@@ -2,18 +2,25 @@ import { defineStore, acceptHMRUpdate } from 'pinia'
 
 export const useCounterStore = defineStore('counter', {
   state: () => ({
-    counter: 0
+    isLogged: false,
+    user: {},
+    permissions: [],
   }),
 
   getters: {
-    doubleCount: (state) => state.counter * 2
+    hasPermission: (state) => (perm) => {
+      if (Array.isArray(perm)) return perm.some(p => state.permissions.includes(p))
+      return state.permissions.includes(perm)
+    },
   },
 
   actions: {
-    increment() {
-      this.counter++
-    }
-  }
+    logout () {
+      this.isLogged = false
+      this.user = {}
+      this.permissions = []
+    },
+  },
 })
 
 if (import.meta.hot) {

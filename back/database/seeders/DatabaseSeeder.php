@@ -10,7 +10,6 @@ class DatabaseSeeder extends Seeder
 {
     public function run(): void
     {
-        // Permisos base
         $permisos = [
             'Ver Usuarios', 'Crear Usuarios', 'Editar Usuarios', 'Eliminar Usuarios',
             'Gestionar Permisos',
@@ -25,17 +24,35 @@ class DatabaseSeeder extends Seeder
             'username' => 'admin',
             'email'    => 'admin@urme.com',
             'ci'       => '00000000',
-            'password' => bcrypt('admin123'),
+            'password' => bcrypt('admin123Admin'),
         ]);
         $admin->syncPermissions(Permission::all());
 
-        // Usuario de prueba
+        // Milton Enrique Tito Cadima
         User::create([
-            'name'     => 'USUARIO PRUEBA',
-            'username' => 'prueba',
-            'email'    => 'prueba@urme.com',
-            'ci'       => '12345678',
-            'password' => bcrypt('123456'),
+            'name'     => 'MILTON ENRIQUE TITO CADIMA',
+            'username' => 'mtito',
+            'email'    => 'mtito@urme.com',
+            'ci'       => '12749265',
+            'password' => bcrypt('12749265'),
+        ]);
+
+        // Daniela Alejandra Peña Valverde
+        User::create([
+            'name'     => 'DANIELA ALEJANDRA PEÑA VALVERDE',
+            'username' => 'dpena',
+            'email'    => 'dpena@urme.com',
+            'ci'       => '7340511',
+            'password' => bcrypt('7340511'),
+        ]);
+
+        // Darwin Gabriel Limachi Tito
+        User::create([
+            'name'     => 'DARWIN GABRIEL LIMACHI TITO',
+            'username' => 'dlimachi',
+            'email'    => 'dlimachi@urme.com',
+            'ci'       => '12644872',
+            'password' => bcrypt('12644872'),
         ]);
     }
 }

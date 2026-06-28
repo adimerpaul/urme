@@ -19,6 +19,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/users/{id}',                    [UserController::class, 'update']);
     Route::delete('/users/{id}',                 [UserController::class, 'destroy']);
     Route::put('/users/{id}/reset-password',     [UserController::class, 'resetPassword']);
+    Route::post('/users/{id}/avatar',            [UserController::class, 'uploadAvatar']);
 
     // Permisos
     Route::get('/permissions',                   [UserController::class, 'permissions']);

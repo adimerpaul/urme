@@ -118,7 +118,14 @@ class UserController extends Controller
 
     public function destroy($id)
     {
-        User::findOrFail($id)->delete();
+        $user = User::findOrFail($id);
+
+        if ($user->avatar) {
+            $path = public_path('images/' . $user->avatar);
+            if (file_exists($path)) @unlink($path);
+        }
+
+        $user->delete();
         return response()->json(['message' => 'Usuario eliminado']);
     }
 
@@ -126,6 +133,64 @@ class UserController extends Controller
     {
         User::findOrFail($id)->update(['password' => bcrypt('123456')]);
         return response()->json(['message' => 'Contraseña restablecida a 123456']);
+    }
+
+    // ── Avatar ───────────────────────────────────────────────
+
+    public function uploadAvatar(Request $request, $id)
+    {
+        $request->validate(['avatar' => 'required|image|max:8192']);
+
+        $user = User::findOrFail($id);
+
+        // Delete old avatar file
+        if ($user->avatar) {
+            $old = public_path('images/' . $user->avatar);
+            if (file_exists($old)) @unlink($old);
+        }
+
+        $file = $request->file('avatar');
+        $src  = $this->gdLoad($file);
+
+        // Resize to max 300×300 maintaining aspect ratio
+        $ow = imagesx($src);
+        $oh = imagesy($src);
+        $max = 300;
+        $scale = ($ow > $max || $oh > $max) ? min($max / $ow, $max / $oh) : 1;
+        $nw = (int) round($ow * $scale);
+        $nh = (int) round($oh * $scale);
+
+        $dst = imagecreatetruecolor($nw, $nh);
+        // White background for PNG with transparency
+        $white = imagecolorallocate($dst, 255, 255, 255);
+        imagefill($dst, 0, 0, $white);
+        imagecopyresampled($dst, $src, 0, 0, 0, 0, $nw, $nh, $ow, $oh);
+        imagedestroy($src);
+
+        $dir = public_path('images');
+        if (!is_dir($dir)) mkdir($dir, 0755, true);
+
+        $filename = 'avatar_' . $id . '_' . time() . '.webp';
+        imagewebp($dst, $dir . '/' . $filename, 85);
+        imagedestroy($dst);
+
+        $user->update(['avatar' => $filename]);
+
+        return response()->json(['avatar' => $filename]);
+    }
+
+    private function gdLoad($file): \GdImage
+    {
+        $mime = $file->getMimeType();
+        $path = $file->getPathname();
+
+        return match(true) {
+            str_contains($mime, 'jpeg') => imagecreatefromjpeg($path),
+            str_contains($mime, 'png')  => imagecreatefrompng($path),
+            str_contains($mime, 'webp') => imagecreatefromwebp($path),
+            str_contains($mime, 'gif')  => imagecreatefromgif($path),
+            default                     => imagecreatefromstring(file_get_contents($path)),
+        };
     }
 
     // ── Permisos ─────────────────────────────────────────────

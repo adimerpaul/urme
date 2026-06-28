@@ -14,10 +14,21 @@
         label="Go to Second Page"
         no-caps
       />
+      <pre>{{datos}}</pre>
     </div>
   </q-page>
 </template>
 
 <script setup>
-//
+const datos = {
+  nombre: 'Juan',
+  apellido: 'Pérez',
+  edad: 30,
+  direccion: {
+    calle: 'Calle Falsa',
+    numero: 123,
+    ciudad: 'Ciudad Ejemplo',
+    pais: 'País Ejemplo'
+  },
+}
 </script>

@@ -49,18 +49,13 @@
 
               <q-card-section class="q-pt-none text-center">
                 <q-separator spaced/>
-                <div class="text-body2">
-                  ¿Eres usuario nuevo?
-                  <q-btn flat dense no-caps color="primary" class="text-weight-medium"
-                         label="Regístrate" @click="irRegistro"/>
-                </div>
-                <div class="text-caption text-grey-6 q-mt-xs">
+                <div class="text-caption text-grey-6">
                   © {{ year }} San Juan de Dios. Todos los derechos reservados.
                 </div>
               </q-card-section>
             </template>
 
-            <!-- ── Cambiar contraseña obligatorio (clave 123456) ── -->
+            <!-- ── Cambiar contraseña obligatorio ── -->
             <template v-else-if="vista === 'cambiar'">
               <q-card-section class="q-pt-none">
                 <div class="row items-center q-mb-xs">
@@ -104,171 +99,24 @@
               </q-card-section>
             </template>
 
-            <!-- ── Registro ── -->
-            <template v-else-if="vista === 'registro'">
-              <q-card-section class="q-pt-none">
-                <div class="row items-center q-mb-sm">
-                  <q-icon name="person_add" color="primary" size="22px" class="q-mr-sm"/>
-                  <span class="text-h6 text-bold">Crear cuenta</span>
-                  <q-space/>
-                  <q-btn flat dense round icon="arrow_back" @click="vista = 'login'">
-                    <q-tooltip>Volver al login</q-tooltip>
-                  </q-btn>
-                </div>
-
-                <q-form @submit.prevent="registrar">
-                  <!-- Banner estado de registro -->
-                  <q-banner v-if="registroEstado.habilitado === false" rounded
-                            class="bg-red-1 text-red-10 q-mb-md" style="border:1px solid #ef9a9a">
-                    <template #avatar><q-icon name="access_time" color="red-7" size="22px"/></template>
-                    <div class="text-weight-bold">Registro no disponible</div>
-                    <div class="text-body2" v-if="registroEstado.fecha_inicio && registroEstado.fecha_fin">
-                      El horario de registro es del <b>{{ fmtDt(registroEstado.fecha_inicio) }}</b>
-                      al <b>{{ fmtDt(registroEstado.fecha_fin) }}</b>
-                    </div>
-                    <div class="text-body2" v-else>
-                      Por favor comuníquese con el administrador.
-                    </div>
-                  </q-banner>
-                  <q-banner v-else-if="registroEstado.habilitado === true" rounded
-                            class="bg-green-1 text-green-10 q-mb-md" style="border:1px solid #a5d6a7">
-                    <template #avatar><q-icon name="check_circle" color="green-7" size="22px"/></template>
-                    <div class="text-weight-bold">Registro habilitado</div>
-                    <div class="text-body2">
-                      Hasta el <b>{{ fmtDt(registroEstado.fecha_fin) }}</b>
-                    </div>
-                  </q-banner>
-
-                  <div class="q-mb-sm text-caption text-grey-7">Nombre completo <span class="text-negative">*</span></div>
-                  <q-input v-model="reg.name" outlined dense placeholder="Ej: Adimer Paul Chambi Ajata"
-                           :rules="[v => !!v || 'Campo requerido']" class="q-mb-xs"
-                           @update:model-value="actualizarUsername">
-                    <template #prepend><q-icon name="badge" size="18px"/></template>
-                  </q-input>
-
-                  <!-- Preview username -->
-                  <div v-if="reg.usernamePreview" class="q-mb-md q-mt-xs" style="overflow:hidden">
-                    <q-chip dense :color="usernameModificado ? 'orange-2' : 'blue-1'"
-                            :text-color="usernameModificado ? 'orange-9' : 'primary'"
-                            icon="alternate_email" style="max-width:100%">
-                      Tu usuario será: <strong class="q-ml-xs">{{ reg.usernamePreview }}</strong>
-                    </q-chip>
-                    <div v-if="usernameModificado" class="text-caption text-orange-9 q-mt-xs">
-                      <q-icon name="info" size="12px"/> Ya existe un usuario con ese nombre, se asignará <b>{{ reg.usernamePreview }}</b>
-                    </div>
-                  </div>
-
-                  <div class="row q-col-gutter-sm q-mb-xs">
-                    <div class="col-12 col-sm-6">
-                      <div class="q-mb-xs text-caption text-grey-7">Email <span class="text-grey-5">(opcional)</span></div>
-                      <q-input v-model="reg.email" outlined dense placeholder="correo@ejemplo.com" type="email">
-                        <template #prepend><q-icon name="email" size="18px"/></template>
-                      </q-input>
-                    </div>
-                    <div class="col-12 col-sm-6">
-                      <div class="q-mb-xs text-caption text-grey-7">Celular <span class="text-grey-5">(opcional)</span></div>
-                      <q-input v-model="reg.celular" outlined dense placeholder="Celular">
-                        <template #prepend><q-icon name="phone" size="18px"/></template>
-                      </q-input>
-                    </div>
-                  </div>
-
-                  <div class="q-mb-xs text-caption text-grey-7">
-                    CI (Carnet) <span class="text-negative">*</span>
-                    <span class="text-grey-5 q-ml-xs">— será tu contraseña inicial</span>
-                  </div>
-                  <q-input v-model="reg.ci" outlined dense placeholder="Número de carnet"
-                           :rules="[v => !!v || 'Campo requerido']" class="q-mb-sm">
-                    <template #prepend><q-icon name="credit_card" size="18px"/></template>
-                  </q-input>
-
-                  <div class="q-mb-xs text-caption text-grey-7">Unidad <span class="text-negative">*</span></div>
-                  <q-select v-model="reg.unidad_id" outlined dense
-                            :options="unidades" option-label="nombre" option-value="id"
-                            emit-value map-options placeholder="Selecciona tu unidad" class="q-mb-md"
-                            :rules="[v => !!v || 'Selecciona tu unidad']">
-                    <template #prepend><q-icon name="business" size="18px"/></template>
-                    <template #no-option>
-                      <q-item><q-item-section class="text-grey">Sin resultados</q-item-section></q-item>
-                    </template>
-                  </q-select>
-
-                  <q-btn color="positive" label="Crear cuenta" class="full-width btnLogin"
-                         no-caps unelevated size="16px" icon="person_add"
-                         :loading="loadingReg" type="submit"
-                         :disable="registroEstado.habilitado === false"/>
-                </q-form>
-              </q-card-section>
-
-              <q-card-section class="q-pt-none text-center">
-                <q-separator spaced/>
-                <div class="text-caption text-grey-6">
-                  © {{ year }} San Juan de Dios. Todos los derechos reservados.
-                </div>
-                <div class="text-caption text-grey-5 q-mt-xs">
-                  ¿Dudas? Escríbenos al
-                  <a href="https://wa.me/59169603027" target="_blank" class="text-positive text-weight-medium" style="text-decoration:none">
-                    WhatsApp +591 69603027
-                  </a>
-                </div>
-              </q-card-section>
-            </template>
-
-            <!-- ── Credenciales creadas ── -->
-            <template v-else-if="vista === 'credenciales'">
-              <q-card-section class="q-pt-none text-center">
-                <q-icon name="check_circle" color="positive" size="52px"/>
-                <div class="text-h6 text-weight-bold q-mt-sm">¡Cuenta creada!</div>
-                <div class="text-body2 text-grey-7 q-mt-xs q-mb-md">
-                  Guarda estos datos, los necesitarás para ingresar
-                </div>
-
-                <q-banner rounded class="bg-blue-1 text-primary q-mb-sm text-left">
-                  <template #avatar><q-icon name="account_circle" color="primary" size="22px"/></template>
-                  <div class="text-caption text-grey-7">Tu nombre de usuario</div>
-                  <div class="text-h6 text-weight-bold">{{ credenciales.username }}</div>
-                </q-banner>
-
-                <q-banner rounded class="bg-green-1 text-positive text-left">
-                  <template #avatar><q-icon name="lock" color="positive" size="22px"/></template>
-                  <div class="text-caption text-grey-7">Tu contraseña (tu carnet)</div>
-                  <div class="text-h6 text-weight-bold">{{ credenciales.password }}</div>
-                </q-banner>
-
-                <div class="text-caption text-grey-6 q-mt-sm">
-                  Puedes cambiar tu contraseña desde "Mi perfil" una vez adentro
-                </div>
-              </q-card-section>
-
-              <q-card-section class="q-pt-none">
-                <q-btn color="primary" label="Ingresar al sistema" class="full-width btnLogin"
-                       no-caps unelevated size="16px" icon="login"
-                       :loading="loadingIngreso" @click="ingresarAlSistema"/>
-              </q-card-section>
-            </template>
-
           </q-card>
         </div>
       </q-page>
     </q-page-container>
   </q-layout>
-
 </template>
 
 <script setup>
-import { getCurrentInstance, ref, computed, onMounted } from 'vue'
+import { ref, computed, getCurrentInstance } from 'vue'
 
 const { proxy } = getCurrentInstance()
 
-// ── Login ────────────────────────────────────────────────
-const vista                  = ref('login')   // 'login' | 'cambiar' | 'registro' | 'credenciales'
+const vista                  = ref('login')
 const username               = ref('')
 const password               = ref('')
 const showPassword           = ref(false)
 const loading                = ref(false)
-const year                   = computed(() => new Date().getFullYear())
 
-// ── Cambiar contraseña obligatorio ───────────────────────
 const newPassword            = ref('')
 const newPasswordConfirm     = ref('')
 const showNewPassword        = ref(false)
@@ -276,69 +124,9 @@ const showNewPasswordConfirm = ref(false)
 const loadingChange          = ref(false)
 let   tempToken              = ''
 
-// ── Registro ─────────────────────────────────────────────
-const loadingReg             = ref(false)
-const unidades               = ref([])
-const usernameModificado     = ref(false)
-let   usernameTimer          = null
-const registroEstado         = ref({ habilitado: null, fecha_inicio: null, fecha_fin: null })
-const credenciales           = ref({ username: '', password: '' })
-const loadingIngreso         = ref(false)
-const reg                    = ref({
-  name: '', email: '', celular: '', ci: '', unidad_id: null, usernamePreview: '',
-})
+const year = computed(() => new Date().getFullYear())
 
-onMounted(() => {
-  proxy.$axios.get('unidades-public').then(res => {
-    unidades.value = res.data || []
-  }).catch(() => {})
-})
-
-function actualizarUsername() {
-  const palabras = (reg.value.name || '').trim().toLowerCase().split(/\s+/).filter(Boolean)
-  if (!palabras.length) {
-    reg.value.usernamePreview = ''
-    usernameModificado.value = false
-    clearTimeout(usernameTimer)
-    return
-  }
-  const base = palabras[0]
-  const segunda = palabras[1] ? palabras[1][0] : ''
-  const local = base + segunda
-  reg.value.usernamePreview = local
-  usernameModificado.value = false
-
-  clearTimeout(usernameTimer)
-  usernameTimer = setTimeout(async () => {
-    try {
-      const res = await proxy.$axios.get('username-preview', { params: { name: reg.value.name } })
-      const real = res.data.username
-      reg.value.usernamePreview = real
-      usernameModificado.value = real !== local
-    } catch {}
-  }, 500)
-}
-
-function fmtDt(val) {
-  if (!val) return ''
-  const d = new Date(val)
-  if (isNaN(d)) return val
-  return d.toLocaleString('es-BO', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' })
-}
-
-async function irRegistro() {
-  reg.value = { name: '', email: '', celular: '', ci: '', unidad_id: null, usernamePreview: '' }
-  registroEstado.value = { habilitado: null, fecha_inicio: null, fecha_fin: null }
-  vista.value = 'registro'
-  try {
-    const res = await proxy.$axios.get('registro-estado')
-    registroEstado.value = res.data
-  } catch {}
-}
-
-
-// ── Acciones ─────────────────────────────────────────────
-function login() {
+function login () {
   loading.value = true
   proxy.$axios.post('/login', { username: username.value, password: password.value })
     .then(res => {
@@ -366,66 +154,26 @@ function login() {
     .finally(() => { loading.value = false })
 }
 
-function cambiarPassword() {
+function cambiarPassword () {
   loadingChange.value = true
   proxy.$axios.put('cambiar-password', {
     password_actual:             '123456',
     password_nuevo:              newPassword.value,
     password_nuevo_confirmation: newPasswordConfirm.value,
-  }).then(() => {
-    const user = proxy.$store.user
-    proxy.$store.isLogged    = true
-    proxy.$store.permissions = (user.permissions || []).map(p => p.name)
-    localStorage.setItem('tokenSil', tempToken)
-    localStorage.setItem('user', JSON.stringify(user))
-    proxy.$alert.success('Contraseña actualizada. ¡Bienvenido!')
-    proxy.$router.push('/')
-  }).catch(err => {
-    proxy.$alert.error(err?.response?.data?.message || 'Error al cambiar contraseña')
-  }).finally(() => { loadingChange.value = false })
-}
-
-function registrar() {
-  proxy.$alert.dialog('Se va a crear tu cuenta con los datos ingresados. ¿Continuar?').onOk(async () => {
-    loadingReg.value = true
-    try {
-      const regRes = await proxy.$axios.post('register', {
-        name:      reg.value.name,
-        email:     reg.value.email || null,
-        celular:   reg.value.celular || null,
-        ci:        reg.value.ci,
-        unidad_id: reg.value.unidad_id || null,
-      })
-      credenciales.value = { username: regRes.data.username, password: regRes.data.password }
-      vista.value = 'credenciales'
-    } catch (err) {
-      proxy.$alert.error(err?.response?.data?.message || 'Error al crear la cuenta')
-    } finally {
-      loadingReg.value = false
-    }
   })
-}
-
-async function ingresarAlSistema() {
-  loadingIngreso.value = true
-  try {
-    const loginRes = await proxy.$axios.post('/login', {
-      username: credenciales.value.username,
-      password: credenciales.value.password,
+    .then(() => {
+      const user = proxy.$store.user
+      proxy.$store.isLogged    = true
+      proxy.$store.permissions = (user.permissions || []).map(p => p.name)
+      localStorage.setItem('tokenSil', tempToken)
+      localStorage.setItem('user', JSON.stringify(user))
+      proxy.$alert.success('Contraseña actualizada. ¡Bienvenido!')
+      proxy.$router.push('/')
     })
-    const { user, token } = loginRes.data
-    proxy.$axios.defaults.headers.common.Authorization = `Bearer ${token}`
-    proxy.$store.user        = user
-    proxy.$store.isLogged    = true
-    proxy.$store.permissions = (user.permissions || []).map(p => p.name)
-    localStorage.setItem('tokenSil', token)
-    localStorage.setItem('user', JSON.stringify(user))
-    proxy.$router.push('/')
-  } catch (err) {
-    proxy.$alert.error(err?.response?.data?.message || 'Error al ingresar')
-  } finally {
-    loadingIngreso.value = false
-  }
+    .catch(err => {
+      proxy.$alert.error(err?.response?.data?.message || 'Error al cambiar contraseña')
+    })
+    .finally(() => { loadingChange.value = false })
 }
 </script>
 

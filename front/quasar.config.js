@@ -2,8 +2,25 @@
 // https://v2.quasar.dev/quasar-cli-vite/quasar-config-file
 
 import { defineConfig } from '#q-app'
+import { readFileSync, existsSync } from 'fs'
+import { resolve } from 'path'
 
-export default defineConfig((/* ctx */) => {
+function parseEnvFile (filename) {
+  const path = resolve(process.cwd(), filename)
+  if (!existsSync(path)) return {}
+  const env = {}
+  for (const line of readFileSync(path, 'utf-8').split('\n')) {
+    const m = line.match(/^([^#=\s][^=]*)=(.*)$/)
+    if (m) env[m[1].trim()] = m[2].trim()
+  }
+  return env
+}
+
+export default defineConfig((ctx) => {
+  const env = {
+    ...parseEnvFile('.env'),
+    ...(ctx.dev ? parseEnvFile('.env.development') : parseEnvFile('.env.production')),
+  }
   return {
     // https://v2.quasar.dev/quasar-cli-vite/prefetch-feature
     // preFetch: true,
@@ -50,8 +67,7 @@ export default defineConfig((/* ctx */) => {
       // vueDevtools,
 
       // publicPath: '/',
-      // define: {},
-      // defineEnv: {}
+      defineEnv: env,
       // ignorePublicFolder: true,
       // minify: false,
       // distDir

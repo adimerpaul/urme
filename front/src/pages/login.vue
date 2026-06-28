@@ -10,7 +10,7 @@
             <q-card-section class="q-pt-lg text-center">
               <q-img src="logo.png" width="110px" class="q-mb-sm" ratio="1" fit="contain" />
               <div class="text-subtitle2 text-grey-7 brand-chip">
-                <b>Hospital General</b> · San Juan de Dios
+                <b>Clínica</b> · URME
               </div>
             </q-card-section>
 
@@ -50,7 +50,7 @@
               <q-card-section class="q-pt-none text-center">
                 <q-separator spaced/>
                 <div class="text-caption text-grey-6">
-                  © {{ year }} San Juan de Dios. Todos los derechos reservados.
+                  © {{ year }} Clínica URME. Todos los derechos reservados.
                 </div>
               </q-card-section>
             </template>

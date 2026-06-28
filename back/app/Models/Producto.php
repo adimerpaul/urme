@@ -1,0 +1,32 @@
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
+use OwenIt\Auditing\Auditable as AuditableTrait;
+use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
+
+class Producto extends Model implements AuditableContract
+{
+    use SoftDeletes, AuditableTrait;
+
+    protected $table = 'productos';
+
+    protected $fillable = [
+        'codigo', 'nombre', 'descripcion', 'marca',
+        'fabricante_id', 'unidad_id', 'tipo',
+    ];
+
+    protected $hidden = ['created_at', 'updated_at', 'deleted_at'];
+
+    public function fabricante()
+    {
+        return $this->belongsTo(Fabricante::class);
+    }
+
+    public function unidad()
+    {
+        return $this->belongsTo(Unidad::class);
+    }
+}

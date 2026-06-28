@@ -18,6 +18,9 @@ class DatabaseSeeder extends Seeder
             // Pacientes
             'Ver Pacientes', 'Crear Pacientes', 'Editar Pacientes', 'Eliminar Pacientes',
 
+            // Productos / Farmacia
+            'Ver Productos', 'Crear Productos', 'Editar Productos', 'Eliminar Productos',
+
             // Reportes y PDFs
             'Ver Reportes', 'Imprimir Resultados', 'Exportar Excel',
 

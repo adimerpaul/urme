@@ -166,8 +166,15 @@ const menuSections = [
     icon: 'admin_panel_settings',
     defaultOpened: true,
     links: [
-      { title: 'Inicio', icon: 'dashboard', link: '/', can: null },
-      { title: 'Usuarios', icon: 'people', link: '/usuarios', can: 'Ver Usuarios' },
+      { title: 'Inicio',    icon: 'dashboard', link: '/',         can: null },
+      { title: 'Usuarios',  icon: 'people',    link: '/usuarios', can: 'Ver Usuarios' },
+    ],
+  },
+  {
+    title: 'Farmacia',
+    icon: 'medication',
+    links: [
+      { title: 'Productos', icon: 'inventory_2', link: '/farmacia', can: 'Ver Productos' },
     ],
   },
 ]

@@ -1,0 +1,12 @@
+// app global css in SCSS form
+
+// MAYUSCULAS visuales en inputs marcados con .uppercase-input
+// Para aplicar a un q-input/q-select:
+//   <q-input ... input-class="uppercase-input" />
+// O directamente con la directiva v-uppercase para uppercasing real:
+//   <q-input v-uppercase ... />
+.uppercase-input,
+input.uppercase-input,
+textarea.uppercase-input {
+  text-transform: uppercase;
+}

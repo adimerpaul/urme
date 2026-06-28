@@ -8,6 +8,8 @@ use Spatie\Permission\Models\Permission;
 
 class UserController extends Controller
 {
+    // ── Auth ─────────────────────────────────────────────────
+
     public function login(Request $request)
     {
         $request->validate([
@@ -66,15 +68,17 @@ class UserController extends Controller
 
     // ── CRUD usuarios ────────────────────────────────────────
 
-    public function index()
+    public function index(Request $request)
     {
-        return User::with('permissions:id,name')
-            ->orderBy('name')
-            ->get();
+        $this->requirePermission($request, 'Ver Usuarios');
+
+        return User::with('permissions:id,name')->orderBy('name')->get();
     }
 
     public function store(Request $request)
     {
+        $this->requirePermission($request, 'Crear Usuarios');
+
         $request->validate([
             'name'     => 'required|string|max:255',
             'username' => 'required|string|unique:users,username',
@@ -98,6 +102,8 @@ class UserController extends Controller
 
     public function update(Request $request, $id)
     {
+        $this->requirePermission($request, 'Editar Usuarios');
+
         $user = User::findOrFail($id);
 
         $request->validate([
@@ -116,8 +122,10 @@ class UserController extends Controller
         return response()->json($user->load('permissions:id,name'));
     }
 
-    public function destroy($id)
+    public function destroy(Request $request, $id)
     {
+        $this->requirePermission($request, 'Eliminar Usuarios');
+
         $user = User::findOrFail($id);
 
         if ($user->avatar) {
@@ -129,8 +137,10 @@ class UserController extends Controller
         return response()->json(['message' => 'Usuario eliminado']);
     }
 
-    public function resetPassword($id)
+    public function resetPassword(Request $request, $id)
     {
+        $this->requirePermission($request, 'Editar Usuarios');
+
         User::findOrFail($id)->update(['password' => bcrypt('123456')]);
         return response()->json(['message' => 'Contraseña restablecida a 123456']);
     }
@@ -139,11 +149,12 @@ class UserController extends Controller
 
     public function uploadAvatar(Request $request, $id)
     {
+        $this->requirePermission($request, 'Editar Usuarios');
+
         $request->validate(['avatar' => 'required|image|max:8192']);
 
         $user = User::findOrFail($id);
 
-        // Delete old avatar file
         if ($user->avatar) {
             $old = public_path('images/' . $user->avatar);
             if (file_exists($old)) @unlink($old);
@@ -152,7 +163,6 @@ class UserController extends Controller
         $file = $request->file('avatar');
         $src  = $this->gdLoad($file);
 
-        // Resize to max 300×300 maintaining aspect ratio
         $ow = imagesx($src);
         $oh = imagesy($src);
         $max = 300;
@@ -161,7 +171,6 @@ class UserController extends Controller
         $nh = (int) round($oh * $scale);
 
         $dst = imagecreatetruecolor($nw, $nh);
-        // White background for PNG with transparency
         $white = imagecolorallocate($dst, 255, 255, 255);
         imagefill($dst, 0, 0, $white);
         imagecopyresampled($dst, $src, 0, 0, 0, 0, $nw, $nh, $ow, $oh);
@@ -195,22 +204,42 @@ class UserController extends Controller
 
     // ── Permisos ─────────────────────────────────────────────
 
-    public function permissions()
+    public function permissions(Request $request)
     {
+        $this->requirePermission($request, ['Crear Usuarios', 'Editar Usuarios', 'Gestionar Permisos']);
+
         return response()->json(Permission::orderBy('name')->get());
     }
 
-    public function userPermissions($id)
+    public function userPermissions(Request $request, $id)
     {
+        $this->requirePermission($request, ['Editar Usuarios', 'Gestionar Permisos']);
+
         $user = User::findOrFail($id);
         return response()->json($user->permissions()->pluck('id'));
     }
 
     public function updateUserPermissions(Request $request, $id)
     {
+        $this->requirePermission($request, 'Gestionar Permisos');
+
         $user  = User::findOrFail($id);
         $perms = Permission::whereIn('id', $request->permissions ?? [])->get();
         $user->syncPermissions($perms);
         return response()->json($user->permissions()->pluck('name'));
+    }
+
+    // ── Helper ───────────────────────────────────────────────
+
+    private function requirePermission(Request $request, string|array $permission): void
+    {
+        $user = $request->user();
+        $perms = is_array($permission) ? $permission : [$permission];
+
+        foreach ($perms as $p) {
+            if ($user->hasPermissionTo($p)) return;
+        }
+
+        abort(403, 'No tiene permiso para realizar esta acción');
     }
 }

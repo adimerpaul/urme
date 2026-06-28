@@ -11,8 +11,18 @@ class DatabaseSeeder extends Seeder
     public function run(): void
     {
         $permisos = [
+            // Usuarios
             'Ver Usuarios', 'Crear Usuarios', 'Editar Usuarios', 'Eliminar Usuarios',
             'Gestionar Permisos',
+
+            // Pacientes
+            'Ver Pacientes', 'Crear Pacientes', 'Editar Pacientes', 'Eliminar Pacientes',
+
+            // Reportes y PDFs
+            'Ver Reportes', 'Imprimir Resultados', 'Exportar Excel',
+
+            // Configuración
+            'Ver Configuracion', 'Editar Configuracion',
         ];
         foreach ($permisos as $p) {
             Permission::firstOrCreate(['name' => $p, 'guard_name' => 'web']);

@@ -13,7 +13,7 @@ return new class extends Migration
             $table->string('name');
             $table->string('username')->nullable();
             $table->string('email')->nullable();
-            $table->string('avatar')->nullable()->after('ci');
+            $table->string('avatar')->nullable();
             $table->string('celular', 50)->nullable();
             $table->string('ci', 50)->nullable();
             $table->string('password');

@@ -1,0 +1,10 @@
+[     409ms] [INFO] [Quasar] Running SPA. @ http://localhost:9001/.quasar/dev-spa/client-entry.js?t=1782632885528:33
+[   42133ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:9001/src/pages/login/(index).vue?t=1782633028464:0
+[   42134ms] [ERROR] [vite] Failed to reload /src/pages/login/(index).vue. This could be due to syntax errors or importing non-existent modules. (see errors above) @ http://localhost:9001/@vite/client:928
+[   46283ms] [INFO] [Quasar] Running SPA. @ http://localhost:9001/.quasar/dev-spa/client-entry.js?t=1782633028464:33
+[   78472ms] [INFO] [Quasar] Running SPA. @ http://localhost:9001/.quasar/dev-spa/client-entry.js?t=1782633028464:33
+[  290300ms] [LOG] [vite] server connection lost. Polling for restart... @ http://localhost:9001/@vite/client:992
+[  290967ms] [INFO] [Quasar] Running SPA. @ http://localhost:9001/.quasar/dev-spa/client-entry.js:33
+[  302195ms] [INFO] [Quasar] Running SPA. @ http://localhost:9001/.quasar/dev-spa/client-entry.js:33
+[  324818ms] [INFO] [Quasar] Running SPA. @ http://localhost:9001/.quasar/dev-spa/client-entry.js:33
+[  355689ms] [LOG] [vite] server connection lost. Polling for restart... @ http://localhost:9001/@vite/client:992

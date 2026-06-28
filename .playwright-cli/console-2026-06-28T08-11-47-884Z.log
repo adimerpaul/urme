@@ -1,0 +1,13 @@
+[     390ms] [INFO] [Quasar] Running SPA. @ http://localhost:9000/.quasar/dev-spa/client-entry.js?t=1782634285563:33
+[     572ms] [VERBOSE] [DOM] Input elements should have autocomplete attributes (suggested: "current-password"): (More info: https://goo.gl/9p2vKq) %o @ http://localhost:9000/login:0
+[  167586ms] [INFO] [Quasar] Running SPA. @ http://localhost:9000/.quasar/dev-spa/client-entry.js?t=1782634423865:33
+[  167768ms] [VERBOSE] [DOM] Input elements should have autocomplete attributes (suggested: "current-password"): (More info: https://goo.gl/9p2vKq) %o @ http://localhost:9000/login:0
+[  213675ms] [LOG] [vite] server connection lost. Polling for restart... @ http://localhost:9000/@vite/client:992
+[  217718ms] [INFO] [Quasar] Running SPA. @ http://localhost:9000/.quasar/dev-spa/client-entry.js:33
+[  217857ms] [VERBOSE] [DOM] Input elements should have autocomplete attributes (suggested: "current-password"): (More info: https://goo.gl/9p2vKq) %o @ http://localhost:9000/login:0
+[  282233ms] [INFO] [Quasar] Running SPA. @ http://localhost:9000/.quasar/dev-spa/client-entry.js?t=1782634589729:33
+[  282255ms] [LOG] VITE_API_BACK undefined @ http://localhost:9000/src/boot/axios.js?t=1782634589729:20
+[  282383ms] [VERBOSE] [DOM] Input elements should have autocomplete attributes (suggested: "current-password"): (More info: https://goo.gl/9p2vKq) %o @ http://localhost:9000/login:0
+[  316468ms] [INFO] [Quasar] Running SPA. @ http://localhost:9000/.quasar/dev-spa/client-entry.js?t=1782634589729:33
+[  316486ms] [LOG] VITE_API_BACK undefined @ http://localhost:9000/src/boot/axios.js?t=1782634589729:20
+[  316602ms] [VERBOSE] [DOM] Input elements should have autocomplete attributes (suggested: "current-password"): (More info: https://goo.gl/9p2vKq) %o @ http://localhost:9000/login:0

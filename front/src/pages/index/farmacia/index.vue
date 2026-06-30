@@ -2,207 +2,254 @@
   <q-page class="q-pa-xs">
 
     <!-- Sin acceso -->
-    <div v-if="$store.isLogged && !$store.hasPermission('Ver Productos')"
+    <div v-if="proxy.$store.isLogged && !canVer"
          class="column items-center justify-center q-gutter-sm" style="min-height:320px">
       <q-icon name="lock" size="72px" color="grey-4" />
       <div class="text-h6 text-grey-5">Sin acceso</div>
       <div class="text-body2 text-grey-6">No tiene permiso para ver productos</div>
-      <pre>{{$store.permissions}}</pre>
-      <pre>{{canVer?'true':'false'}}</pre>
     </div>
 
-    <template v-else-if="$store.isLogged">
+    <template v-else-if="proxy.$store.isLogged">
 
       <!-- Tarjetas resumen -->
       <div class="row q-col-gutter-xs q-mb-xs">
         <div class="col-4">
           <q-card flat bordered class="text-center q-pa-xs">
             <div class="text-caption text-grey-6">Productos</div>
-            <div class="text-h6 text-teal text-weight-bold">{{ resumen?.productos ?? 0 }}</div>
+            <div class="text-h6 text-teal text-weight-bold">{{ resumen.productos }}</div>
           </q-card>
         </div>
         <div class="col-4">
           <q-card flat bordered class="text-center q-pa-xs">
             <div class="text-caption text-grey-6">Fabricantes</div>
-            <div class="text-h6 text-deep-orange text-weight-bold">{{ resumen?.fabricantes ?? 0 }}</div>
+            <div class="text-h6 text-deep-orange text-weight-bold">{{ resumen.fabricantes }}</div>
           </q-card>
         </div>
         <div class="col-4">
           <q-card flat bordered class="text-center q-pa-xs">
             <div class="text-caption text-grey-6">Unidades</div>
-            <div class="text-h6 text-purple text-weight-bold">{{ resumen?.unidades ?? 0 }}</div>
+            <div class="text-h6 text-purple text-weight-bold">{{ resumen.unidades }}</div>
           </q-card>
         </div>
       </div>
 
       <q-tabs v-model="tab" dense align="left"
-              :active-color="tabActiveColor" :indicator-color="tabActiveColor"
+              active-color="primary" indicator-color="primary"
               class="q-mb-xs">
-        <q-tab name="productos"   icon="medication"  label="Productos" no-caps />
-        <q-tab name="fabricantes" icon="factory"     label="Fabricantes" no-caps />
-        <q-tab name="unidades"    icon="straighten"  label="Unidades" no-caps />
+        <q-tab name="productos"   icon="medication"  label="Productos" />
+        <q-tab name="fabricantes" icon="factory"     label="Fabricantes" />
+        <q-tab name="unidades"    icon="straighten"  label="Unidades" />
       </q-tabs>
       <q-separator class="q-mb-xs" />
 
-      <!-- ══ TAB PRODUCTOS ════════════════════════════════════════ -->
+      <!-- ══ TAB PRODUCTOS ══════════════════════════════════════════ -->
       <div v-show="tab === 'productos'">
-        <q-table
-          :rows="productos || []"
-          :columns="colProductos || []"
-          row-key="id"
-          dense flat bordered
-          :pagination="paginationProd"
-          @request="onRequestProd"
-          :loading="loadingProd"
-          :rows-per-page-options="[10, 20, 50]"
-        >
-          <template v-slot:top-left>
-            <span class="text-subtitle2 text-grey-7">Productos farmacia</span>
-          </template>
-          <template v-slot:top-right>
-            <q-input v-model="filterProd" label="Buscar" dense outlined clearable
-                     style="width:160px" class="q-mr-xs">
-              <template v-slot:append><q-icon name="search" /></template>
-            </q-input>
-            <q-btn v-if="canCrear" color="positive" label="Nuevo" icon="add_circle_outline"
-                   no-caps dense @click="prodNew" class="q-mr-xs" />
-            <q-btn color="red-7" icon="picture_as_pdf" no-caps dense @click="exportPdf('productos')"
-                   class="q-mr-xs">
-              <q-tooltip>Exportar PDF</q-tooltip>
-            </q-btn>
-            <q-btn color="green-8" icon="table_view" no-caps dense @click="exportExcel('productos')">
-              <q-tooltip>Exportar Excel</q-tooltip>
-            </q-btn>
-          </template>
+        <div class="row items-center q-gutter-xs q-mb-xs">
+          <span class="text-subtitle2 text-grey-7">Productos farmacia</span>
+          <q-space />
+          <q-input v-model="filterProd" label="Buscar" dense outlined clearable
+                   style="width:160px" @update:model-value="onFilterProd">
+            <template v-slot:append><q-icon name="search" /></template>
+          </q-input>
+          <q-btn v-if="canCrear" color="positive" label="Nuevo" icon="add_circle_outline"
+                 no-caps dense @click="prodNew" />
+          <q-btn color="red-7" icon="picture_as_pdf" no-caps dense @click="exportPdf('productos')">
+            <q-tooltip>Exportar PDF</q-tooltip>
+          </q-btn>
+          <q-btn color="green-8" icon="table_view" no-caps dense @click="exportExcel('productos')">
+            <q-tooltip>Exportar Excel</q-tooltip>
+          </q-btn>
+        </div>
 
-          <template v-slot:body-cell-fabricante="props">
-            <q-td :props="props">{{ props.row.fabricante?.nombre || '—' }}</q-td>
-          </template>
+        <q-markup-table dense flat bordered separator="cell" class="full-width">
+          <thead>
+            <tr class="bg-grey-2">
+              <th class="text-left" style="width:64px"></th>
+              <th class="text-left">Código</th>
+              <th class="text-left">Nombre</th>
+              <th class="text-left">Marca</th>
+              <th class="text-left">Fabricante</th>
+              <th class="text-left">Unidad</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-if="loadingProd">
+              <td colspan="6" class="text-center q-pa-md">
+                <q-spinner color="primary" size="24px" />
+              </td>
+            </tr>
+            <tr v-else-if="!productos.length">
+              <td colspan="6" class="text-center text-grey-5 q-pa-md">Sin datos</td>
+            </tr>
+            <tr v-else v-for="row in productos" :key="row.id">
+              <td class="q-pa-xs">
+                <q-btn-dropdown v-if="canEditar || canEliminar"
+                                label="Opc." no-caps size="xs" dense color="primary" flat>
+                  <q-list dense>
+                    <q-item v-if="canEditar" clickable v-close-popup @click="prodEdit(row)">
+                      <q-item-section avatar><q-icon name="edit" size="xs" /></q-item-section>
+                      <q-item-section><q-item-label>Editar</q-item-label></q-item-section>
+                    </q-item>
+                    <q-item v-if="canEliminar" clickable v-close-popup @click="prodDelete(row.id)">
+                      <q-item-section avatar><q-icon name="delete" color="negative" size="xs" /></q-item-section>
+                      <q-item-section><q-item-label class="text-negative">Eliminar</q-item-label></q-item-section>
+                    </q-item>
+                  </q-list>
+                </q-btn-dropdown>
+              </td>
+              <td>{{ row.codigo || '—' }}</td>
+              <td>{{ row.nombre }}</td>
+              <td>{{ row.marca || '—' }}</td>
+              <td>{{ row.fabricante ? row.fabricante.nombre : '—' }}</td>
+              <td>{{ row.unidad ? (row.unidad.abreviatura || row.unidad.nombre) : '—' }}</td>
+            </tr>
+          </tbody>
+        </q-markup-table>
 
-          <template v-slot:body-cell-unidad="props">
-            <q-td :props="props">
-              {{ props.row.unidad?.abreviatura || props.row.unidad?.nombre || '—' }}
-            </q-td>
-          </template>
-
-          <template v-slot:body-cell-actions="props">
-            <q-td :props="props" class="q-pa-xs">
-              <q-btn-dropdown v-if="canEditar || canEliminar"
-                              label="Opc." no-caps size="xs" dense color="primary" flat>
-                <q-list dense>
-                  <q-item v-if="canEditar" clickable v-close-popup @click="prodEdit(props.row)">
-                    <q-item-section avatar><q-icon name="edit" size="xs" /></q-item-section>
-                    <q-item-section><q-item-label>Editar</q-item-label></q-item-section>
-                  </q-item>
-                  <q-item v-if="canEliminar" clickable v-close-popup @click="prodDelete(props.row.id)">
-                    <q-item-section avatar><q-icon name="delete" color="negative" size="xs" /></q-item-section>
-                    <q-item-section><q-item-label class="text-negative">Eliminar</q-item-label></q-item-section>
-                  </q-item>
-                </q-list>
-              </q-btn-dropdown>
-            </q-td>
-          </template>
-        </q-table>
+        <div class="row items-center justify-between q-mt-xs q-px-xs">
+          <div class="text-caption text-grey-6">
+            Total: {{ totalProd }} | Página {{ pageProd }} de {{ pagesProd }}
+          </div>
+          <q-pagination v-model="pageProd" :max="pagesProd" :max-pages="6"
+                        boundary-links direction-links size="sm"
+                        @update:model-value="loadProductos" />
+        </div>
       </div>
 
-      <!-- ══ TAB FABRICANTES ══════════════════════════════════════ -->
+      <!-- ══ TAB FABRICANTES ════════════════════════════════════════ -->
       <div v-show="tab === 'fabricantes'">
-        <q-table
-          :rows="fabricantes || []"
-          :columns="colFab || []"
-          row-key="id"
-          dense flat bordered
-          :pagination="paginationFab"
-          @request="onRequestFab"
-          :loading="loadingFab"
-          :rows-per-page-options="[10, 20, 50]"
-        >
-          <template v-slot:top-left>
-            <span class="text-subtitle2 text-grey-7">Fabricantes</span>
-          </template>
-          <template v-slot:top-right>
-            <q-input v-model="filterFab" label="Buscar" dense outlined clearable
-                     style="width:160px" class="q-mr-xs">
-              <template v-slot:append><q-icon name="search" /></template>
-            </q-input>
-            <q-btn v-if="canCrear" color="positive" label="Nuevo" icon="add_circle_outline"
-                   no-caps dense @click="fabNew" class="q-mr-xs" />
-            <q-btn color="red-7" icon="picture_as_pdf" no-caps dense @click="exportPdf('fabricantes')"
-                   class="q-mr-xs">
-              <q-tooltip>Exportar PDF</q-tooltip>
-            </q-btn>
-            <q-btn color="green-8" icon="table_view" no-caps dense @click="exportExcel('fabricantes')">
-              <q-tooltip>Exportar Excel</q-tooltip>
-            </q-btn>
-          </template>
-          <template v-slot:body-cell-actions="props">
-            <q-td :props="props" class="q-pa-xs">
-              <q-btn-dropdown v-if="canEditar || canEliminar"
-                              label="Opc." no-caps size="xs" dense color="deep-orange" flat>
-                <q-list dense>
-                  <q-item v-if="canEditar" clickable v-close-popup @click="fabEdit(props.row)">
-                    <q-item-section avatar><q-icon name="edit" size="xs" /></q-item-section>
-                    <q-item-section><q-item-label>Editar</q-item-label></q-item-section>
-                  </q-item>
-                  <q-item v-if="canEliminar" clickable v-close-popup @click="fabDelete(props.row.id)">
-                    <q-item-section avatar><q-icon name="delete" color="negative" size="xs" /></q-item-section>
-                    <q-item-section><q-item-label class="text-negative">Eliminar</q-item-label></q-item-section>
-                  </q-item>
-                </q-list>
-              </q-btn-dropdown>
-            </q-td>
-          </template>
-        </q-table>
+        <div class="row items-center q-gutter-xs q-mb-xs">
+          <span class="text-subtitle2 text-grey-7">Fabricantes</span>
+          <q-space />
+          <q-input v-model="filterFab" label="Buscar" dense outlined clearable
+                   style="width:160px" @update:model-value="onFilterFab">
+            <template v-slot:append><q-icon name="search" /></template>
+          </q-input>
+          <q-btn v-if="canCrear" color="positive" label="Nuevo" icon="add_circle_outline"
+                 no-caps dense @click="fabNew" />
+          <q-btn color="red-7" icon="picture_as_pdf" no-caps dense @click="exportPdf('fabricantes')">
+            <q-tooltip>Exportar PDF</q-tooltip>
+          </q-btn>
+          <q-btn color="green-8" icon="table_view" no-caps dense @click="exportExcel('fabricantes')">
+            <q-tooltip>Exportar Excel</q-tooltip>
+          </q-btn>
+        </div>
+
+        <q-markup-table dense flat bordered separator="cell" class="full-width">
+          <thead>
+            <tr class="bg-grey-2">
+              <th class="text-left" style="width:64px"></th>
+              <th class="text-left">Nombre</th>
+              <th class="text-left">País</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-if="loadingFab">
+              <td colspan="3" class="text-center q-pa-md">
+                <q-spinner color="deep-orange" size="24px" />
+              </td>
+            </tr>
+            <tr v-else-if="!fabricantes.length">
+              <td colspan="3" class="text-center text-grey-5 q-pa-md">Sin datos</td>
+            </tr>
+            <tr v-else v-for="row in fabricantes" :key="row.id">
+              <td class="q-pa-xs">
+                <q-btn-dropdown v-if="canEditar || canEliminar"
+                                label="Opc." no-caps size="xs" dense color="deep-orange" flat>
+                  <q-list dense>
+                    <q-item v-if="canEditar" clickable v-close-popup @click="fabEdit(row)">
+                      <q-item-section avatar><q-icon name="edit" size="xs" /></q-item-section>
+                      <q-item-section><q-item-label>Editar</q-item-label></q-item-section>
+                    </q-item>
+                    <q-item v-if="canEliminar" clickable v-close-popup @click="fabDelete(row.id)">
+                      <q-item-section avatar><q-icon name="delete" color="negative" size="xs" /></q-item-section>
+                      <q-item-section><q-item-label class="text-negative">Eliminar</q-item-label></q-item-section>
+                    </q-item>
+                  </q-list>
+                </q-btn-dropdown>
+              </td>
+              <td>{{ row.nombre }}</td>
+              <td>{{ row.pais || '—' }}</td>
+            </tr>
+          </tbody>
+        </q-markup-table>
+
+        <div class="row items-center justify-between q-mt-xs q-px-xs">
+          <div class="text-caption text-grey-6">
+            Total: {{ totalFab }} | Página {{ pageFab }} de {{ pagesFab }}
+          </div>
+          <q-pagination v-model="pageFab" :max="pagesFab" :max-pages="6"
+                        boundary-links direction-links size="sm"
+                        @update:model-value="loadFabricantes" />
+        </div>
       </div>
 
-      <!-- ══ TAB UNIDADES ═════════════════════════════════════════ -->
+      <!-- ══ TAB UNIDADES ══════════════════════════════════════════ -->
       <div v-show="tab === 'unidades'">
-        <q-table
-          :rows="unidades || []"
-          :columns="colUnid || []"
-          row-key="id"
-          dense flat bordered
-          :pagination="paginationUnid"
-          @request="onRequestUnid"
-          :loading="loadingUnid"
-          :rows-per-page-options="[10, 20, 50]"
-        >
-          <template v-slot:top-left>
-            <span class="text-subtitle2 text-grey-7">Unidades de medida</span>
-          </template>
-          <template v-slot:top-right>
-            <q-input v-model="filterUnid" label="Buscar" dense outlined clearable
-                     style="width:160px" class="q-mr-xs">
-              <template v-slot:append><q-icon name="search" /></template>
-            </q-input>
-            <q-btn v-if="canCrear" color="positive" label="Nuevo" icon="add_circle_outline"
-                   no-caps dense @click="unidNew" class="q-mr-xs" />
-            <q-btn color="red-7" icon="picture_as_pdf" no-caps dense @click="exportPdf('unidades')"
-                   class="q-mr-xs">
-              <q-tooltip>Exportar PDF</q-tooltip>
-            </q-btn>
-            <q-btn color="green-8" icon="table_view" no-caps dense @click="exportExcel('unidades')">
-              <q-tooltip>Exportar Excel</q-tooltip>
-            </q-btn>
-          </template>
-          <template v-slot:body-cell-actions="props">
-            <q-td :props="props" class="q-pa-xs">
-              <q-btn-dropdown v-if="canEditar || canEliminar"
-                              label="Opc." no-caps size="xs" dense color="purple" flat>
-                <q-list dense>
-                  <q-item v-if="canEditar" clickable v-close-popup @click="unidEdit(props.row)">
-                    <q-item-section avatar><q-icon name="edit" size="xs" /></q-item-section>
-                    <q-item-section><q-item-label>Editar</q-item-label></q-item-section>
-                  </q-item>
-                  <q-item v-if="canEliminar" clickable v-close-popup @click="unidDelete(props.row.id)">
-                    <q-item-section avatar><q-icon name="delete" color="negative" size="xs" /></q-item-section>
-                    <q-item-section><q-item-label class="text-negative">Eliminar</q-item-label></q-item-section>
-                  </q-item>
-                </q-list>
-              </q-btn-dropdown>
-            </q-td>
-          </template>
-        </q-table>
+        <div class="row items-center q-gutter-xs q-mb-xs">
+          <span class="text-subtitle2 text-grey-7">Unidades de medida</span>
+          <q-space />
+          <q-input v-model="filterUnid" label="Buscar" dense outlined clearable
+                   style="width:160px" @update:model-value="onFilterUnid">
+            <template v-slot:append><q-icon name="search" /></template>
+          </q-input>
+          <q-btn v-if="canCrear" color="positive" label="Nuevo" icon="add_circle_outline"
+                 no-caps dense @click="unidNew" />
+          <q-btn color="red-7" icon="picture_as_pdf" no-caps dense @click="exportPdf('unidades')">
+            <q-tooltip>Exportar PDF</q-tooltip>
+          </q-btn>
+          <q-btn color="green-8" icon="table_view" no-caps dense @click="exportExcel('unidades')">
+            <q-tooltip>Exportar Excel</q-tooltip>
+          </q-btn>
+        </div>
+
+        <q-markup-table dense flat bordered separator="cell" class="full-width">
+          <thead>
+            <tr class="bg-grey-2">
+              <th class="text-left" style="width:64px"></th>
+              <th class="text-left">Nombre</th>
+              <th class="text-left">Abreviatura</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-if="loadingUnid">
+              <td colspan="3" class="text-center q-pa-md">
+                <q-spinner color="purple" size="24px" />
+              </td>
+            </tr>
+            <tr v-else-if="!unidades.length">
+              <td colspan="3" class="text-center text-grey-5 q-pa-md">Sin datos</td>
+            </tr>
+            <tr v-else v-for="row in unidades" :key="row.id">
+              <td class="q-pa-xs">
+                <q-btn-dropdown v-if="canEditar || canEliminar"
+                                label="Opc." no-caps size="xs" dense color="purple" flat>
+                  <q-list dense>
+                    <q-item v-if="canEditar" clickable v-close-popup @click="unidEdit(row)">
+                      <q-item-section avatar><q-icon name="edit" size="xs" /></q-item-section>
+                      <q-item-section><q-item-label>Editar</q-item-label></q-item-section>
+                    </q-item>
+                    <q-item v-if="canEliminar" clickable v-close-popup @click="unidDelete(row.id)">
+                      <q-item-section avatar><q-icon name="delete" color="negative" size="xs" /></q-item-section>
+                      <q-item-section><q-item-label class="text-negative">Eliminar</q-item-label></q-item-section>
+                    </q-item>
+                  </q-list>
+                </q-btn-dropdown>
+              </td>
+              <td>{{ row.nombre }}</td>
+              <td>{{ row.abreviatura || '—' }}</td>
+            </tr>
+          </tbody>
+        </q-markup-table>
+
+        <div class="row items-center justify-between q-mt-xs q-px-xs">
+          <div class="text-caption text-grey-6">
+            Total: {{ totalUnid }} | Página {{ pageUnid }} de {{ pagesUnid }}
+          </div>
+          <q-pagination v-model="pageUnid" :max="pagesUnid" :max-pages="6"
+                        boundary-links direction-links size="sm"
+                        @update:model-value="loadUnidades" />
+        </div>
       </div>
 
     </template>
@@ -361,395 +408,315 @@
   </q-page>
 </template>
 
-<script>
-export default {
-  name: 'FarmaciaIndex',
+<script setup>
+import { ref, computed, watch, onMounted, getCurrentInstance } from 'vue'
 
-  data () {
-    return {
-      tab: 'productos',
-      resumen: { productos: 0, fabricantes: 0, unidades: 0 },
+const { proxy } = getCurrentInstance()
 
-      // ── Productos ─────────────────────────────────────────────
-      productos: [],
-      loadingProd: false,
-      savingProd: false,
-      dialogProd: false,
-      prodAction: 'Nuevo',
-      filterProd: '',
-      paginationProd: { page: 1, rowsPerPage: 20, rowsNumber: 0, sortBy: null, descending: false },
-      prod: {},
+// ── Permisos ───────────────────────────────────────────────────
+const canVer      = computed(() => proxy.$store.hasPermission('Ver Productos'))
+const canCrear    = computed(() => proxy.$store.hasPermission('Crear Productos'))
+const canEditar   = computed(() => proxy.$store.hasPermission('Editar Productos'))
+const canEliminar = computed(() => proxy.$store.hasPermission('Eliminar Productos'))
 
-      // ── Fabricantes ───────────────────────────────────────────
-      fabricantes: [],
-      allFabricantes: [],
-      loadingFab: false,
-      savingFab: false,
-      dialogFab: false,
-      fabAction: 'Nuevo',
-      filterFab: '',
-      paginationFab: { page: 1, rowsPerPage: 20, rowsNumber: 0 },
-      fab: {},
-      fabQuick: false,
-      fabQNombre: '',
-      fabQPais: '',
+// ── Estado general ─────────────────────────────────────────────
+const tab     = ref('productos')
+const resumen = ref({ productos: 0, fabricantes: 0, unidades: 0 })
 
-      // ── Unidades ──────────────────────────────────────────────
-      unidades: [],
-      allUnidades: [],
-      loadingUnid: false,
-      savingUnid: false,
-      dialogUnid: false,
-      unidAction: 'Nuevo',
-      filterUnid: '',
-      paginationUnid: { page: 1, rowsPerPage: 20, rowsNumber: 0 },
-      unid: {},
-      unidQuick: false,
-      unidQNombre: '',
-      unidQAbrev: '',
+// ── Productos ──────────────────────────────────────────────────
+const productos   = ref([])
+const loadingProd = ref(false)
+const savingProd  = ref(false)
+const dialogProd  = ref(false)
+const prodAction  = ref('Nuevo')
+const filterProd  = ref('')
+const pageProd    = ref(1)
+const totalProd   = ref(0)
+const perProd     = 20
+const prod        = ref({})
+let timerProd     = null
 
-      _timerProd: null,
-      _timerFab: null,
-      _timerUnid: null,
+const pagesProd = computed(() => Math.max(1, Math.ceil(totalProd.value / perProd)))
+
+// ── Fabricantes ────────────────────────────────────────────────
+const fabricantes    = ref([])
+const allFabricantes = ref([])
+const loadingFab     = ref(false)
+const savingFab      = ref(false)
+const dialogFab      = ref(false)
+const fabAction      = ref('Nuevo')
+const filterFab      = ref('')
+const pageFab        = ref(1)
+const totalFab       = ref(0)
+const perFab         = 20
+const fab            = ref({})
+const fabQuick       = ref(false)
+const fabQNombre     = ref('')
+const fabQPais       = ref('')
+let timerFab         = null
+
+const pagesFab = computed(() => Math.max(1, Math.ceil(totalFab.value / perFab)))
+
+// ── Unidades ───────────────────────────────────────────────────
+const unidades    = ref([])
+const allUnidades = ref([])
+const loadingUnid = ref(false)
+const savingUnid  = ref(false)
+const dialogUnid  = ref(false)
+const unidAction  = ref('Nuevo')
+const filterUnid  = ref('')
+const pageUnid    = ref(1)
+const totalUnid   = ref(0)
+const perUnid     = 20
+const unid        = ref({})
+const unidQuick   = ref(false)
+const unidQNombre = ref('')
+const unidQAbrev  = ref('')
+let timerUnid     = null
+
+const pagesUnid = computed(() => Math.max(1, Math.ceil(totalUnid.value / perUnid)))
+
+// ── Init ───────────────────────────────────────────────────────
+function init () {
+  loadResumen()
+  loadProductos()
+  loadFabricantes()
+  loadUnidades()
+  loadAllFabricantes()
+  loadAllUnidades()
+}
+
+onMounted(() => { if (proxy.$store.isLogged) init() })
+watch(() => proxy.$store.isLogged, (val) => { if (val) init() })
+
+// ── Resumen ────────────────────────────────────────────────────
+function loadResumen () {
+  proxy.$axios.get('farmacia/resumen')
+    .then(r => { if (r.data && typeof r.data === 'object') resumen.value = r.data })
+    .catch(() => {})
+}
+
+// ── Productos ──────────────────────────────────────────────────
+function loadProductos () {
+  loadingProd.value = true
+  proxy.$axios.get('productos', {
+    params: { page: pageProd.value, per_page: perProd, q: filterProd.value, tipo: 'FARMACIA' },
+  }).then(r => {
+    productos.value = r.data.data || []
+    totalProd.value = r.data.total || 0
+  }).catch(e => proxy.$alert.error(e.response?.data?.message || 'Error al cargar'))
+    .finally(() => { loadingProd.value = false })
+}
+
+function onFilterProd () {
+  clearTimeout(timerProd)
+  timerProd = setTimeout(() => { pageProd.value = 1; loadProductos() }, 350)
+}
+
+function prodNew () {
+  prod.value = { codigo: '', nombre: '', descripcion: '', marca: '', fabricante_id: null, unidad_id: null }
+  prodAction.value = 'Nuevo'
+  dialogProd.value = true
+}
+
+function prodEdit (row) {
+  prod.value = { ...row, fabricante_id: row.fabricante?.id || null, unidad_id: row.unidad?.id || null }
+  prodAction.value = 'Editar'
+  dialogProd.value = true
+}
+
+async function prodSave () {
+  savingProd.value = true
+  try {
+    const payload = { ...prod.value, tipo: 'FARMACIA' }
+    if (prod.value.id) {
+      await proxy.$axios.put('productos/' + prod.value.id, payload)
+      proxy.$alert.success('Producto actualizado')
+    } else {
+      await proxy.$axios.post('productos', payload)
+      proxy.$alert.success('Producto creado')
     }
-  },
+    dialogProd.value = false
+    loadProductos()
+    loadResumen()
+  } catch (e) {
+    proxy.$alert.error(e.response?.data?.message || 'Error al guardar')
+  } finally {
+    savingProd.value = false
+  }
+}
 
-  computed: {
-    canVer ()      { return this.$store.hasPermission('Ver Productos') },
-    canCrear ()    { return this.$store.hasPermission('Crear Productos') },
-    canEditar ()   { return this.$store.hasPermission('Editar Productos') },
-    canEliminar () { return this.$store.hasPermission('Eliminar Productos') },
+function prodDelete (id) {
+  proxy.$alert.dialog('¿Desea eliminar el producto?').onOk(() => {
+    proxy.$axios.delete('productos/' + id)
+      .then(() => { proxy.$alert.success('Producto eliminado'); loadProductos(); loadResumen() })
+      .catch(e => proxy.$alert.error(e.response?.data?.message || 'Error'))
+  })
+}
 
-    tabActiveColor () {
-      return { productos: 'teal', fabricantes: 'deep-orange', unidades: 'purple' }[this.tab] || 'primary'
-    },
+// ── Fabricantes ────────────────────────────────────────────────
+function loadFabricantes () {
+  loadingFab.value = true
+  proxy.$axios.get('fabricantes', {
+    params: { page: pageFab.value, per_page: perFab, q: filterFab.value },
+  }).then(r => {
+    fabricantes.value = r.data.data || []
+    totalFab.value = r.data.total || 0
+  }).catch(e => proxy.$alert.error(e.response?.data?.message || 'Error'))
+    .finally(() => { loadingFab.value = false })
+}
 
-    colProductos () {
-      return [
-        { name: 'actions',    label: '',           align: 'center', style: 'width:64px' },
-        { name: 'codigo',     label: 'Código',     align: 'left',   field: 'codigo',  sortable: false },
-        { name: 'nombre',     label: 'Nombre',     align: 'left',   field: 'nombre',  sortable: false },
-        { name: 'marca',      label: 'Marca',      align: 'left',   field: 'marca' },
-        { name: 'fabricante', label: 'Fabricante', align: 'left' },
-        { name: 'unidad',     label: 'Unidad',     align: 'left' },
-      ]
-    },
+function loadAllFabricantes () {
+  proxy.$axios.get('fabricantes').then(r => { allFabricantes.value = r.data || [] })
+}
 
-    colFab () {
-      return [
-        { name: 'actions', label: '',       align: 'center', style: 'width:64px' },
-        { name: 'nombre',  label: 'Nombre', align: 'left',   field: 'nombre', sortable: false },
-        { name: 'pais',    label: 'País',   align: 'left',   field: 'pais' },
-      ]
-    },
+function onFilterFab () {
+  clearTimeout(timerFab)
+  timerFab = setTimeout(() => { pageFab.value = 1; loadFabricantes() }, 350)
+}
 
-    colUnid () {
-      return [
-        { name: 'actions',     label: '',            align: 'center', style: 'width:64px' },
-        { name: 'nombre',      label: 'Nombre',      align: 'left',   field: 'nombre',     sortable: false },
-        { name: 'abreviatura', label: 'Abreviatura', align: 'left',   field: 'abreviatura' },
-      ]
-    },
-  },
+function fabNew ()     { fab.value = { nombre: '', pais: '' }; fabAction.value = 'Nuevo'; dialogFab.value = true }
+function fabEdit (row) { fab.value = { ...row }; fabAction.value = 'Editar'; dialogFab.value = true }
 
-  watch: {
-    '$store.isLogged' (val) {
-      if (val) this.init()
-    },
-    filterProd () {
-      clearTimeout(this._timerProd)
-      this._timerProd = setTimeout(() => {
-        this.paginationProd.page = 1
-        this.loadProductos()
-      }, 350)
-    },
-    filterFab () {
-      clearTimeout(this._timerFab)
-      this._timerFab = setTimeout(() => {
-        this.paginationFab.page = 1
-        this.loadFabricantes()
-      }, 350)
-    },
-    filterUnid () {
-      clearTimeout(this._timerUnid)
-      this._timerUnid = setTimeout(() => {
-        this.paginationUnid.page = 1
-        this.loadUnidades()
-      }, 350)
-    },
-  },
+async function fabSave () {
+  savingFab.value = true
+  try {
+    if (fab.value.id) {
+      await proxy.$axios.put('fabricantes/' + fab.value.id, fab.value)
+      proxy.$alert.success('Fabricante actualizado')
+    } else {
+      await proxy.$axios.post('fabricantes', fab.value)
+      proxy.$alert.success('Fabricante creado')
+    }
+    dialogFab.value = false
+    loadFabricantes(); loadAllFabricantes(); loadResumen()
+  } catch (e) {
+    proxy.$alert.error(e.response?.data?.message || 'Error al guardar')
+  } finally {
+    savingFab.value = false
+  }
+}
 
-  mounted () {
-    if (this.$store.isLogged) this.init()
-  },
+function fabDelete (id) {
+  proxy.$alert.dialog('¿Desea eliminar el fabricante?').onOk(() => {
+    proxy.$axios.delete('fabricantes/' + id)
+      .then(() => { proxy.$alert.success('Fabricante eliminado'); loadFabricantes(); loadAllFabricantes(); loadResumen() })
+      .catch(e => proxy.$alert.error(e.response?.data?.message || 'Error'))
+  })
+}
 
-  methods: {
-    init () {
-      this.loadResumen()
-      this.loadProductos()
-      this.loadFabricantes()
-      this.loadUnidades()
-      this.loadAllFabricantes()
-      this.loadAllUnidades()
-    },
+async function fabQuickSave () {
+  savingFab.value = true
+  try {
+    const res = await proxy.$axios.post('fabricantes', { nombre: fabQNombre.value, pais: fabQPais.value })
+    loadAllFabricantes()
+    prod.value.fabricante_id = res.data.id
+    fabQuick.value = false
+    fabQNombre.value = ''
+    fabQPais.value = ''
+  } catch (e) {
+    proxy.$alert.error(e.response?.data?.message || 'Error')
+  } finally {
+    savingFab.value = false
+  }
+}
 
-    // ── Resumen ──────────────────────────────────────────────────
-    loadResumen () {
-      this.$axios.get('farmacia/resumen')
-        .then(r => { if (r.data && typeof r.data === 'object') this.resumen = r.data })
-        .catch(() => {})
-    },
+// ── Unidades ───────────────────────────────────────────────────
+function loadUnidades () {
+  loadingUnid.value = true
+  proxy.$axios.get('unidades', {
+    params: { page: pageUnid.value, per_page: perUnid, q: filterUnid.value },
+  }).then(r => {
+    unidades.value = r.data.data || []
+    totalUnid.value = r.data.total || 0
+  }).catch(e => proxy.$alert.error(e.response?.data?.message || 'Error'))
+    .finally(() => { loadingUnid.value = false })
+}
 
-    // ── Productos ────────────────────────────────────────────────
-    loadProductos () {
-      this.loadingProd = true
-      this.$axios.get('productos', {
-        params: { page: this.paginationProd.page, per_page: this.paginationProd.rowsPerPage, q: this.filterProd, tipo: 'FARMACIA' },
-      }).then(r => {
-        this.productos = r.data.data || []
-        this.paginationProd.rowsNumber = r.data.total || 0
-      }).catch(e => this.$alert.error(e.response?.data?.message || 'Error al cargar'))
-        .finally(() => { this.loadingProd = false })
-    },
+function loadAllUnidades () {
+  proxy.$axios.get('unidades').then(r => { allUnidades.value = r.data || [] })
+}
 
-    onRequestProd (props) {
-      const { page, rowsPerPage, sortBy, descending } = props.pagination
-      this.paginationProd.page = page
-      this.paginationProd.rowsPerPage = rowsPerPage
-      this.paginationProd.sortBy = sortBy
-      this.paginationProd.descending = descending
-      this.loadProductos()
-    },
+function onFilterUnid () {
+  clearTimeout(timerUnid)
+  timerUnid = setTimeout(() => { pageUnid.value = 1; loadUnidades() }, 350)
+}
 
-    prodNew () {
-      this.prod = { codigo: '', nombre: '', descripcion: '', marca: '', fabricante_id: null, unidad_id: null, tipo: 'FARMACIA' }
-      this.prodAction = 'Nuevo'
-      this.dialogProd = true
-    },
+function unidNew ()     { unid.value = { nombre: '', abreviatura: '' }; unidAction.value = 'Nuevo'; dialogUnid.value = true }
+function unidEdit (row) { unid.value = { ...row }; unidAction.value = 'Editar'; dialogUnid.value = true }
 
-    prodEdit (row) {
-      this.prod = { ...row, fabricante_id: row.fabricante?.id || null, unidad_id: row.unidad?.id || null }
-      this.prodAction = 'Editar'
-      this.dialogProd = true
-    },
+async function unidSave () {
+  savingUnid.value = true
+  try {
+    if (unid.value.id) {
+      await proxy.$axios.put('unidades/' + unid.value.id, unid.value)
+      proxy.$alert.success('Unidad actualizada')
+    } else {
+      await proxy.$axios.post('unidades', unid.value)
+      proxy.$alert.success('Unidad creada')
+    }
+    dialogUnid.value = false
+    loadUnidades(); loadAllUnidades(); loadResumen()
+  } catch (e) {
+    proxy.$alert.error(e.response?.data?.message || 'Error al guardar')
+  } finally {
+    savingUnid.value = false
+  }
+}
 
-    async prodSave () {
-      this.savingProd = true
-      try {
-        const payload = { ...this.prod, tipo: 'FARMACIA' }
-        if (this.prod.id) {
-          await this.$axios.put('productos/' + this.prod.id, payload)
-          this.$alert.success('Producto actualizado')
-        } else {
-          await this.$axios.post('productos', payload)
-          this.$alert.success('Producto creado')
-        }
-        this.dialogProd = false
-        this.loadProductos()
-        this.loadResumen()
-      } catch (e) {
-        this.$alert.error(e.response?.data?.message || 'Error al guardar')
-      } finally {
-        this.savingProd = false
-      }
-    },
+function unidDelete (id) {
+  proxy.$alert.dialog('¿Desea eliminar la unidad?').onOk(() => {
+    proxy.$axios.delete('unidades/' + id)
+      .then(() => { proxy.$alert.success('Unidad eliminada'); loadUnidades(); loadAllUnidades(); loadResumen() })
+      .catch(e => proxy.$alert.error(e.response?.data?.message || 'Error'))
+  })
+}
 
-    prodDelete (id) {
-      this.$alert.dialog('¿Desea eliminar el producto?').onOk(() => {
-        this.$axios.delete('productos/' + id)
-          .then(() => { this.$alert.success('Producto eliminado'); this.loadProductos(); this.loadResumen() })
-          .catch(e => this.$alert.error(e.response?.data?.message || 'Error'))
-      })
-    },
+async function unidQuickSave () {
+  savingUnid.value = true
+  try {
+    const res = await proxy.$axios.post('unidades', { nombre: unidQNombre.value, abreviatura: unidQAbrev.value })
+    loadAllUnidades()
+    prod.value.unidad_id = res.data.id
+    unidQuick.value = false
+    unidQNombre.value = ''
+    unidQAbrev.value  = ''
+  } catch (e) {
+    proxy.$alert.error(e.response?.data?.message || 'Error')
+  } finally {
+    savingUnid.value = false
+  }
+}
 
-    // ── Fabricantes ──────────────────────────────────────────────
-    loadFabricantes () {
-      this.loadingFab = true
-      this.$axios.get('fabricantes', {
-        params: { page: this.paginationFab.page, per_page: this.paginationFab.rowsPerPage, q: this.filterFab },
-      }).then(r => {
-        this.fabricantes = r.data.data || []
-        this.paginationFab.rowsNumber = r.data.total || 0
-      }).catch(e => this.$alert.error(e.response?.data?.message || 'Error'))
-        .finally(() => { this.loadingFab = false })
-    },
+// ── Exportar ───────────────────────────────────────────────────
+async function exportPdf (recurso) {
+  try {
+    const params = recurso === 'productos'
+      ? { q: filterProd.value, tipo: 'FARMACIA' }
+      : recurso === 'fabricantes' ? { q: filterFab.value } : { q: filterUnid.value }
+    const res = await proxy.$axios.get(recurso + '/export-pdf', { params, responseType: 'blob' })
+    window.open(window.URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' })), '_blank')
+  } catch (e) {
+    proxy.$alert.error('Error al generar PDF')
+  }
+}
 
-    loadAllFabricantes () {
-      this.$axios.get('fabricantes').then(r => { this.allFabricantes = r.data || [] })
-    },
-
-    onRequestFab (props) {
-      const { page, rowsPerPage } = props.pagination
-      this.paginationFab.page = page
-      this.paginationFab.rowsPerPage = rowsPerPage
-      this.loadFabricantes()
-    },
-
-    fabNew ()     { this.fab = { nombre: '', pais: '' }; this.fabAction = 'Nuevo'; this.dialogFab = true },
-    fabEdit (row) { this.fab = { ...row }; this.fabAction = 'Editar'; this.dialogFab = true },
-
-    async fabSave () {
-      this.savingFab = true
-      try {
-        if (this.fab.id) {
-          await this.$axios.put('fabricantes/' + this.fab.id, this.fab)
-          this.$alert.success('Fabricante actualizado')
-        } else {
-          await this.$axios.post('fabricantes', this.fab)
-          this.$alert.success('Fabricante creado')
-        }
-        this.dialogFab = false
-        this.loadFabricantes()
-        this.loadAllFabricantes()
-        this.loadResumen()
-      } catch (e) {
-        this.$alert.error(e.response?.data?.message || 'Error al guardar')
-      } finally {
-        this.savingFab = false
-      }
-    },
-
-    fabDelete (id) {
-      this.$alert.dialog('¿Desea eliminar el fabricante?').onOk(() => {
-        this.$axios.delete('fabricantes/' + id)
-          .then(() => {
-            this.$alert.success('Fabricante eliminado')
-            this.loadFabricantes()
-            this.loadAllFabricantes()
-            this.loadResumen()
-          })
-          .catch(e => this.$alert.error(e.response?.data?.message || 'Error'))
-      })
-    },
-
-    async fabQuickSave () {
-      this.savingFab = true
-      try {
-        const res = await this.$axios.post('fabricantes', { nombre: this.fabQNombre, pais: this.fabQPais })
-        this.loadAllFabricantes()
-        this.prod.fabricante_id = res.data.id
-        this.fabQuick = false
-        this.fabQNombre = ''
-        this.fabQPais = ''
-      } catch (e) {
-        this.$alert.error(e.response?.data?.message || 'Error')
-      } finally {
-        this.savingFab = false
-      }
-    },
-
-    // ── Unidades ─────────────────────────────────────────────────
-    loadUnidades () {
-      this.loadingUnid = true
-      this.$axios.get('unidades', {
-        params: { page: this.paginationUnid.page, per_page: this.paginationUnid.rowsPerPage, q: this.filterUnid },
-      }).then(r => {
-        this.unidades = r.data.data || []
-        this.paginationUnid.rowsNumber = r.data.total || 0
-      }).catch(e => this.$alert.error(e.response?.data?.message || 'Error'))
-        .finally(() => { this.loadingUnid = false })
-    },
-
-    loadAllUnidades () {
-      this.$axios.get('unidades').then(r => { this.allUnidades = r.data || [] })
-    },
-
-    onRequestUnid (props) {
-      const { page, rowsPerPage } = props.pagination
-      this.paginationUnid.page = page
-      this.paginationUnid.rowsPerPage = rowsPerPage
-      this.loadUnidades()
-    },
-
-    unidNew ()     { this.unid = { nombre: '', abreviatura: '' }; this.unidAction = 'Nuevo'; this.dialogUnid = true },
-    unidEdit (row) { this.unid = { ...row }; this.unidAction = 'Editar'; this.dialogUnid = true },
-
-    async unidSave () {
-      this.savingUnid = true
-      try {
-        if (this.unid.id) {
-          await this.$axios.put('unidades/' + this.unid.id, this.unid)
-          this.$alert.success('Unidad actualizada')
-        } else {
-          await this.$axios.post('unidades', this.unid)
-          this.$alert.success('Unidad creada')
-        }
-        this.dialogUnid = false
-        this.loadUnidades()
-        this.loadAllUnidades()
-        this.loadResumen()
-      } catch (e) {
-        this.$alert.error(e.response?.data?.message || 'Error al guardar')
-      } finally {
-        this.savingUnid = false
-      }
-    },
-
-    unidDelete (id) {
-      this.$alert.dialog('¿Desea eliminar la unidad?').onOk(() => {
-        this.$axios.delete('unidades/' + id)
-          .then(() => {
-            this.$alert.success('Unidad eliminada')
-            this.loadUnidades()
-            this.loadAllUnidades()
-            this.loadResumen()
-          })
-          .catch(e => this.$alert.error(e.response?.data?.message || 'Error'))
-      })
-    },
-
-    async unidQuickSave () {
-      this.savingUnid = true
-      try {
-        const res = await this.$axios.post('unidades', { nombre: this.unidQNombre, abreviatura: this.unidQAbrev })
-        this.loadAllUnidades()
-        this.prod.unidad_id = res.data.id
-        this.unidQuick = false
-        this.unidQNombre = ''
-        this.unidQAbrev  = ''
-      } catch (e) {
-        this.$alert.error(e.response?.data?.message || 'Error')
-      } finally {
-        this.savingUnid = false
-      }
-    },
-
-    // ── Exportar ─────────────────────────────────────────────────
-    async exportPdf (recurso) {
-      try {
-        const params = recurso === 'productos'
-          ? { q: this.filterProd, tipo: 'FARMACIA' }
-          : recurso === 'fabricantes'
-            ? { q: this.filterFab }
-            : { q: this.filterUnid }
-        const res = await this.$axios.get(recurso + '/export-pdf', { params, responseType: 'blob' })
-        const url = window.URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }))
-        window.open(url, '_blank')
-      } catch (e) {
-        this.$alert.error('Error al generar PDF')
-      }
-    },
-
-    async exportExcel (recurso) {
-      try {
-        const params = recurso === 'productos'
-          ? { q: this.filterProd, tipo: 'FARMACIA' }
-          : recurso === 'fabricantes'
-            ? { q: this.filterFab }
-            : { q: this.filterUnid }
-        const res = await this.$axios.get(recurso + '/export-excel', { params, responseType: 'blob' })
-        const url = window.URL.createObjectURL(new Blob([res.data], {
-          type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        }))
-        const a = document.createElement('a')
-        a.href = url
-        a.download = recurso + '_' + new Date().toISOString().slice(0, 10) + '.xlsx'
-        a.click()
-        window.URL.revokeObjectURL(url)
-      } catch (e) {
-        this.$alert.error('Error al generar Excel')
-      }
-    },
-  },
+async function exportExcel (recurso) {
+  try {
+    const params = recurso === 'productos'
+      ? { q: filterProd.value, tipo: 'FARMACIA' }
+      : recurso === 'fabricantes' ? { q: filterFab.value } : { q: filterUnid.value }
+    const res = await proxy.$axios.get(recurso + '/export-excel', { params, responseType: 'blob' })
+    const url = window.URL.createObjectURL(new Blob([res.data], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    }))
+    const a = document.createElement('a')
+    a.href = url
+    a.download = recurso + '_' + new Date().toISOString().slice(0, 10) + '.xlsx'
+    a.click()
+    window.URL.revokeObjectURL(url)
+  } catch (e) {
+    proxy.$alert.error('Error al generar Excel')
+  }
 }
 </script>

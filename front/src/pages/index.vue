@@ -180,6 +180,7 @@ const menuSections = [
 ]
 
 const userPermissions = computed(() => proxy.$store.permissions || [])
+// console.log(userPermissions)
 
 const visibleMenuSections = computed(() =>
   menuSections.filter(section => visibleSectionLinks(section).length > 0)

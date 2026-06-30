@@ -2,11 +2,13 @@
   <q-page class="q-pa-xs">
 
     <!-- Sin acceso -->
-    <div v-if="$store.isLogged && !canVer"
+    <div v-if="$store.isLogged && !$store.hasPermission('Ver Productos')"
          class="column items-center justify-center q-gutter-sm" style="min-height:320px">
       <q-icon name="lock" size="72px" color="grey-4" />
       <div class="text-h6 text-grey-5">Sin acceso</div>
       <div class="text-body2 text-grey-6">No tiene permiso para ver productos</div>
+      <pre>{{$store.permissions}}</pre>
+      <pre>{{canVer?'true':'false'}}</pre>
     </div>
 
     <template v-else-if="$store.isLogged">
@@ -36,9 +38,9 @@
       <q-tabs v-model="tab" dense align="left"
               :active-color="tabActiveColor" :indicator-color="tabActiveColor"
               class="q-mb-xs">
-        <q-tab name="productos"   icon="medication"  label="productos" />
-        <q-tab name="fabricantes" icon="factory"     label="fabricantes" />
-        <q-tab name="unidades"    icon="straighten"  label="unidades" />
+        <q-tab name="productos"   icon="medication"  label="Productos" no-caps />
+        <q-tab name="fabricantes" icon="factory"     label="Fabricantes" no-caps />
+        <q-tab name="unidades"    icon="straighten"  label="Unidades" no-caps />
       </q-tabs>
       <q-separator class="q-mb-xs" />
 
@@ -49,7 +51,7 @@
           :columns="colProductos || []"
           row-key="id"
           dense flat bordered
-          v-model:pagination="paginationProd"
+          :pagination="paginationProd"
           @request="onRequestProd"
           :loading="loadingProd"
           :rows-per-page-options="[10, 20, 50]"
@@ -110,7 +112,7 @@
           :columns="colFab || []"
           row-key="id"
           dense flat bordered
-          v-model:pagination="paginationFab"
+          :pagination="paginationFab"
           @request="onRequestFab"
           :loading="loadingFab"
           :rows-per-page-options="[10, 20, 50]"
@@ -160,7 +162,7 @@
           :columns="colUnid || []"
           row-key="id"
           dense flat bordered
-          v-model:pagination="paginationUnid"
+          :pagination="paginationUnid"
           @request="onRequestUnid"
           :loading="loadingUnid"
           :rows-per-page-options="[10, 20, 50]"
@@ -511,7 +513,11 @@ export default {
     },
 
     onRequestProd (props) {
-      this.paginationProd = props.pagination
+      const { page, rowsPerPage, sortBy, descending } = props.pagination
+      this.paginationProd.page = page
+      this.paginationProd.rowsPerPage = rowsPerPage
+      this.paginationProd.sortBy = sortBy
+      this.paginationProd.descending = descending
       this.loadProductos()
     },
 
@@ -573,7 +579,9 @@ export default {
     },
 
     onRequestFab (props) {
-      this.paginationFab = props.pagination
+      const { page, rowsPerPage } = props.pagination
+      this.paginationFab.page = page
+      this.paginationFab.rowsPerPage = rowsPerPage
       this.loadFabricantes()
     },
 
@@ -647,7 +655,9 @@ export default {
     },
 
     onRequestUnid (props) {
-      this.paginationUnid = props.pagination
+      const { page, rowsPerPage } = props.pagination
+      this.paginationUnid.page = page
+      this.paginationUnid.rowsPerPage = rowsPerPage
       this.loadUnidades()
     },
 

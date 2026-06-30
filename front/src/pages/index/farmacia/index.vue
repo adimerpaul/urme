@@ -1,42 +1,76 @@
 <template>
-  <q-page class="q-pa-md">
+  <q-page class="q-pa-xs">
 
     <!-- Sin acceso -->
-    <div v-if="proxy.$store.isLogged && !canVer"
+    <div v-if="$store.isLogged && !canVer"
          class="column items-center justify-center q-gutter-sm" style="min-height:320px">
       <q-icon name="lock" size="72px" color="grey-4" />
       <div class="text-h6 text-grey-5">Sin acceso</div>
       <div class="text-body2 text-grey-6">No tiene permiso para ver productos</div>
     </div>
 
-    <template v-else>
-      <q-tabs v-model="tab" dense align="left" active-color="primary" indicator-color="primary"
-              class="q-mb-md text-grey-7">
-        <q-tab name="productos"   label="Productos"   icon="medication" />
-        <q-tab name="fabricantes" label="Fabricantes" icon="factory" />
-        <q-tab name="unidades"    label="Unidades"    icon="straighten" />
+    <template v-else-if="$store.isLogged">
+
+      <!-- Tarjetas resumen -->
+      <div class="row q-col-gutter-xs q-mb-xs">
+        <div class="col-4">
+          <q-card flat bordered class="text-center q-pa-xs">
+            <div class="text-caption text-grey-6">Productos</div>
+            <div class="text-h6 text-teal text-weight-bold">{{ resumen?.productos ?? 0 }}</div>
+          </q-card>
+        </div>
+        <div class="col-4">
+          <q-card flat bordered class="text-center q-pa-xs">
+            <div class="text-caption text-grey-6">Fabricantes</div>
+            <div class="text-h6 text-deep-orange text-weight-bold">{{ resumen?.fabricantes ?? 0 }}</div>
+          </q-card>
+        </div>
+        <div class="col-4">
+          <q-card flat bordered class="text-center q-pa-xs">
+            <div class="text-caption text-grey-6">Unidades</div>
+            <div class="text-h6 text-purple text-weight-bold">{{ resumen?.unidades ?? 0 }}</div>
+          </q-card>
+        </div>
+      </div>
+
+      <q-tabs v-model="tab" dense align="left"
+              :active-color="tabActiveColor" :indicator-color="tabActiveColor"
+              class="q-mb-xs">
+        <q-tab name="productos"   icon="medication"  label="productos" />
+        <q-tab name="fabricantes" icon="factory"     label="fabricantes" />
+        <q-tab name="unidades"    icon="straighten"  label="unidades" />
       </q-tabs>
-      <q-separator class="q-mb-md" />
+      <q-separator class="q-mb-xs" />
 
       <!-- ══ TAB PRODUCTOS ════════════════════════════════════════ -->
       <div v-show="tab === 'productos'">
-        <q-table :rows="productos" :columns="colProductos" row-key="id"
-                 dense flat bordered :rows-per-page-options="[0]"
-                 title="Productos" :filter="filterProd" :loading="loadingProd">
+        <q-table
+          :rows="productos || []"
+          :columns="colProductos || []"
+          row-key="id"
+          dense flat bordered
+          v-model:pagination="paginationProd"
+          @request="onRequestProd"
+          :loading="loadingProd"
+          :rows-per-page-options="[10, 20, 50]"
+        >
+          <template v-slot:top-left>
+            <span class="text-subtitle2 text-grey-7">Productos farmacia</span>
+          </template>
           <template v-slot:top-right>
-            <q-btn v-if="canCrear" color="positive" label="Nuevo" icon="add_circle_outline"
-                   no-caps @click="prodNew" class="q-mr-sm" />
-            <q-btn color="primary" label="Actualizar" icon="refresh"
-                   no-caps @click="loadProductos" class="q-mr-sm" />
-            <q-input v-model="filterProd" label="Buscar" dense outlined style="width:180px">
+            <q-input v-model="filterProd" label="Buscar" dense outlined clearable
+                     style="width:160px" class="q-mr-xs">
               <template v-slot:append><q-icon name="search" /></template>
             </q-input>
-          </template>
-
-          <template v-slot:body-cell-tipo="props">
-            <q-td :props="props">
-              <q-badge color="teal" outline>{{ props.row.tipo }}</q-badge>
-            </q-td>
+            <q-btn v-if="canCrear" color="positive" label="Nuevo" icon="add_circle_outline"
+                   no-caps dense @click="prodNew" class="q-mr-xs" />
+            <q-btn color="red-7" icon="picture_as_pdf" no-caps dense @click="exportPdf('productos')"
+                   class="q-mr-xs">
+              <q-tooltip>Exportar PDF</q-tooltip>
+            </q-btn>
+            <q-btn color="green-8" icon="table_view" no-caps dense @click="exportExcel('productos')">
+              <q-tooltip>Exportar Excel</q-tooltip>
+            </q-btn>
           </template>
 
           <template v-slot:body-cell-fabricante="props">
@@ -44,20 +78,22 @@
           </template>
 
           <template v-slot:body-cell-unidad="props">
-            <q-td :props="props">{{ props.row.unidad?.abreviatura || props.row.unidad?.nombre || '—' }}</q-td>
+            <q-td :props="props">
+              {{ props.row.unidad?.abreviatura || props.row.unidad?.nombre || '—' }}
+            </q-td>
           </template>
 
           <template v-slot:body-cell-actions="props">
-            <q-td :props="props">
+            <q-td :props="props" class="q-pa-xs">
               <q-btn-dropdown v-if="canEditar || canEliminar"
-                              label="Opciones" no-caps size="10px" dense color="primary">
-                <q-list>
+                              label="Opc." no-caps size="xs" dense color="primary" flat>
+                <q-list dense>
                   <q-item v-if="canEditar" clickable v-close-popup @click="prodEdit(props.row)">
-                    <q-item-section avatar><q-icon name="edit" /></q-item-section>
+                    <q-item-section avatar><q-icon name="edit" size="xs" /></q-item-section>
                     <q-item-section><q-item-label>Editar</q-item-label></q-item-section>
                   </q-item>
                   <q-item v-if="canEliminar" clickable v-close-popup @click="prodDelete(props.row.id)">
-                    <q-item-section avatar><q-icon name="delete" color="negative" /></q-item-section>
+                    <q-item-section avatar><q-icon name="delete" color="negative" size="xs" /></q-item-section>
                     <q-item-section><q-item-label class="text-negative">Eliminar</q-item-label></q-item-section>
                   </q-item>
                 </q-list>
@@ -69,29 +105,45 @@
 
       <!-- ══ TAB FABRICANTES ══════════════════════════════════════ -->
       <div v-show="tab === 'fabricantes'">
-        <q-table :rows="fabricantes" :columns="colFab" row-key="id"
-                 dense flat bordered :rows-per-page-options="[0]"
-                 title="Fabricantes" :filter="filterFab" :loading="loadingFab">
+        <q-table
+          :rows="fabricantes || []"
+          :columns="colFab || []"
+          row-key="id"
+          dense flat bordered
+          v-model:pagination="paginationFab"
+          @request="onRequestFab"
+          :loading="loadingFab"
+          :rows-per-page-options="[10, 20, 50]"
+        >
+          <template v-slot:top-left>
+            <span class="text-subtitle2 text-grey-7">Fabricantes</span>
+          </template>
           <template v-slot:top-right>
-            <q-btn v-if="canCrear" color="positive" label="Nuevo" icon="add_circle_outline"
-                   no-caps @click="fabNew" class="q-mr-sm" />
-            <q-btn color="primary" label="Actualizar" icon="refresh"
-                   no-caps @click="loadFabricantes" class="q-mr-sm" />
-            <q-input v-model="filterFab" label="Buscar" dense outlined style="width:180px">
+            <q-input v-model="filterFab" label="Buscar" dense outlined clearable
+                     style="width:160px" class="q-mr-xs">
               <template v-slot:append><q-icon name="search" /></template>
             </q-input>
+            <q-btn v-if="canCrear" color="positive" label="Nuevo" icon="add_circle_outline"
+                   no-caps dense @click="fabNew" class="q-mr-xs" />
+            <q-btn color="red-7" icon="picture_as_pdf" no-caps dense @click="exportPdf('fabricantes')"
+                   class="q-mr-xs">
+              <q-tooltip>Exportar PDF</q-tooltip>
+            </q-btn>
+            <q-btn color="green-8" icon="table_view" no-caps dense @click="exportExcel('fabricantes')">
+              <q-tooltip>Exportar Excel</q-tooltip>
+            </q-btn>
           </template>
           <template v-slot:body-cell-actions="props">
-            <q-td :props="props">
+            <q-td :props="props" class="q-pa-xs">
               <q-btn-dropdown v-if="canEditar || canEliminar"
-                              label="Opciones" no-caps size="10px" dense color="primary">
-                <q-list>
+                              label="Opc." no-caps size="xs" dense color="deep-orange" flat>
+                <q-list dense>
                   <q-item v-if="canEditar" clickable v-close-popup @click="fabEdit(props.row)">
-                    <q-item-section avatar><q-icon name="edit" /></q-item-section>
+                    <q-item-section avatar><q-icon name="edit" size="xs" /></q-item-section>
                     <q-item-section><q-item-label>Editar</q-item-label></q-item-section>
                   </q-item>
                   <q-item v-if="canEliminar" clickable v-close-popup @click="fabDelete(props.row.id)">
-                    <q-item-section avatar><q-icon name="delete" color="negative" /></q-item-section>
+                    <q-item-section avatar><q-icon name="delete" color="negative" size="xs" /></q-item-section>
                     <q-item-section><q-item-label class="text-negative">Eliminar</q-item-label></q-item-section>
                   </q-item>
                 </q-list>
@@ -103,29 +155,45 @@
 
       <!-- ══ TAB UNIDADES ═════════════════════════════════════════ -->
       <div v-show="tab === 'unidades'">
-        <q-table :rows="unidades" :columns="colUnid" row-key="id"
-                 dense flat bordered :rows-per-page-options="[0]"
-                 title="Unidades de Medida" :filter="filterUnid" :loading="loadingUnid">
+        <q-table
+          :rows="unidades || []"
+          :columns="colUnid || []"
+          row-key="id"
+          dense flat bordered
+          v-model:pagination="paginationUnid"
+          @request="onRequestUnid"
+          :loading="loadingUnid"
+          :rows-per-page-options="[10, 20, 50]"
+        >
+          <template v-slot:top-left>
+            <span class="text-subtitle2 text-grey-7">Unidades de medida</span>
+          </template>
           <template v-slot:top-right>
-            <q-btn v-if="canCrear" color="positive" label="Nuevo" icon="add_circle_outline"
-                   no-caps @click="unidNew" class="q-mr-sm" />
-            <q-btn color="primary" label="Actualizar" icon="refresh"
-                   no-caps @click="loadUnidades" class="q-mr-sm" />
-            <q-input v-model="filterUnid" label="Buscar" dense outlined style="width:180px">
+            <q-input v-model="filterUnid" label="Buscar" dense outlined clearable
+                     style="width:160px" class="q-mr-xs">
               <template v-slot:append><q-icon name="search" /></template>
             </q-input>
+            <q-btn v-if="canCrear" color="positive" label="Nuevo" icon="add_circle_outline"
+                   no-caps dense @click="unidNew" class="q-mr-xs" />
+            <q-btn color="red-7" icon="picture_as_pdf" no-caps dense @click="exportPdf('unidades')"
+                   class="q-mr-xs">
+              <q-tooltip>Exportar PDF</q-tooltip>
+            </q-btn>
+            <q-btn color="green-8" icon="table_view" no-caps dense @click="exportExcel('unidades')">
+              <q-tooltip>Exportar Excel</q-tooltip>
+            </q-btn>
           </template>
           <template v-slot:body-cell-actions="props">
-            <q-td :props="props">
+            <q-td :props="props" class="q-pa-xs">
               <q-btn-dropdown v-if="canEditar || canEliminar"
-                              label="Opciones" no-caps size="10px" dense color="primary">
-                <q-list>
+                              label="Opc." no-caps size="xs" dense color="purple" flat>
+                <q-list dense>
                   <q-item v-if="canEditar" clickable v-close-popup @click="unidEdit(props.row)">
-                    <q-item-section avatar><q-icon name="edit" /></q-item-section>
+                    <q-item-section avatar><q-icon name="edit" size="xs" /></q-item-section>
                     <q-item-section><q-item-label>Editar</q-item-label></q-item-section>
                   </q-item>
                   <q-item v-if="canEliminar" clickable v-close-popup @click="unidDelete(props.row.id)">
-                    <q-item-section avatar><q-icon name="delete" color="negative" /></q-item-section>
+                    <q-item-section avatar><q-icon name="delete" color="negative" size="xs" /></q-item-section>
                     <q-item-section><q-item-label class="text-negative">Eliminar</q-item-label></q-item-section>
                   </q-item>
                 </q-list>
@@ -134,14 +202,13 @@
           </template>
         </q-table>
       </div>
+
     </template>
 
-    <!-- ═══════════════════════════════════════════════════════════
-         DIALOG PRODUCTO
-    ════════════════════════════════════════════════════════════ -->
+    <!-- ═══ DIALOG PRODUCTO ══════════════════════════════════════ -->
     <q-dialog v-model="dialogProd" persistent>
       <q-card style="width:min(96vw,620px)">
-        <q-card-section class="row items-center bg-primary text-white q-pb-sm">
+        <q-card-section class="row items-center bg-teal text-white q-py-sm">
           <q-icon name="medication" size="20px" class="q-mr-sm" />
           <span class="text-subtitle1 text-weight-bold">{{ prodAction }} producto</span>
           <q-space />
@@ -165,16 +232,11 @@
                 <q-input v-model="prod.marca" label="Marca" dense outlined v-uppercase />
               </div>
               <div class="col-12 col-sm-6">
-                <q-select v-model="prod.tipo" label="Tipo *" dense outlined
-                          :options="tiposOpts" emit-value map-options
-                          :rules="[v => !!v || 'Requerido']" />
-              </div>
-              <div class="col-12 col-sm-6">
                 <q-select v-model="prod.fabricante_id" label="Fabricante" dense outlined
-                          :options="fabricantes" option-value="id" option-label="nombre"
+                          :options="allFabricantes" option-value="id" option-label="nombre"
                           emit-value map-options clearable>
                   <template v-slot:after>
-                    <q-btn v-if="canCrear" flat round dense icon="add" color="primary"
+                    <q-btn v-if="canCrear" flat round dense icon="add" color="deep-orange"
                            @click="fabQuick = true">
                       <q-tooltip>Nuevo fabricante</q-tooltip>
                     </q-btn>
@@ -183,11 +245,11 @@
               </div>
               <div class="col-12 col-sm-6">
                 <q-select v-model="prod.unidad_id" label="Unidad de medida" dense outlined
-                          :options="unidades" option-value="id"
+                          :options="allUnidades" option-value="id"
                           :option-label="u => u.abreviatura ? u.nombre + ' (' + u.abreviatura + ')' : u.nombre"
                           emit-value map-options clearable>
                   <template v-slot:after>
-                    <q-btn v-if="canCrear" flat round dense icon="add" color="primary"
+                    <q-btn v-if="canCrear" flat round dense icon="add" color="purple"
                            @click="unidQuick = true">
                       <q-tooltip>Nueva unidad</q-tooltip>
                     </q-btn>
@@ -197,7 +259,7 @@
             </div>
             <div class="row justify-end q-gutter-sm q-mt-md">
               <q-btn flat color="grey-7" label="Cancelar" no-caps @click="dialogProd = false" />
-              <q-btn color="primary" :label="prod.id ? 'Guardar cambios' : 'Crear producto'"
+              <q-btn color="teal" :label="prod.id ? 'Guardar cambios' : 'Crear producto'"
                      type="submit" no-caps :loading="savingProd" icon-right="save" />
             </div>
           </q-form>
@@ -208,7 +270,7 @@
     <!-- DIALOG FABRICANTE -->
     <q-dialog v-model="dialogFab" persistent>
       <q-card style="width:min(96vw,420px)">
-        <q-card-section class="row items-center bg-primary text-white q-pb-sm">
+        <q-card-section class="row items-center bg-deep-orange text-white q-py-sm">
           <q-icon name="factory" size="20px" class="q-mr-sm" />
           <span class="text-subtitle1 text-weight-bold">{{ fabAction }} fabricante</span>
           <q-space />
@@ -221,7 +283,7 @@
             <q-input v-model="fab.pais" label="País" dense outlined class="q-mb-md" v-uppercase />
             <div class="row justify-end q-gutter-sm">
               <q-btn flat color="grey-7" label="Cancelar" no-caps @click="dialogFab = false" />
-              <q-btn color="primary" :label="fab.id ? 'Guardar' : 'Crear'"
+              <q-btn color="deep-orange" :label="fab.id ? 'Guardar' : 'Crear'"
                      type="submit" no-caps :loading="savingFab" icon-right="save" />
             </div>
           </q-form>
@@ -232,7 +294,7 @@
     <!-- DIALOG UNIDAD -->
     <q-dialog v-model="dialogUnid" persistent>
       <q-card style="width:min(96vw,420px)">
-        <q-card-section class="row items-center bg-primary text-white q-pb-sm">
+        <q-card-section class="row items-center bg-purple text-white q-py-sm">
           <q-icon name="straighten" size="20px" class="q-mr-sm" />
           <span class="text-subtitle1 text-weight-bold">{{ unidAction }} unidad</span>
           <q-space />
@@ -246,7 +308,7 @@
                      dense outlined class="q-mb-md" v-uppercase />
             <div class="row justify-end q-gutter-sm">
               <q-btn flat color="grey-7" label="Cancelar" no-caps @click="dialogUnid = false" />
-              <q-btn color="primary" :label="unid.id ? 'Guardar' : 'Crear'"
+              <q-btn color="purple" :label="unid.id ? 'Guardar' : 'Crear'"
                      type="submit" no-caps :loading="savingUnid" icon-right="save" />
             </div>
           </q-form>
@@ -254,10 +316,10 @@
       </q-card>
     </q-dialog>
 
-    <!-- quick-create desde dialog producto -->
+    <!-- Quick fabricante -->
     <q-dialog v-model="fabQuick" persistent>
       <q-card style="width:min(96vw,380px)">
-        <q-card-section class="bg-primary text-white q-py-sm">
+        <q-card-section class="bg-deep-orange text-white q-py-sm">
           <span class="text-subtitle2 text-weight-bold">Nuevo fabricante rápido</span>
         </q-card-section>
         <q-card-section>
@@ -267,16 +329,17 @@
             <q-input v-model="fabQPais" label="País" dense outlined class="q-mb-md" v-uppercase />
             <div class="row justify-end q-gutter-sm">
               <q-btn flat color="grey-7" label="Cancelar" no-caps @click="fabQuick = false" />
-              <q-btn color="primary" label="Crear" type="submit" no-caps :loading="savingFab" />
+              <q-btn color="deep-orange" label="Crear" type="submit" no-caps :loading="savingFab" />
             </div>
           </q-form>
         </q-card-section>
       </q-card>
     </q-dialog>
 
+    <!-- Quick unidad -->
     <q-dialog v-model="unidQuick" persistent>
       <q-card style="width:min(96vw,380px)">
-        <q-card-section class="bg-primary text-white q-py-sm">
+        <q-card-section class="bg-purple text-white q-py-sm">
           <span class="text-subtitle2 text-weight-bold">Nueva unidad rápida</span>
         </q-card-section>
         <q-card-section>
@@ -286,7 +349,7 @@
             <q-input v-model="unidQAbrev" label="Abreviatura" dense outlined class="q-mb-md" v-uppercase />
             <div class="row justify-end q-gutter-sm">
               <q-btn flat color="grey-7" label="Cancelar" no-caps @click="unidQuick = false" />
-              <q-btn color="primary" label="Crear" type="submit" no-caps :loading="savingUnid" />
+              <q-btn color="purple" label="Crear" type="submit" no-caps :loading="savingUnid" />
             </div>
           </q-form>
         </q-card-section>
@@ -296,252 +359,387 @@
   </q-page>
 </template>
 
-<script setup>
-import { ref, computed, watch, getCurrentInstance } from 'vue'
+<script>
+export default {
+  name: 'FarmaciaIndex',
 
-const { proxy } = getCurrentInstance()
+  data () {
+    return {
+      tab: 'productos',
+      resumen: { productos: 0, fabricantes: 0, unidades: 0 },
 
-// ── Permisos ─────────────────────────────────────────────────────
-const canVer      = computed(() => proxy.$store.hasPermission('Ver Productos'))
-const canCrear    = computed(() => proxy.$store.hasPermission('Crear Productos'))
-const canEditar   = computed(() => proxy.$store.hasPermission('Editar Productos'))
-const canEliminar = computed(() => proxy.$store.hasPermission('Eliminar Productos'))
+      // ── Productos ─────────────────────────────────────────────
+      productos: [],
+      loadingProd: false,
+      savingProd: false,
+      dialogProd: false,
+      prodAction: 'Nuevo',
+      filterProd: '',
+      paginationProd: { page: 1, rowsPerPage: 20, rowsNumber: 0, sortBy: null, descending: false },
+      prod: {},
 
-// ── Tab activo ───────────────────────────────────────────────────
-const tab = ref('productos')
+      // ── Fabricantes ───────────────────────────────────────────
+      fabricantes: [],
+      allFabricantes: [],
+      loadingFab: false,
+      savingFab: false,
+      dialogFab: false,
+      fabAction: 'Nuevo',
+      filterFab: '',
+      paginationFab: { page: 1, rowsPerPage: 20, rowsNumber: 0 },
+      fab: {},
+      fabQuick: false,
+      fabQNombre: '',
+      fabQPais: '',
 
-// ── Tipos disponibles ────────────────────────────────────────────
-const tiposOpts = [
-  { label: 'FARMACIA',      value: 'FARMACIA' },
-  { label: 'LABORATORIO',   value: 'LABORATORIO' },
-  { label: 'INSUMOS',       value: 'INSUMOS' },
-  { label: 'EQUIPAMIENTO',  value: 'EQUIPAMIENTO' },
-]
+      // ── Unidades ──────────────────────────────────────────────
+      unidades: [],
+      allUnidades: [],
+      loadingUnid: false,
+      savingUnid: false,
+      dialogUnid: false,
+      unidAction: 'Nuevo',
+      filterUnid: '',
+      paginationUnid: { page: 1, rowsPerPage: 20, rowsNumber: 0 },
+      unid: {},
+      unidQuick: false,
+      unidQNombre: '',
+      unidQAbrev: '',
 
-// ════════════════════════════════════════════════════════════════
-// PRODUCTOS
-// ════════════════════════════════════════════════════════════════
-const productos   = ref([])
-const prod        = ref({})
-const loadingProd = ref(false)
-const savingProd  = ref(false)
-const dialogProd  = ref(false)
-const prodAction  = ref('Nuevo')
-const filterProd  = ref('')
-
-const colProductos = [
-  { name: 'actions',     label: 'Acciones',    align: 'center' },
-  { name: 'codigo',      label: 'Código',      align: 'left', field: 'codigo',  sortable: true },
-  { name: 'nombre',      label: 'Nombre',      align: 'left', field: 'nombre',  sortable: true },
-  { name: 'marca',       label: 'Marca',       align: 'left', field: 'marca' },
-  { name: 'fabricante',  label: 'Fabricante',  align: 'left' },
-  { name: 'unidad',      label: 'Unidad',      align: 'left' },
-  { name: 'tipo',        label: 'Tipo',        align: 'left', field: 'tipo' },
-]
-
-function loadProductos () {
-  loadingProd.value = true
-  proxy.$axios.get('productos', { params: { per_page: 500 } })
-    .then(r => { productos.value = r.data.data })
-    .catch(e => proxy.$alert.error(e.response?.data?.message || 'Error al cargar'))
-    .finally(() => { loadingProd.value = false })
-}
-
-function prodNew () {
-  prod.value = { codigo: '', nombre: '', descripcion: '', marca: '', fabricante_id: null, unidad_id: null, tipo: 'FARMACIA' }
-  prodAction.value = 'Nuevo'
-  dialogProd.value = true
-}
-
-function prodEdit (row) {
-  prod.value = { ...row, fabricante_id: row.fabricante?.id || null, unidad_id: row.unidad?.id || null }
-  prodAction.value = 'Editar'
-  dialogProd.value = true
-}
-
-async function prodSave () {
-  savingProd.value = true
-  try {
-    if (prod.value.id) {
-      await proxy.$axios.put('productos/' + prod.value.id, prod.value)
-      proxy.$alert.success('Producto actualizado')
-    } else {
-      await proxy.$axios.post('productos', prod.value)
-      proxy.$alert.success('Producto creado')
+      _timerProd: null,
+      _timerFab: null,
+      _timerUnid: null,
     }
-    dialogProd.value = false
-    loadProductos()
-  } catch (e) {
-    proxy.$alert.error(e.response?.data?.message || 'Error al guardar')
-  } finally {
-    savingProd.value = false
-  }
+  },
+
+  computed: {
+    canVer ()      { return this.$store.hasPermission('Ver Productos') },
+    canCrear ()    { return this.$store.hasPermission('Crear Productos') },
+    canEditar ()   { return this.$store.hasPermission('Editar Productos') },
+    canEliminar () { return this.$store.hasPermission('Eliminar Productos') },
+
+    tabActiveColor () {
+      return { productos: 'teal', fabricantes: 'deep-orange', unidades: 'purple' }[this.tab] || 'primary'
+    },
+
+    colProductos () {
+      return [
+        { name: 'actions',    label: '',           align: 'center', style: 'width:64px' },
+        { name: 'codigo',     label: 'Código',     align: 'left',   field: 'codigo',  sortable: false },
+        { name: 'nombre',     label: 'Nombre',     align: 'left',   field: 'nombre',  sortable: false },
+        { name: 'marca',      label: 'Marca',      align: 'left',   field: 'marca' },
+        { name: 'fabricante', label: 'Fabricante', align: 'left' },
+        { name: 'unidad',     label: 'Unidad',     align: 'left' },
+      ]
+    },
+
+    colFab () {
+      return [
+        { name: 'actions', label: '',       align: 'center', style: 'width:64px' },
+        { name: 'nombre',  label: 'Nombre', align: 'left',   field: 'nombre', sortable: false },
+        { name: 'pais',    label: 'País',   align: 'left',   field: 'pais' },
+      ]
+    },
+
+    colUnid () {
+      return [
+        { name: 'actions',     label: '',            align: 'center', style: 'width:64px' },
+        { name: 'nombre',      label: 'Nombre',      align: 'left',   field: 'nombre',     sortable: false },
+        { name: 'abreviatura', label: 'Abreviatura', align: 'left',   field: 'abreviatura' },
+      ]
+    },
+  },
+
+  watch: {
+    '$store.isLogged' (val) {
+      if (val) this.init()
+    },
+    filterProd () {
+      clearTimeout(this._timerProd)
+      this._timerProd = setTimeout(() => {
+        this.paginationProd.page = 1
+        this.loadProductos()
+      }, 350)
+    },
+    filterFab () {
+      clearTimeout(this._timerFab)
+      this._timerFab = setTimeout(() => {
+        this.paginationFab.page = 1
+        this.loadFabricantes()
+      }, 350)
+    },
+    filterUnid () {
+      clearTimeout(this._timerUnid)
+      this._timerUnid = setTimeout(() => {
+        this.paginationUnid.page = 1
+        this.loadUnidades()
+      }, 350)
+    },
+  },
+
+  mounted () {
+    if (this.$store.isLogged) this.init()
+  },
+
+  methods: {
+    init () {
+      this.loadResumen()
+      this.loadProductos()
+      this.loadFabricantes()
+      this.loadUnidades()
+      this.loadAllFabricantes()
+      this.loadAllUnidades()
+    },
+
+    // ── Resumen ──────────────────────────────────────────────────
+    loadResumen () {
+      this.$axios.get('farmacia/resumen')
+        .then(r => { if (r.data && typeof r.data === 'object') this.resumen = r.data })
+        .catch(() => {})
+    },
+
+    // ── Productos ────────────────────────────────────────────────
+    loadProductos () {
+      this.loadingProd = true
+      this.$axios.get('productos', {
+        params: { page: this.paginationProd.page, per_page: this.paginationProd.rowsPerPage, q: this.filterProd, tipo: 'FARMACIA' },
+      }).then(r => {
+        this.productos = r.data.data || []
+        this.paginationProd.rowsNumber = r.data.total || 0
+      }).catch(e => this.$alert.error(e.response?.data?.message || 'Error al cargar'))
+        .finally(() => { this.loadingProd = false })
+    },
+
+    onRequestProd (props) {
+      this.paginationProd = props.pagination
+      this.loadProductos()
+    },
+
+    prodNew () {
+      this.prod = { codigo: '', nombre: '', descripcion: '', marca: '', fabricante_id: null, unidad_id: null, tipo: 'FARMACIA' }
+      this.prodAction = 'Nuevo'
+      this.dialogProd = true
+    },
+
+    prodEdit (row) {
+      this.prod = { ...row, fabricante_id: row.fabricante?.id || null, unidad_id: row.unidad?.id || null }
+      this.prodAction = 'Editar'
+      this.dialogProd = true
+    },
+
+    async prodSave () {
+      this.savingProd = true
+      try {
+        const payload = { ...this.prod, tipo: 'FARMACIA' }
+        if (this.prod.id) {
+          await this.$axios.put('productos/' + this.prod.id, payload)
+          this.$alert.success('Producto actualizado')
+        } else {
+          await this.$axios.post('productos', payload)
+          this.$alert.success('Producto creado')
+        }
+        this.dialogProd = false
+        this.loadProductos()
+        this.loadResumen()
+      } catch (e) {
+        this.$alert.error(e.response?.data?.message || 'Error al guardar')
+      } finally {
+        this.savingProd = false
+      }
+    },
+
+    prodDelete (id) {
+      this.$alert.dialog('¿Desea eliminar el producto?').onOk(() => {
+        this.$axios.delete('productos/' + id)
+          .then(() => { this.$alert.success('Producto eliminado'); this.loadProductos(); this.loadResumen() })
+          .catch(e => this.$alert.error(e.response?.data?.message || 'Error'))
+      })
+    },
+
+    // ── Fabricantes ──────────────────────────────────────────────
+    loadFabricantes () {
+      this.loadingFab = true
+      this.$axios.get('fabricantes', {
+        params: { page: this.paginationFab.page, per_page: this.paginationFab.rowsPerPage, q: this.filterFab },
+      }).then(r => {
+        this.fabricantes = r.data.data || []
+        this.paginationFab.rowsNumber = r.data.total || 0
+      }).catch(e => this.$alert.error(e.response?.data?.message || 'Error'))
+        .finally(() => { this.loadingFab = false })
+    },
+
+    loadAllFabricantes () {
+      this.$axios.get('fabricantes').then(r => { this.allFabricantes = r.data || [] })
+    },
+
+    onRequestFab (props) {
+      this.paginationFab = props.pagination
+      this.loadFabricantes()
+    },
+
+    fabNew ()     { this.fab = { nombre: '', pais: '' }; this.fabAction = 'Nuevo'; this.dialogFab = true },
+    fabEdit (row) { this.fab = { ...row }; this.fabAction = 'Editar'; this.dialogFab = true },
+
+    async fabSave () {
+      this.savingFab = true
+      try {
+        if (this.fab.id) {
+          await this.$axios.put('fabricantes/' + this.fab.id, this.fab)
+          this.$alert.success('Fabricante actualizado')
+        } else {
+          await this.$axios.post('fabricantes', this.fab)
+          this.$alert.success('Fabricante creado')
+        }
+        this.dialogFab = false
+        this.loadFabricantes()
+        this.loadAllFabricantes()
+        this.loadResumen()
+      } catch (e) {
+        this.$alert.error(e.response?.data?.message || 'Error al guardar')
+      } finally {
+        this.savingFab = false
+      }
+    },
+
+    fabDelete (id) {
+      this.$alert.dialog('¿Desea eliminar el fabricante?').onOk(() => {
+        this.$axios.delete('fabricantes/' + id)
+          .then(() => {
+            this.$alert.success('Fabricante eliminado')
+            this.loadFabricantes()
+            this.loadAllFabricantes()
+            this.loadResumen()
+          })
+          .catch(e => this.$alert.error(e.response?.data?.message || 'Error'))
+      })
+    },
+
+    async fabQuickSave () {
+      this.savingFab = true
+      try {
+        const res = await this.$axios.post('fabricantes', { nombre: this.fabQNombre, pais: this.fabQPais })
+        this.loadAllFabricantes()
+        this.prod.fabricante_id = res.data.id
+        this.fabQuick = false
+        this.fabQNombre = ''
+        this.fabQPais = ''
+      } catch (e) {
+        this.$alert.error(e.response?.data?.message || 'Error')
+      } finally {
+        this.savingFab = false
+      }
+    },
+
+    // ── Unidades ─────────────────────────────────────────────────
+    loadUnidades () {
+      this.loadingUnid = true
+      this.$axios.get('unidades', {
+        params: { page: this.paginationUnid.page, per_page: this.paginationUnid.rowsPerPage, q: this.filterUnid },
+      }).then(r => {
+        this.unidades = r.data.data || []
+        this.paginationUnid.rowsNumber = r.data.total || 0
+      }).catch(e => this.$alert.error(e.response?.data?.message || 'Error'))
+        .finally(() => { this.loadingUnid = false })
+    },
+
+    loadAllUnidades () {
+      this.$axios.get('unidades').then(r => { this.allUnidades = r.data || [] })
+    },
+
+    onRequestUnid (props) {
+      this.paginationUnid = props.pagination
+      this.loadUnidades()
+    },
+
+    unidNew ()     { this.unid = { nombre: '', abreviatura: '' }; this.unidAction = 'Nuevo'; this.dialogUnid = true },
+    unidEdit (row) { this.unid = { ...row }; this.unidAction = 'Editar'; this.dialogUnid = true },
+
+    async unidSave () {
+      this.savingUnid = true
+      try {
+        if (this.unid.id) {
+          await this.$axios.put('unidades/' + this.unid.id, this.unid)
+          this.$alert.success('Unidad actualizada')
+        } else {
+          await this.$axios.post('unidades', this.unid)
+          this.$alert.success('Unidad creada')
+        }
+        this.dialogUnid = false
+        this.loadUnidades()
+        this.loadAllUnidades()
+        this.loadResumen()
+      } catch (e) {
+        this.$alert.error(e.response?.data?.message || 'Error al guardar')
+      } finally {
+        this.savingUnid = false
+      }
+    },
+
+    unidDelete (id) {
+      this.$alert.dialog('¿Desea eliminar la unidad?').onOk(() => {
+        this.$axios.delete('unidades/' + id)
+          .then(() => {
+            this.$alert.success('Unidad eliminada')
+            this.loadUnidades()
+            this.loadAllUnidades()
+            this.loadResumen()
+          })
+          .catch(e => this.$alert.error(e.response?.data?.message || 'Error'))
+      })
+    },
+
+    async unidQuickSave () {
+      this.savingUnid = true
+      try {
+        const res = await this.$axios.post('unidades', { nombre: this.unidQNombre, abreviatura: this.unidQAbrev })
+        this.loadAllUnidades()
+        this.prod.unidad_id = res.data.id
+        this.unidQuick = false
+        this.unidQNombre = ''
+        this.unidQAbrev  = ''
+      } catch (e) {
+        this.$alert.error(e.response?.data?.message || 'Error')
+      } finally {
+        this.savingUnid = false
+      }
+    },
+
+    // ── Exportar ─────────────────────────────────────────────────
+    async exportPdf (recurso) {
+      try {
+        const params = recurso === 'productos'
+          ? { q: this.filterProd, tipo: 'FARMACIA' }
+          : recurso === 'fabricantes'
+            ? { q: this.filterFab }
+            : { q: this.filterUnid }
+        const res = await this.$axios.get(recurso + '/export-pdf', { params, responseType: 'blob' })
+        const url = window.URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }))
+        window.open(url, '_blank')
+      } catch (e) {
+        this.$alert.error('Error al generar PDF')
+      }
+    },
+
+    async exportExcel (recurso) {
+      try {
+        const params = recurso === 'productos'
+          ? { q: this.filterProd, tipo: 'FARMACIA' }
+          : recurso === 'fabricantes'
+            ? { q: this.filterFab }
+            : { q: this.filterUnid }
+        const res = await this.$axios.get(recurso + '/export-excel', { params, responseType: 'blob' })
+        const url = window.URL.createObjectURL(new Blob([res.data], {
+          type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        }))
+        const a = document.createElement('a')
+        a.href = url
+        a.download = recurso + '_' + new Date().toISOString().slice(0, 10) + '.xlsx'
+        a.click()
+        window.URL.revokeObjectURL(url)
+      } catch (e) {
+        this.$alert.error('Error al generar Excel')
+      }
+    },
+  },
 }
-
-function prodDelete (id) {
-  proxy.$alert.dialog('¿Desea eliminar el producto?').onOk(() => {
-    proxy.$axios.delete('productos/' + id)
-      .then(() => { proxy.$alert.success('Producto eliminado'); loadProductos() })
-      .catch(e => proxy.$alert.error(e.response?.data?.message || 'Error'))
-  })
-}
-
-// ════════════════════════════════════════════════════════════════
-// FABRICANTES
-// ════════════════════════════════════════════════════════════════
-const fabricantes   = ref([])
-const fab           = ref({})
-const loadingFab    = ref(false)
-const savingFab     = ref(false)
-const dialogFab     = ref(false)
-const fabAction     = ref('Nuevo')
-const filterFab     = ref('')
-const fabQuick      = ref(false)
-const fabQNombre    = ref('')
-const fabQPais      = ref('')
-
-const colFab = [
-  { name: 'actions', label: 'Acciones', align: 'center' },
-  { name: 'nombre',  label: 'Nombre',   align: 'left', field: 'nombre',  sortable: true },
-  { name: 'pais',    label: 'País',     align: 'left', field: 'pais' },
-]
-
-function loadFabricantes () {
-  loadingFab.value = true
-  proxy.$axios.get('fabricantes')
-    .then(r => { fabricantes.value = r.data })
-    .catch(e => proxy.$alert.error(e.response?.data?.message || 'Error'))
-    .finally(() => { loadingFab.value = false })
-}
-
-function fabNew () { fab.value = { nombre: '', pais: '' }; fabAction.value = 'Nuevo'; dialogFab.value = true }
-function fabEdit (row) { fab.value = { ...row }; fabAction.value = 'Editar'; dialogFab.value = true }
-
-async function fabSave () {
-  savingFab.value = true
-  try {
-    if (fab.value.id) {
-      await proxy.$axios.put('fabricantes/' + fab.value.id, fab.value)
-      proxy.$alert.success('Fabricante actualizado')
-    } else {
-      await proxy.$axios.post('fabricantes', fab.value)
-      proxy.$alert.success('Fabricante creado')
-    }
-    dialogFab.value = false
-    loadFabricantes()
-  } catch (e) {
-    proxy.$alert.error(e.response?.data?.message || 'Error al guardar')
-  } finally {
-    savingFab.value = false
-  }
-}
-
-function fabDelete (id) {
-  proxy.$alert.dialog('¿Desea eliminar el fabricante?').onOk(() => {
-    proxy.$axios.delete('fabricantes/' + id)
-      .then(() => { proxy.$alert.success('Fabricante eliminado'); loadFabricantes() })
-      .catch(e => proxy.$alert.error(e.response?.data?.message || 'Error'))
-  })
-}
-
-async function fabQuickSave () {
-  savingFab.value = true
-  try {
-    const res = await proxy.$axios.post('fabricantes', { nombre: fabQNombre.value, pais: fabQPais.value })
-    await loadFabricantes()
-    prod.value.fabricante_id = res.data.id
-    fabQuick.value = false
-    fabQNombre.value = ''
-    fabQPais.value = ''
-  } catch (e) {
-    proxy.$alert.error(e.response?.data?.message || 'Error')
-  } finally {
-    savingFab.value = false
-  }
-}
-
-// ════════════════════════════════════════════════════════════════
-// UNIDADES
-// ════════════════════════════════════════════════════════════════
-const unidades    = ref([])
-const unid        = ref({})
-const loadingUnid = ref(false)
-const savingUnid  = ref(false)
-const dialogUnid  = ref(false)
-const unidAction  = ref('Nuevo')
-const filterUnid  = ref('')
-const unidQuick   = ref(false)
-const unidQNombre = ref('')
-const unidQAbrev  = ref('')
-
-const colUnid = [
-  { name: 'actions',      label: 'Acciones',     align: 'center' },
-  { name: 'nombre',       label: 'Nombre',        align: 'left', field: 'nombre',      sortable: true },
-  { name: 'abreviatura',  label: 'Abreviatura',   align: 'left', field: 'abreviatura' },
-]
-
-function loadUnidades () {
-  loadingUnid.value = true
-  proxy.$axios.get('unidades')
-    .then(r => { unidades.value = r.data })
-    .catch(e => proxy.$alert.error(e.response?.data?.message || 'Error'))
-    .finally(() => { loadingUnid.value = false })
-}
-
-function unidNew () { unid.value = { nombre: '', abreviatura: '' }; unidAction.value = 'Nuevo'; dialogUnid.value = true }
-function unidEdit (row) { unid.value = { ...row }; unidAction.value = 'Editar'; dialogUnid.value = true }
-
-async function unidSave () {
-  savingUnid.value = true
-  try {
-    if (unid.value.id) {
-      await proxy.$axios.put('unidades/' + unid.value.id, unid.value)
-      proxy.$alert.success('Unidad actualizada')
-    } else {
-      await proxy.$axios.post('unidades', unid.value)
-      proxy.$alert.success('Unidad creada')
-    }
-    dialogUnid.value = false
-    loadUnidades()
-  } catch (e) {
-    proxy.$alert.error(e.response?.data?.message || 'Error al guardar')
-  } finally {
-    savingUnid.value = false
-  }
-}
-
-function unidDelete (id) {
-  proxy.$alert.dialog('¿Desea eliminar la unidad?').onOk(() => {
-    proxy.$axios.delete('unidades/' + id)
-      .then(() => { proxy.$alert.success('Unidad eliminada'); loadUnidades() })
-      .catch(e => proxy.$alert.error(e.response?.data?.message || 'Error'))
-  })
-}
-
-async function unidQuickSave () {
-  savingUnid.value = true
-  try {
-    const res = await proxy.$axios.post('unidades', { nombre: unidQNombre.value, abreviatura: unidQAbrev.value })
-    await loadUnidades()
-    prod.value.unidad_id = res.data.id
-    unidQuick.value = false
-    unidQNombre.value = ''
-    unidQAbrev.value  = ''
-  } catch (e) {
-    proxy.$alert.error(e.response?.data?.message || 'Error')
-  } finally {
-    savingUnid.value = false
-  }
-}
-
-// ── Carga inicial ─────────────────────────────────────────────
-let fetched = false
-watch(() => proxy.$store.isLogged, (val) => {
-  if (val && !fetched) {
-    fetched = true
-    loadProductos()
-    loadFabricantes()
-    loadUnidades()
-  }
-}, { immediate: true })
 </script>

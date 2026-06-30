@@ -27,19 +27,28 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/users/{id}/permissions',        [UserController::class, 'userPermissions']);
     Route::put('/users/{id}/permissions',        [UserController::class, 'updateUserPermissions']);
 
+    // Resumen farmacia
+    Route::get('/farmacia/resumen',              [ProductoController::class, 'resumen']);
+
     // Catálogos - Fabricantes
+    Route::get('/fabricantes/export-pdf',        [ProductoController::class, 'exportFabricantesPdf']);
+    Route::get('/fabricantes/export-excel',      [ProductoController::class, 'exportFabricantesExcel']);
     Route::get('/fabricantes',                   [ProductoController::class, 'fabricantes']);
     Route::post('/fabricantes',                  [ProductoController::class, 'storeFabricante']);
     Route::put('/fabricantes/{id}',              [ProductoController::class, 'updateFabricante']);
     Route::delete('/fabricantes/{id}',           [ProductoController::class, 'destroyFabricante']);
 
     // Catálogos - Unidades
+    Route::get('/unidades/export-pdf',           [ProductoController::class, 'exportUnidadesPdf']);
+    Route::get('/unidades/export-excel',         [ProductoController::class, 'exportUnidadesExcel']);
     Route::get('/unidades',                      [ProductoController::class, 'unidades']);
     Route::post('/unidades',                     [ProductoController::class, 'storeUnidad']);
     Route::put('/unidades/{id}',                 [ProductoController::class, 'updateUnidad']);
     Route::delete('/unidades/{id}',              [ProductoController::class, 'destroyUnidad']);
 
     // Productos
+    Route::get('/productos/export-pdf',          [ProductoController::class, 'exportProductosPdf']);
+    Route::get('/productos/export-excel',        [ProductoController::class, 'exportProductosExcel']);
     Route::get('/productos',                     [ProductoController::class, 'index']);
     Route::post('/productos',                    [ProductoController::class, 'store']);
     Route::put('/productos/{id}',                [ProductoController::class, 'update']);

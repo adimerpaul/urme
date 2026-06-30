@@ -140,9 +140,11 @@ function login () {
         newPasswordConfirm.value = ''
         vista.value = 'cambiar'
       } else {
+        const perms = (user.permissions || []).map(p => p.name)
         proxy.$store.isLogged    = true
-        proxy.$store.permissions = (user.permissions || []).map(p => p.name)
-        localStorage.setItem('tokenSil', token)
+        proxy.$store.permissions = perms
+        localStorage.setItem('tokenUrme', token)
+        localStorage.setItem('permissionsUrme', JSON.stringify(perms))
         localStorage.setItem('user', JSON.stringify(user))
         proxy.$alert.success('Bienvenido ' + user.name)
         proxy.$router.push('/')
@@ -163,9 +165,11 @@ function cambiarPassword () {
   })
     .then(() => {
       const user = proxy.$store.user
+      const perms = (user.permissions || []).map(p => p.name)
       proxy.$store.isLogged    = true
-      proxy.$store.permissions = (user.permissions || []).map(p => p.name)
-      localStorage.setItem('tokenSil', tempToken)
+      proxy.$store.permissions = perms
+      localStorage.setItem('tokenUrme', tempToken)
+      localStorage.setItem('permissionsUrme', JSON.stringify(perms))
       localStorage.setItem('user', JSON.stringify(user))
       proxy.$alert.success('Contraseña actualizada. ¡Bienvenido!')
       proxy.$router.push('/')

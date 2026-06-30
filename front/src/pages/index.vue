@@ -219,8 +219,8 @@ function logout () {
       proxy.$store.isLogged = false
       proxy.$store.user = {}
       proxy.$store.permissions = []
-      localStorage.removeItem('tokenSil')
-      localStorage.removeItem('permissionsSil')
+      localStorage.removeItem('tokenUrme')
+      localStorage.removeItem('permissionsUrme')
       proxy.$router.push('/login')
     })
   })

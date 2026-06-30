@@ -60,22 +60,31 @@ export default boot(({ app, router }) => {
       return 'red'
     }
   }
-  const token = localStorage.getItem('tokenSil')
+  const token = localStorage.getItem('tokenUrme')
   if (token) {
     app.config.globalProperties.$axios.defaults.headers.common['Authorization'] = `Bearer ${token}`
+
+    // Load permissions from localStorage immediately so canVer etc. are ready before /me resolves
+    try {
+      const cachedPerms = JSON.parse(localStorage.getItem('permissionsUrme') || '[]')
+      if (cachedPerms.length) {
+        useCounterStore().permissions = cachedPerms
+        useCounterStore().isLogged = true
+      }
+    } catch (e) {}
+
     app.config.globalProperties.$axios.get('me').then(response => {
       useCounterStore().isLogged = true
       useCounterStore().user = response.data
       const perms = (response.data.permissions || []).map(p => p.name)
       useCounterStore().permissions = perms
       localStorage.setItem('user', JSON.stringify(response.data))
-      localStorage.setItem('permissionsSil', JSON.stringify(perms))
-      // useCounterStore().permissions = response.data.permissions
+      localStorage.setItem('permissionsUrme', JSON.stringify(perms))
     }).catch(error => {
       console.log(error)
       router.push('/login')
-      localStorage.removeItem('tokenSil')
-      localStorage.removeItem('permissionsSil')
+      localStorage.removeItem('tokenUrme')
+      localStorage.removeItem('permissionsUrme')
       useCounterStore().isLogged = false
       useCounterStore().permissions = []
       useCounterStore().user = {}

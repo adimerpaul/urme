@@ -27,15 +27,6 @@ class ProductosExport implements FromCollection, WithHeadings, WithStyles, WithT
         $query = Producto::with(['fabricante:id,nombre', 'unidad:id,nombre,abreviatura'])
             ->orderBy('nombre');
 
-        if (!empty($this->filters['q'])) {
-            $q = $this->filters['q'];
-            $query->where(function ($sq) use ($q) {
-                $sq->where('nombre',  'like', "%$q%")
-                   ->orWhere('codigo', 'like', "%$q%")
-                   ->orWhere('marca',  'like', "%$q%");
-            });
-        }
-
         $tipo = $this->filters['tipo'] ?? 'FARMACIA';
         if ($tipo) {
             $query->where('tipo', $tipo);

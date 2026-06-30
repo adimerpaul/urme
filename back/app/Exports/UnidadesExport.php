@@ -25,13 +25,6 @@ class UnidadesExport implements FromCollection, WithHeadings, WithStyles, WithTi
     public function collection()
     {
         $query = Unidad::orderBy('nombre');
-        if (!empty($this->filters['q'])) {
-            $q = $this->filters['q'];
-            $query->where(function ($sq) use ($q) {
-                $sq->where('nombre',       'like', "%$q%")
-                   ->orWhere('abreviatura', 'like', "%$q%");
-            });
-        }
         return $query->get()->map(fn($u) => [
             $u->nombre       ?? '',
             $u->abreviatura  ?? '',

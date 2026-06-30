@@ -16,6 +16,59 @@ class ProductoController extends Controller
 {
     // ── Resumen ───────────────────────────────────────────────────
 
+    public function datos(Request $request)
+    {
+        $this->req($request, 'Ver Productos');
+
+        $qProductos    = $request->input('q_prod', '');
+        $qFabricantes   = $request->input('q_fab', '');
+        $qUnidades     = $request->input('q_unid', '');
+        $perPage       = (int) $request->input('per_page', 15);
+        $pageProductos = (int) $request->input('page_prod', 1);
+        $pageFabrican  = (int) $request->input('page_fab', 1);
+        $pageUnidades  = (int) $request->input('page_unid', 1);
+
+        $productosQuery = Producto::with(['fabricante:id,nombre', 'unidad:id,nombre,abreviatura'])
+            ->where('tipo', 'FARMACIA')
+            ->orderBy('nombre');
+        if ($qProductos) {
+            $productosQuery->where(function ($sq) use ($qProductos) {
+                $sq->where('nombre', 'like', "%$qProductos%")
+                   ->orWhere('codigo', 'like', "%$qProductos%")
+                   ->orWhere('marca', 'like', "%$qProductos%");
+            });
+        }
+
+        $fabricantesQuery = Fabricante::orderBy('nombre');
+        if ($qFabricantes) {
+            $fabricantesQuery->where(function ($sq) use ($qFabricantes) {
+                $sq->where('nombre', 'like', "%$qFabricantes%")
+                   ->orWhere('pais', 'like', "%$qFabricantes%");
+            });
+        }
+
+        $unidadesQuery = Unidad::orderBy('nombre');
+        if ($qUnidades) {
+            $unidadesQuery->where(function ($sq) use ($qUnidades) {
+                $sq->where('nombre', 'like', "%$qUnidades%")
+                   ->orWhere('abreviatura', 'like', "%$qUnidades%");
+            });
+        }
+
+        return response()->json([
+            'resumen' => [
+                'productos'   => Producto::where('tipo', 'FARMACIA')->count(),
+                'fabricantes' => Fabricante::count(),
+                'unidades'    => Unidad::count(),
+            ],
+            'productos' => $productosQuery->paginate($perPage, ['*'], 'page_prod', $pageProductos),
+            'fabricantes' => $fabricantesQuery->paginate($perPage, ['*'], 'page_fab', $pageFabrican),
+            'unidades' => $unidadesQuery->paginate($perPage, ['*'], 'page_unid', $pageUnidades),
+            'allFabricantes' => Fabricante::orderBy('nombre')->get(['id', 'nombre', 'pais']),
+            'allUnidades' => Unidad::orderBy('nombre')->get(['id', 'nombre', 'abreviatura']),
+        ]);
+    }
+
     public function resumen(Request $request)
     {
         $this->req($request, 'Ver Productos');
@@ -207,18 +260,10 @@ class ProductoController extends Controller
     public function exportProductosPdf(Request $request)
     {
         $this->req($request, 'Ver Productos');
-        $q    = $request->input('q', '');
         $tipo = $request->input('tipo', 'FARMACIA');
 
         $query = Producto::with(['fabricante:id,nombre', 'unidad:id,nombre,abreviatura'])
             ->orderBy('nombre');
-        if ($q) {
-            $query->where(function ($sq) use ($q) {
-                $sq->where('nombre', 'like', "%$q%")
-                   ->orWhere('codigo', 'like', "%$q%")
-                   ->orWhere('marca', 'like', "%$q%");
-            });
-        }
         if ($tipo) {
             $query->where('tipo', $tipo);
         }
@@ -226,7 +271,7 @@ class ProductoController extends Controller
 
         $pdf = Pdf::loadView('reportes.productos', [
             'items'   => $items,
-            'q'       => $q,
+            'q'       => '',
             'tipo'    => $tipo,
             'total'   => $items->count(),
         ])->setPaper('letter', 'landscape');
@@ -237,7 +282,7 @@ class ProductoController extends Controller
     public function exportProductosExcel(Request $request)
     {
         $this->req($request, 'Ver Productos');
-        $filters = $request->only(['q', 'tipo']);
+        $filters = $request->only(['tipo']);
         return Excel::download(new ProductosExport($filters), 'productos_' . now()->format('Ymd_His') . '.xlsx');
     }
 
@@ -246,19 +291,12 @@ class ProductoController extends Controller
     public function exportFabricantesPdf(Request $request)
     {
         $this->req($request, 'Ver Productos');
-        $q     = $request->input('q', '');
         $query = Fabricante::orderBy('nombre');
-        if ($q) {
-            $query->where(function ($sq) use ($q) {
-                $sq->where('nombre', 'like', "%$q%")
-                   ->orWhere('pais',  'like', "%$q%");
-            });
-        }
         $items = $query->get();
 
         $pdf = Pdf::loadView('reportes.fabricantes', [
             'items' => $items,
-            'q'     => $q,
+            'q'     => '',
             'total' => $items->count(),
         ])->setPaper('letter', 'portrait');
 
@@ -268,8 +306,7 @@ class ProductoController extends Controller
     public function exportFabricantesExcel(Request $request)
     {
         $this->req($request, 'Ver Productos');
-        $filters = $request->only(['q']);
-        return Excel::download(new FabricantesExport($filters), 'fabricantes_' . now()->format('Ymd_His') . '.xlsx');
+        return Excel::download(new FabricantesExport(), 'fabricantes_' . now()->format('Ymd_His') . '.xlsx');
     }
 
     // ── Exportar Unidades ─────────────────────────────────────────
@@ -277,19 +314,12 @@ class ProductoController extends Controller
     public function exportUnidadesPdf(Request $request)
     {
         $this->req($request, 'Ver Productos');
-        $q     = $request->input('q', '');
         $query = Unidad::orderBy('nombre');
-        if ($q) {
-            $query->where(function ($sq) use ($q) {
-                $sq->where('nombre',       'like', "%$q%")
-                   ->orWhere('abreviatura', 'like', "%$q%");
-            });
-        }
         $items = $query->get();
 
         $pdf = Pdf::loadView('reportes.unidades', [
             'items' => $items,
-            'q'     => $q,
+            'q'     => '',
             'total' => $items->count(),
         ])->setPaper('letter', 'portrait');
 
@@ -299,8 +329,7 @@ class ProductoController extends Controller
     public function exportUnidadesExcel(Request $request)
     {
         $this->req($request, 'Ver Productos');
-        $filters = $request->only(['q']);
-        return Excel::download(new UnidadesExport($filters), 'unidades_' . now()->format('Ymd_His') . '.xlsx');
+        return Excel::download(new UnidadesExport(), 'unidades_' . now()->format('Ymd_His') . '.xlsx');
     }
 
     // ── Helper ────────────────────────────────────────────────────

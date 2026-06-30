@@ -27,7 +27,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/users/{id}/permissions',        [UserController::class, 'userPermissions']);
     Route::put('/users/{id}/permissions',        [UserController::class, 'updateUserPermissions']);
 
-    // Resumen farmacia
+    // Farmacia
+    Route::get('/farmacia/datos',               [ProductoController::class, 'datos']);
     Route::get('/farmacia/resumen',              [ProductoController::class, 'resumen']);
 
     // Catálogos - Fabricantes

@@ -6156,7 +6156,7 @@ JSON, true);
                     'marca' => $producto['marca'],
                     'fabricante_id' => $fabricanteIds[$producto['fabricante']] ?? null,
                     'unidad_id' => $unidadIds[$producto['unidad']] ?? null,
-                    'tipo' => $producto['tipo'],
+                    'tipo' => 'FARMACIA',
                     'deleted_at' => null,
                     'updated_at' => $now,
                     'created_at' => $now,

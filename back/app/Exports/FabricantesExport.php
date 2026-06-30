@@ -25,13 +25,6 @@ class FabricantesExport implements FromCollection, WithHeadings, WithStyles, Wit
     public function collection()
     {
         $query = Fabricante::orderBy('nombre');
-        if (!empty($this->filters['q'])) {
-            $q = $this->filters['q'];
-            $query->where(function ($sq) use ($q) {
-                $sq->where('nombre', 'like', "%$q%")
-                   ->orWhere('pais',  'like', "%$q%");
-            });
-        }
         return $query->get()->map(fn($f) => [
             $f->nombre ?? '',
             $f->pais   ?? '',

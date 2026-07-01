@@ -339,18 +339,31 @@ class ProductoController extends Controller
     public function exportProductosPdf(Request $request)
     {
         $this->req($request, 'Ver Productos');
-        $tipo = $request->input('tipo', 'FARMACIA');
+        ini_set('memory_limit', '1024M');
+        $tipo           = $request->input('tipo', 'FARMACIA');
+        $q              = $request->input('q', '');
+        $tipoProductoId = $request->input('tipo_producto_id', '');
 
         $query = Producto::with(['fabricante:id,nombre', 'unidad:id,nombre,abreviatura', 'tipoProducto:id,nombre,color'])
             ->orderBy('nombre');
         if ($tipo) {
             $query->where('tipo', $tipo);
         }
+        if ($tipoProductoId) {
+            $query->where('tipo_producto_id', $tipoProductoId);
+        }
+        if ($q) {
+            $query->where(function ($sq) use ($q) {
+                $sq->where('nombre', 'like', "%$q%")
+                   ->orWhere('codigo', 'like', "%$q%")
+                   ->orWhere('marca', 'like', "%$q%");
+            });
+        }
         $items = $query->get();
 
         $pdf = Pdf::loadView('reportes.productos', [
             'items'   => $items,
-            'q'       => '',
+            'q'       => $q,
             'tipo'    => $tipo,
             'total'   => $items->count(),
         ])->setPaper('letter', 'landscape');
@@ -361,7 +374,7 @@ class ProductoController extends Controller
     public function exportProductosExcel(Request $request)
     {
         $this->req($request, 'Ver Productos');
-        $filters = $request->only(['tipo']);
+        $filters = $request->only(['tipo', 'q', 'tipo_producto_id']);
         return Excel::download(new ProductosExport($filters), 'productos_' . now()->format('Ymd_His') . '.xlsx');
     }
 

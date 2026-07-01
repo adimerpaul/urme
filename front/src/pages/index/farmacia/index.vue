@@ -72,10 +72,12 @@
           </q-input>
           <q-btn v-if="canCrear" color="positive" label="Nuevo" icon="add_circle_outline"
                  no-caps dense @click="prodNew" />
-          <q-btn color="red-7" icon="picture_as_pdf" no-caps dense @click="exportPdf('productos')">
+          <q-btn color="red-7" icon="picture_as_pdf" no-caps dense :loading="exportingPdf" :disable="exportingPdf"
+                 @click="exportPdf('productos')">
             <q-tooltip>Exportar PDF</q-tooltip>
           </q-btn>
-          <q-btn color="green-8" icon="table_view" no-caps dense @click="exportExcel('productos')">
+          <q-btn color="green-8" icon="table_view" no-caps dense :loading="exportingExcel" :disable="exportingExcel"
+                 @click="exportExcel('productos')">
             <q-tooltip>Exportar Excel</q-tooltip>
           </q-btn>
         </div>
@@ -153,10 +155,12 @@
           </q-input>
           <q-btn v-if="canCrear" color="positive" label="Nuevo" icon="add_circle_outline"
                  no-caps dense @click="fabNew" />
-          <q-btn color="red-7" icon="picture_as_pdf" no-caps dense @click="exportPdf('fabricantes')">
+          <q-btn color="red-7" icon="picture_as_pdf" no-caps dense :loading="exportingPdf" :disable="exportingPdf"
+                 @click="exportPdf('fabricantes')">
             <q-tooltip>Exportar PDF</q-tooltip>
           </q-btn>
-          <q-btn color="green-8" icon="table_view" no-caps dense @click="exportExcel('fabricantes')">
+          <q-btn color="green-8" icon="table_view" no-caps dense :loading="exportingExcel" :disable="exportingExcel"
+                 @click="exportExcel('fabricantes')">
             <q-tooltip>Exportar Excel</q-tooltip>
           </q-btn>
         </div>
@@ -227,10 +231,12 @@
           </q-input>
           <q-btn v-if="canCrear" color="positive" label="Nuevo" icon="add_circle_outline"
                  no-caps dense @click="unidNew" />
-          <q-btn color="red-7" icon="picture_as_pdf" no-caps dense @click="exportPdf('unidades')">
+          <q-btn color="red-7" icon="picture_as_pdf" no-caps dense :loading="exportingPdf" :disable="exportingPdf"
+                 @click="exportPdf('unidades')">
             <q-tooltip>Exportar PDF</q-tooltip>
           </q-btn>
-          <q-btn color="green-8" icon="table_view" no-caps dense @click="exportExcel('unidades')">
+          <q-btn color="green-8" icon="table_view" no-caps dense :loading="exportingExcel" :disable="exportingExcel"
+                 @click="exportExcel('unidades')">
             <q-tooltip>Exportar Excel</q-tooltip>
           </q-btn>
         </div>
@@ -632,6 +638,8 @@ const canEliminar = computed(() => proxy.$store.hasPermission('Eliminar Producto
 // ── Estado general ─────────────────────────────────────────────
 const tab     = ref('productos')
 const resumen = ref({ productos: 0, fabricantes: 0, unidades: 0, tipos: 0 })
+const exportingPdf   = ref(false)
+const exportingExcel = ref(false)
 
 // ── Productos ──────────────────────────────────────────────────
 const productos   = ref([])
@@ -967,19 +975,36 @@ async function tipoQuickSave () {
 }
 
 // ── Exportar ───────────────────────────────────────────────────
+function exportParams (recurso) {
+  if (recurso === 'productos') {
+    return { tipo: 'FARMACIA', tipo_producto_id: filterTipoProducto.value, q: filterProd.value }
+  }
+  if (recurso === 'fabricantes') {
+    return { q: filterFab.value }
+  }
+  if (recurso === 'unidades') {
+    return { q: filterUnid.value }
+  }
+  return {}
+}
+
 async function exportPdf (recurso) {
+  exportingPdf.value = true
   try {
-    const params = recurso === 'productos' ? { tipo: 'FARMACIA' } : {}
+    const params = exportParams(recurso)
     const res = await proxy.$axios.get(recurso + '/export-pdf', { params, responseType: 'blob' })
     window.open(window.URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' })), '_blank')
   } catch (e) {
     proxy.$alert.error('Error al generar PDF')
+  } finally {
+    exportingPdf.value = false
   }
 }
 
 async function exportExcel (recurso) {
+  exportingExcel.value = true
   try {
-    const params = recurso === 'productos' ? { tipo: 'FARMACIA' } : {}
+    const params = exportParams(recurso)
     const res = await proxy.$axios.get(recurso + '/export-excel', { params, responseType: 'blob' })
     const url = window.URL.createObjectURL(new Blob([res.data], {
       type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -991,6 +1016,8 @@ async function exportExcel (recurso) {
     window.URL.revokeObjectURL(url)
   } catch (e) {
     proxy.$alert.error('Error al generar Excel')
+  } finally {
+    exportingExcel.value = false
   }
 }
 </script>

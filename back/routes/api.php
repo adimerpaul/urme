@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\ProductoController;
+use App\Http\Controllers\SeguroController;
 use Illuminate\Support\Facades\Route;
 
 // ── Rutas públicas ────────────────────────────────────────────
@@ -60,4 +61,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/productos',                    [ProductoController::class, 'store']);
     Route::put('/productos/{id}',                [ProductoController::class, 'update']);
     Route::delete('/productos/{id}',             [ProductoController::class, 'destroy']);
+
+    // Seguros
+    Route::get('/seguros',                       [SeguroController::class, 'index']);
+    Route::post('/seguros',                      [SeguroController::class, 'store']);
+    Route::put('/seguros/{id}',                  [SeguroController::class, 'update']);
+    Route::delete('/seguros/{id}',               [SeguroController::class, 'destroy']);
 });

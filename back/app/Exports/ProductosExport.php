@@ -32,6 +32,20 @@ class ProductosExport implements FromCollection, WithHeadings, WithStyles, WithT
             $query->where('tipo', $tipo);
         }
 
+        $tipoProductoId = $this->filters['tipo_producto_id'] ?? '';
+        if ($tipoProductoId) {
+            $query->where('tipo_producto_id', $tipoProductoId);
+        }
+
+        $q = $this->filters['q'] ?? '';
+        if ($q) {
+            $query->where(function ($sq) use ($q) {
+                $sq->where('nombre', 'like', "%$q%")
+                   ->orWhere('codigo', 'like', "%$q%")
+                   ->orWhere('marca', 'like', "%$q%");
+            });
+        }
+
         return $query->get()->map(fn($p) => [
             $p->codigo                                                 ?? '',
             $p->nombre                                                 ?? '',

@@ -177,6 +177,13 @@ const menuSections = [
       { title: 'Productos', icon: 'inventory_2', link: '/farmacia', can: 'Ver Productos' },
     ],
   },
+  {
+    title: 'Seguros',
+    icon: 'verified_user',
+    links: [
+      { title: 'Seguros', icon: 'verified_user', link: '/seguros', can: 'Ver Seguros' },
+    ],
+  },
 ]
 
 const userPermissions = computed(() => proxy.$store.permissions || [])

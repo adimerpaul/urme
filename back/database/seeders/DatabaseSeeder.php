@@ -21,6 +21,9 @@ class DatabaseSeeder extends Seeder
             // Productos / Farmacia
             'Ver Productos', 'Crear Productos', 'Editar Productos', 'Eliminar Productos',
 
+            // Seguros
+            'Ver Seguros', 'Crear Seguros', 'Editar Seguros', 'Eliminar Seguros',
+
             // Reportes y PDFs
             'Ver Reportes', 'Imprimir Resultados', 'Exportar Excel',
 
@@ -30,6 +33,8 @@ class DatabaseSeeder extends Seeder
         foreach ($permisos as $p) {
             Permission::firstOrCreate(['name' => $p, 'guard_name' => 'web']);
         }
+
+        $this->call(SeguroSeeder::class);
 
         // Admin
         $admin = User::create([

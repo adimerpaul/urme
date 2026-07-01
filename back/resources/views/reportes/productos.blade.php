@@ -14,9 +14,13 @@
         .s-box { display: inline-block; width: 32%; vertical-align: top; }
         .s-label { color: #546E7A; font-size: 7px; text-transform: uppercase; display: block; }
         .s-val { color: #004D40; font-size: 12px; font-weight: bold; display: block; }
-        .filters { border: 1px solid #ddd; padding: 3px 6px; margin-bottom: 6px; font-size: 7px; color: #475569; }
-        .th { background: #00695C; color: #fff; font-size: 7.5px; font-weight: bold; text-transform: uppercase; padding: 4px 3px; overflow: hidden; }
-        .cell { display: inline-block; vertical-align: top; overflow: hidden; }
+        .empty { border: 1px dashed #cbd5e1; color: #64748b; padding: 22px; text-align: center; margin-top: 18px; }
+        table.items { width: 100%; border-collapse: collapse; }
+        table.items thead { display: table-header-group; }
+        table.items tr { page-break-inside: avoid; }
+        table.items th { background: #00695C; color: #fff; font-size: 7.5px; font-weight: bold; text-transform: uppercase; padding: 4px 3px; text-align: left; }
+        table.items td { padding: 3px; border-bottom: 1px solid #dbe4ee; }
+        table.items tbody tr:nth-child(even) td { background: #F1F8F7; }
         .c-cod  { width:  6%; }
         .c-nom  { width: 22%; }
         .c-marc { width:  9%; }
@@ -26,9 +30,6 @@
         .c-cat  { width: 11%; }
         .c-prec { width:  7%; text-align: right; }
         .c-tipo { width:  6%; text-align: center; }
-        .row-item { border-bottom: 1px solid #dbe4ee; padding: 3px; page-break-inside: avoid; }
-        .row-item:nth-child(even) { background: #F1F8F7; }
-        .empty { border: 1px dashed #cbd5e1; color: #64748b; padding: 22px; text-align: center; margin-top: 18px; }
         .badge { background: #00695C; color: #fff; padding: 1px 4px; border-radius: 3px; font-size: 7px; }
     </style>
 </head>
@@ -57,30 +58,36 @@
     @if ($items->isEmpty())
         <div class="empty">No existen productos para los filtros aplicados.</div>
     @else
-        <div class="th">
-            <span class="cell c-cod">Código</span>
-            <span class="cell c-nom">Nombre</span>
-            <span class="cell c-marc">Marca</span>
-            <span class="cell c-desc">Descripción</span>
-            <span class="cell c-fab">Fabricante</span>
-            <span class="cell c-unid">Unidad</span>
-            <span class="cell c-cat">Categoría</span>
-            <span class="cell c-prec">Precio</span>
-            <span class="cell c-tipo">Tipo</span>
-        </div>
-        @foreach ($items as $item)
-            <div class="row-item">
-                <span class="cell c-cod">{{ $item->codigo ?: '—' }}</span>
-                <span class="cell c-nom">{{ $item->nombre }}</span>
-                <span class="cell c-marc">{{ $item->marca ?: '—' }}</span>
-                <span class="cell c-desc">{{ $item->descripcion ?: '—' }}</span>
-                <span class="cell c-fab">{{ $item->fabricante?->nombre ?: '—' }}</span>
-                <span class="cell c-unid">{{ $item->unidad?->abreviatura ?: ($item->unidad?->nombre ?: '—') }}</span>
-                <span class="cell c-cat">{{ $item->tipoProducto?->nombre ?: '—' }}</span>
-                <span class="cell c-prec">{{ $item->precio ? number_format($item->precio, 2, ',', '.') : '—' }}</span>
-                <span class="cell c-tipo"><span class="badge">{{ $item->tipo }}</span></span>
-            </div>
-        @endforeach
+        <table class="items">
+            <thead>
+                <tr>
+                    <th class="c-cod">Código</th>
+                    <th class="c-nom">Nombre</th>
+                    <th class="c-marc">Marca</th>
+                    <th class="c-desc">Descripción</th>
+                    <th class="c-fab">Fabricante</th>
+                    <th class="c-unid">Unidad</th>
+                    <th class="c-cat">Categoría</th>
+                    <th class="c-prec">Precio</th>
+                    <th class="c-tipo">Tipo</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach ($items as $item)
+                    <tr>
+                        <td class="c-cod">{{ $item->codigo ?: '—' }}</td>
+                        <td class="c-nom">{{ $item->nombre }}</td>
+                        <td class="c-marc">{{ $item->marca ?: '—' }}</td>
+                        <td class="c-desc">{{ $item->descripcion ?: '—' }}</td>
+                        <td class="c-fab">{{ $item->fabricante?->nombre ?: '—' }}</td>
+                        <td class="c-unid">{{ $item->unidad?->abreviatura ?: ($item->unidad?->nombre ?: '—') }}</td>
+                        <td class="c-cat">{{ $item->tipoProducto?->nombre ?: '—' }}</td>
+                        <td class="c-prec">{{ $item->precio ? number_format($item->precio, 2, ',', '.') : '—' }}</td>
+                        <td class="c-tipo"><span class="badge">{{ $item->tipo }}</span></td>
+                    </tr>
+                @endforeach
+            </tbody>
+        </table>
     @endif
 </body>
 </html>

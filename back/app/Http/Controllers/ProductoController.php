@@ -32,7 +32,7 @@ class ProductoController extends Controller
         $pageUnidades  = (int) $request->input('page_unid', 1);
         $pageTipos     = (int) $request->input('page_tipo', 1);
 
-        $productosQuery = Producto::with(['fabricante:id,nombre', 'unidad:id,nombre,abreviatura', 'tipoProducto:id,nombre'])
+        $productosQuery = Producto::with(['fabricante:id,nombre', 'unidad:id,nombre,abreviatura', 'tipoProducto:id,nombre,color'])
             ->where('tipo', 'FARMACIA')
             ->orderBy('nombre');
         if ($qProductos) {
@@ -80,7 +80,7 @@ class ProductoController extends Controller
             'tipos' => $tiposQuery->paginate($perPage, ['*'], 'page_tipo', $pageTipos),
             'allFabricantes' => Fabricante::orderBy('nombre')->get(['id', 'nombre', 'pais']),
             'allUnidades' => Unidad::orderBy('nombre')->get(['id', 'nombre', 'abreviatura']),
-            'allTipoProductos' => TipoProducto::orderBy('nombre')->get(['id', 'nombre']),
+            'allTipoProductos' => TipoProducto::orderBy('nombre')->get(['id', 'nombre', 'color']),
         ]);
     }
 
@@ -219,9 +219,13 @@ class ProductoController extends Controller
     public function storeTipoProducto(Request $request)
     {
         $this->req($request, 'Crear Productos');
-        $request->validate(['nombre' => 'required|string|max:255']);
+        $request->validate([
+            'nombre' => 'required|string|max:255',
+            'color'  => 'nullable|string|max:30',
+        ]);
         $tipo = TipoProducto::create([
             'nombre' => mb_strtoupper($request->nombre),
+            'color'  => $request->color ?: 'primary',
         ]);
         return response()->json($tipo, 201);
     }
@@ -229,10 +233,14 @@ class ProductoController extends Controller
     public function updateTipoProducto(Request $request, $id)
     {
         $this->req($request, 'Editar Productos');
-        $request->validate(['nombre' => 'required|string|max:255']);
+        $request->validate([
+            'nombre' => 'required|string|max:255',
+            'color'  => 'nullable|string|max:30',
+        ]);
         $tipo = TipoProducto::findOrFail($id);
         $tipo->update([
             'nombre' => mb_strtoupper($request->nombre),
+            'color'  => $request->color ?: 'primary',
         ]);
         return response()->json($tipo);
     }
@@ -254,7 +262,7 @@ class ProductoController extends Controller
         $tipo    = $request->input('tipo', '');
         $perPage = (int) $request->input('per_page', 20);
 
-        $query = Producto::with(['fabricante:id,nombre', 'unidad:id,nombre,abreviatura', 'tipoProducto:id,nombre'])
+        $query = Producto::with(['fabricante:id,nombre', 'unidad:id,nombre,abreviatura', 'tipoProducto:id,nombre,color'])
             ->orderBy('nombre');
 
         if ($q) {
@@ -292,7 +300,7 @@ class ProductoController extends Controller
             'tipo_producto_id'  => $request->tipo_producto_id ?: null,
             'precio'            => $request->precio ?: 0,
         ]);
-        return response()->json($producto->load(['fabricante:id,nombre', 'unidad:id,nombre,abreviatura', 'tipoProducto:id,nombre']), 201);
+        return response()->json($producto->load(['fabricante:id,nombre', 'unidad:id,nombre,abreviatura', 'tipoProducto:id,nombre,color']), 201);
     }
 
     public function update(Request $request, $id)
@@ -316,7 +324,7 @@ class ProductoController extends Controller
             'tipo_producto_id'  => $request->tipo_producto_id ?: null,
             'precio'            => $request->precio ?: 0,
         ]);
-        return response()->json($producto->load(['fabricante:id,nombre', 'unidad:id,nombre,abreviatura', 'tipoProducto:id,nombre']));
+        return response()->json($producto->load(['fabricante:id,nombre', 'unidad:id,nombre,abreviatura', 'tipoProducto:id,nombre,color']));
     }
 
     public function destroy(Request $request, $id)
@@ -333,7 +341,7 @@ class ProductoController extends Controller
         $this->req($request, 'Ver Productos');
         $tipo = $request->input('tipo', 'FARMACIA');
 
-        $query = Producto::with(['fabricante:id,nombre', 'unidad:id,nombre,abreviatura', 'tipoProducto:id,nombre'])
+        $query = Producto::with(['fabricante:id,nombre', 'unidad:id,nombre,abreviatura', 'tipoProducto:id,nombre,color'])
             ->orderBy('nombre');
         if ($tipo) {
             $query->where('tipo', $tipo);

@@ -13,7 +13,7 @@ class TipoProducto extends Model implements AuditableContract
 
     protected $table = 'tipo_productos';
 
-    protected $fillable = ['nombre'];
+    protected $fillable = ['nombre', 'color'];
 
     protected $hidden = ['created_at', 'updated_at', 'deleted_at'];
 

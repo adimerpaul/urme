@@ -57,6 +57,14 @@
           <q-select v-model="filterTipoProducto" label="Categoría" dense outlined clearable
                      :options="allTipoProductos" option-value="id" option-label="nombre"
                      emit-value map-options style="width:180px" @update:model-value="onFilterProd">
+            <template v-slot:option="scope">
+              <q-item v-bind="scope.itemProps">
+                <q-item-section avatar>
+                  <q-badge :color="scope.opt.color || 'primary'" style="width:16px;height:16px" />
+                </q-item-section>
+                <q-item-section>{{ scope.opt.nombre }}</q-item-section>
+              </q-item>
+            </template>
           </q-select>
           <q-input v-model="filterProd" label="Buscar" dense outlined clearable
                    style="width:160px" @update:model-value="onFilterProd">
@@ -76,24 +84,19 @@
           <thead>
             <tr class="bg-grey-2">
               <th class="text-left" style="width:64px"></th>
-<!--              <th class="text-left">Código</th>-->
               <th class="text-left">Nombre</th>
               <th class="text-left">Tipo</th>
-<!--              <th class="text-left">Categoría</th>-->
-<!--              <th class="text-left">Marca</th>-->
-<!--              <th class="text-left">Fabricante</th>-->
-<!--              <th class="text-left">Unidad</th>-->
               <th class="text-right">Precio (Bs.)</th>
             </tr>
           </thead>
           <tbody>
             <tr v-if="loadingProd">
-              <td colspan="8" class="text-center q-pa-md">
+              <td colspan="4" class="text-center q-pa-md">
                 <q-spinner color="primary" size="24px" />
               </td>
             </tr>
             <tr v-else-if="!productos.length">
-              <td colspan="8" class="text-center text-grey-5 q-pa-md">Sin datos</td>
+              <td colspan="4" class="text-center text-grey-5 q-pa-md">Sin datos</td>
             </tr>
             <tr v-else v-for="row in productos" :key="row.id">
               <td class="q-pa-xs">
@@ -117,17 +120,13 @@
                   </q-list>
                 </q-btn-dropdown>
               </td>
-<!--              <td>{{ row.codigo || '—' }}</td>-->
               <td>{{ row.nombre }}</td>
               <td>
-<!--                <pre>-->
-                  {{row.tipo_producto?.nombre}}
-<!--                </pre>-->
+                <q-badge v-if="row.tipo_producto" :color="row.tipo_producto.color || 'primary'">
+                  {{ row.tipo_producto.nombre }}
+                </q-badge>
+                <span v-else>—</span>
               </td>
-<!--              <td>{{ row.tipo_producto ? row.tipo_producto.nombre : '—' }}</td>-->
-<!--              <td>{{ row.marca || '—' }}</td>-->
-<!--              <td>{{ row.fabricante ? row.fabricante.nombre : '—' }}</td>-->
-<!--              <td>{{ row.unidad ? (row.unidad.abreviatura || row.unidad.nombre) : '—' }}</td>-->
               <td class="text-right">{{ row.precio ? Number(row.precio).toFixed(2) : '—' }}</td>
             </tr>
           </tbody>
@@ -309,16 +308,17 @@
             <tr class="bg-grey-2">
               <th class="text-left" style="width:64px"></th>
               <th class="text-left">Nombre</th>
+              <th class="text-left">Tipo</th>
             </tr>
           </thead>
           <tbody>
             <tr v-if="loadingTipo">
-              <td colspan="2" class="text-center q-pa-md">
+              <td colspan="3" class="text-center q-pa-md">
                 <q-spinner color="indigo" size="24px" />
               </td>
             </tr>
             <tr v-else-if="!tipos.length">
-              <td colspan="2" class="text-center text-grey-5 q-pa-md">Sin datos</td>
+              <td colspan="3" class="text-center text-grey-5 q-pa-md">Sin datos</td>
             </tr>
             <tr v-else v-for="row in tipos" :key="row.id">
               <td class="q-pa-xs">
@@ -343,6 +343,7 @@
                 </q-btn-dropdown>
               </td>
               <td>{{ row.nombre }}</td>
+              <td><q-badge :color="row.color || 'primary'">{{ row.nombre }}</q-badge></td>
             </tr>
           </tbody>
         </q-markup-table>
@@ -386,6 +387,14 @@
                 <q-select v-model="prod.tipo_producto_id" label="Categoría (tipo de producto)" dense outlined
                           :options="allTipoProductos" option-value="id" option-label="nombre"
                           emit-value map-options clearable>
+                  <template v-slot:option="scope">
+                    <q-item v-bind="scope.itemProps">
+                      <q-item-section avatar>
+                        <q-badge :color="scope.opt.color || 'primary'" style="width:16px;height:16px" />
+                      </q-item-section>
+                      <q-item-section>{{ scope.opt.nombre }}</q-item-section>
+                    </q-item>
+                  </template>
                   <template v-slot:after>
                     <q-btn v-if="canCrear" flat round dense icon="add" color="indigo"
                            @click="tipoQuick = true">
@@ -497,8 +506,23 @@
         </q-card-section>
         <q-card-section style="padding:14px 16px">
           <q-form @submit.prevent="tipoSave">
-            <q-input v-model="tipoItem.nombre" label="Nombre *" dense outlined class="q-mb-md"
+            <q-input v-model="tipoItem.nombre" label="Nombre *" dense outlined class="q-mb-sm"
                      :rules="[v => !!v || 'Requerido']" v-uppercase />
+            <q-select v-model="tipoItem.color" label="Color" dense outlined class="q-mb-md"
+                      :options="quasarColors" emit-value map-options>
+              <template v-slot:option="scope">
+                <q-item v-bind="scope.itemProps">
+                  <q-item-section avatar>
+                    <q-badge :color="scope.opt.value" style="width:16px;height:16px" />
+                  </q-item-section>
+                  <q-item-section>{{ scope.opt.label }}</q-item-section>
+                </q-item>
+              </template>
+              <template v-slot:selected-item="scope">
+                <q-badge :color="scope.opt.value" class="q-mr-xs" style="width:12px;height:12px" />
+                {{ scope.opt.label }}
+              </template>
+            </q-select>
             <div class="row justify-end q-gutter-sm">
               <q-btn flat color="grey-7" label="Cancelar" no-caps @click="dialogTipo = false" />
               <q-btn color="indigo" :label="tipoItem.id ? 'Guardar' : 'Crear'"
@@ -517,8 +541,23 @@
         </q-card-section>
         <q-card-section>
           <q-form @submit.prevent="tipoQuickSave">
-            <q-input v-model="tipoQNombre" label="Nombre *" dense outlined class="q-mb-md"
+            <q-input v-model="tipoQNombre" label="Nombre *" dense outlined class="q-mb-sm"
                      :rules="[v => !!v || 'Requerido']" v-uppercase autofocus />
+            <q-select v-model="tipoQColor" label="Color" dense outlined class="q-mb-md"
+                      :options="quasarColors" emit-value map-options>
+              <template v-slot:option="scope">
+                <q-item v-bind="scope.itemProps">
+                  <q-item-section avatar>
+                    <q-badge :color="scope.opt.value" style="width:16px;height:16px" />
+                  </q-item-section>
+                  <q-item-section>{{ scope.opt.label }}</q-item-section>
+                </q-item>
+              </template>
+              <template v-slot:selected-item="scope">
+                <q-badge :color="scope.opt.value" class="q-mr-xs" style="width:12px;height:12px" />
+                {{ scope.opt.label }}
+              </template>
+            </q-select>
             <div class="row justify-end q-gutter-sm">
               <q-btn flat color="grey-7" label="Cancelar" no-caps @click="tipoQuick = false" />
               <q-btn color="indigo" label="Crear" type="submit" no-caps :loading="savingTipo" />
@@ -575,6 +614,14 @@
 import { ref, computed, watch, getCurrentInstance } from 'vue'
 
 const { proxy } = getCurrentInstance()
+
+// ── Colores Quasar disponibles ──────────────────────────────────
+const quasarColors = [
+  'primary', 'secondary', 'accent', 'positive', 'negative', 'info', 'warning', 'dark',
+  'red', 'pink', 'purple', 'deep-purple', 'indigo', 'blue', 'light-blue', 'cyan', 'teal',
+  'green', 'light-green', 'lime', 'yellow', 'amber', 'orange', 'deep-orange', 'brown',
+  'grey', 'blue-grey',
+].map(c => ({ label: c, value: c }))
 
 // ── Permisos ───────────────────────────────────────────────────
 const canVer      = computed(() => proxy.$store.hasPermission('Ver Productos'))
@@ -654,6 +701,7 @@ const perTipo         = 15
 const tipoItem        = ref({})
 const tipoQuick       = ref(false)
 const tipoQNombre     = ref('')
+const tipoQColor      = ref('primary')
 let timerTipo         = null
 
 const pagesTipo = computed(() => Math.max(1, Math.ceil(totalTipo.value / perTipo)))
@@ -872,7 +920,7 @@ function onFilterTipo () {
   timerTipo = setTimeout(() => { pageTipo.value = 1; loadTipos() }, 350)
 }
 
-function tipoNew ()     { tipoItem.value = { nombre: '' }; tipoAction.value = 'Nuevo'; dialogTipo.value = true }
+function tipoNew ()     { tipoItem.value = { nombre: '', color: 'primary' }; tipoAction.value = 'Nuevo'; dialogTipo.value = true }
 function tipoEdit (row) { tipoItem.value = { ...row }; tipoAction.value = 'Editar'; dialogTipo.value = true }
 
 async function tipoSave () {
@@ -905,11 +953,12 @@ function tipoDelete (id) {
 async function tipoQuickSave () {
   savingTipo.value = true
   try {
-    const res = await proxy.$axios.post('tipo-productos', { nombre: tipoQNombre.value })
+    const res = await proxy.$axios.post('tipo-productos', { nombre: tipoQNombre.value, color: tipoQColor.value })
     loadFarmaciaData()
     prod.value.tipo_producto_id = res.data.id
     tipoQuick.value = false
     tipoQNombre.value = ''
+    tipoQColor.value = 'primary'
   } catch (e) {
     proxy.$alert.error(e.response?.data?.message || 'Error')
   } finally {

@@ -175,6 +175,7 @@ const menuSections = [
     icon: 'medication',
     links: [
       { title: 'Productos', icon: 'inventory_2', link: '/farmacia', can: 'Ver Productos' },
+      { title: 'Compras',   icon: 'shopping_cart', link: '/compras', can: 'Ver Compras' },
     ],
   },
   {
@@ -182,6 +183,13 @@ const menuSections = [
     icon: 'verified_user',
     links: [
       { title: 'Seguros', icon: 'verified_user', link: '/seguros', can: 'Ver Seguros' },
+    ],
+  },
+  {
+    title: 'Pacientes',
+    icon: 'badge',
+    links: [
+      { title: 'Pacientes', icon: 'badge', link: '/pacientes', can: ['Ver Pacientes', 'Ver Internaciones'] },
     ],
   },
 ]

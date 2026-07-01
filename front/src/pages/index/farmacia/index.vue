@@ -89,16 +89,17 @@
               <th class="text-left">Nombre</th>
               <th class="text-left">Tipo</th>
               <th class="text-right">Precio (Bs.)</th>
+              <th class="text-right">Stock</th>
             </tr>
           </thead>
           <tbody>
             <tr v-if="loadingProd">
-              <td colspan="4" class="text-center q-pa-md">
+              <td colspan="5" class="text-center q-pa-md">
                 <q-spinner color="primary" size="24px" />
               </td>
             </tr>
             <tr v-else-if="!productos.length">
-              <td colspan="4" class="text-center text-grey-5 q-pa-md">Sin datos</td>
+              <td colspan="5" class="text-center text-grey-5 q-pa-md">Sin datos</td>
             </tr>
             <tr v-else v-for="row in productos" :key="row.id">
               <td class="q-pa-xs">
@@ -130,6 +131,11 @@
                 <span v-else>—</span>
               </td>
               <td class="text-right">{{ row.precio ? Number(row.precio).toFixed(2) : '—' }}</td>
+              <td class="text-right">
+                <span :class="Number(row.stock) > 0 ? 'text-green-8 text-weight-bold' : 'text-grey-6'">
+                  {{ row.stock ? Number(row.stock).toFixed(0) : '0' }}
+                </span>
+              </td>
             </tr>
           </tbody>
         </q-markup-table>
@@ -796,7 +802,7 @@ function prodEdit (row) {
 async function prodSave () {
   savingProd.value = true
   try {
-    const payload = { ...prod.value, tipo: 'FARMACIA' }
+    const payload = { ...prod.value }
     if (prod.value.id) {
       await proxy.$axios.put('productos/' + prod.value.id, payload)
       proxy.$alert.success('Producto actualizado')
@@ -977,7 +983,7 @@ async function tipoQuickSave () {
 // ── Exportar ───────────────────────────────────────────────────
 function exportParams (recurso) {
   if (recurso === 'productos') {
-    return { tipo: 'FARMACIA', tipo_producto_id: filterTipoProducto.value, q: filterProd.value }
+    return { tipo_producto_id: filterTipoProducto.value, q: filterProd.value }
   }
   if (recurso === 'fabricantes') {
     return { q: filterFab.value }

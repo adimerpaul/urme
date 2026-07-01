@@ -11,7 +11,7 @@
         h1 { margin: 2px 0 0; font-size: 15px; color: #111827; }
         .meta { float: right; color: #64748b; font-size: 7.5px; text-align: right; }
         .summary { background: #E0F2F1; border: 1px solid #80CBC4; padding: 5px 8px; margin-bottom: 7px; overflow: hidden; }
-        .s-box { display: inline-block; width: 32%; vertical-align: top; }
+        .s-box { display: inline-block; width: 48%; vertical-align: top; }
         .s-label { color: #546E7A; font-size: 7px; text-transform: uppercase; display: block; }
         .s-val { color: #004D40; font-size: 12px; font-weight: bold; display: block; }
         .empty { border: 1px dashed #cbd5e1; color: #64748b; padding: 22px; text-align: center; margin-top: 18px; }
@@ -21,16 +21,14 @@
         table.items th { background: #00695C; color: #fff; font-size: 7.5px; font-weight: bold; text-transform: uppercase; padding: 4px 3px; text-align: left; }
         table.items td { padding: 3px; border-bottom: 1px solid #dbe4ee; }
         table.items tbody tr:nth-child(even) td { background: #F1F8F7; }
-        .c-cod  { width:  6%; }
-        .c-nom  { width: 22%; }
-        .c-marc { width:  9%; }
-        .c-desc { width: 16%; }
-        .c-fab  { width: 12%; }
-        .c-unid { width:  6%; }
-        .c-cat  { width: 11%; }
+        .c-cod  { width:  7%; }
+        .c-nom  { width: 25%; }
+        .c-marc { width: 10%; }
+        .c-desc { width: 18%; }
+        .c-fab  { width: 14%; }
+        .c-unid { width:  7%; }
+        .c-cat  { width: 12%; }
         .c-prec { width:  7%; text-align: right; }
-        .c-tipo { width:  6%; text-align: center; }
-        .badge { background: #00695C; color: #fff; padding: 1px 4px; border-radius: 3px; font-size: 7px; }
     </style>
 </head>
 <body>
@@ -44,10 +42,6 @@
         <div class="s-box">
             <span class="s-label">Total productos</span>
             <span class="s-val">{{ number_format($total, 0, ',', '.') }}</span>
-        </div>
-        <div class="s-box">
-            <span class="s-label">Tipo</span>
-            <span class="s-val">{{ $tipo ?: 'Todos' }}</span>
         </div>
         <div class="s-box">
             <span class="s-label">Búsqueda</span>
@@ -69,7 +63,6 @@
                     <th class="c-unid">Unidad</th>
                     <th class="c-cat">Categoría</th>
                     <th class="c-prec">Precio</th>
-                    <th class="c-tipo">Tipo</th>
                 </tr>
             </thead>
             <tbody>
@@ -83,7 +76,6 @@
                         <td class="c-unid">{{ $item->unidad?->abreviatura ?: ($item->unidad?->nombre ?: '—') }}</td>
                         <td class="c-cat">{{ $item->tipoProducto?->nombre ?: '—' }}</td>
                         <td class="c-prec">{{ $item->precio ? number_format($item->precio, 2, ',', '.') : '—' }}</td>
-                        <td class="c-tipo"><span class="badge">{{ $item->tipo }}</span></td>
                     </tr>
                 @endforeach
             </tbody>

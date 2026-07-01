@@ -15,7 +15,7 @@ class Producto extends Model implements AuditableContract
 
     protected $fillable = [
         'codigo', 'nombre', 'descripcion', 'marca',
-        'fabricante_id', 'unidad_id', 'tipo',
+        'fabricante_id', 'unidad_id',
         'tipo_producto_id', 'precio',
     ];
 
@@ -38,5 +38,15 @@ class Producto extends Model implements AuditableContract
     public function tipoProducto()
     {
         return $this->belongsTo(TipoProducto::class);
+    }
+
+    public function inventarios()
+    {
+        return $this->hasMany(ProductoInventario::class);
+    }
+
+    public function compraDetalles()
+    {
+        return $this->hasMany(CompraDetalle::class);
     }
 }

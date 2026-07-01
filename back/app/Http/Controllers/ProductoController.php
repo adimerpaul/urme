@@ -33,7 +33,7 @@ class ProductoController extends Controller
         $pageTipos     = (int) $request->input('page_tipo', 1);
 
         $productosQuery = Producto::with(['fabricante:id,nombre', 'unidad:id,nombre,abreviatura', 'tipoProducto:id,nombre,color'])
-            ->where('tipo', 'FARMACIA')
+            ->withSum('inventarios as stock', 'cantidad_secundaria')
             ->orderBy('nombre');
         if ($qProductos) {
             $productosQuery->where(function ($sq) use ($qProductos) {
@@ -69,7 +69,7 @@ class ProductoController extends Controller
 
         return response()->json([
             'resumen' => [
-                'productos'   => Producto::where('tipo', 'FARMACIA')->count(),
+                'productos'   => Producto::count(),
                 'fabricantes' => Fabricante::count(),
                 'unidades'    => Unidad::count(),
                 'tipos'       => TipoProducto::count(),
@@ -88,7 +88,7 @@ class ProductoController extends Controller
     {
         $this->req($request, 'Ver Productos');
         return response()->json([
-            'productos'   => Producto::where('tipo', 'FARMACIA')->count(),
+            'productos'   => Producto::count(),
             'fabricantes' => Fabricante::count(),
             'unidades'    => Unidad::count(),
             'tipos'       => TipoProducto::count(),
@@ -258,9 +258,9 @@ class ProductoController extends Controller
     {
         $this->req($request, 'Ver Productos');
 
-        $q       = $request->input('q', '');
-        $tipo    = $request->input('tipo', '');
-        $perPage = (int) $request->input('per_page', 20);
+        $q               = $request->input('q', '');
+        $tipoProductoId  = $request->input('tipo_producto_id', '');
+        $perPage         = (int) $request->input('per_page', 20);
 
         $query = Producto::with(['fabricante:id,nombre', 'unidad:id,nombre,abreviatura', 'tipoProducto:id,nombre,color'])
             ->orderBy('nombre');
@@ -273,8 +273,8 @@ class ProductoController extends Controller
             });
         }
 
-        if ($tipo) {
-            $query->where('tipo', $tipo);
+        if ($tipoProductoId) {
+            $query->where('tipo_producto_id', $tipoProductoId);
         }
 
         return response()->json($query->paginate($perPage));
@@ -285,7 +285,6 @@ class ProductoController extends Controller
         $this->req($request, 'Crear Productos');
         $request->validate([
             'nombre'            => 'required|string|max:255',
-            'tipo'              => 'required|string|max:80',
             'precio'            => 'nullable|numeric|min:0',
             'tipo_producto_id'  => 'nullable|exists:tipo_productos,id',
         ]);
@@ -296,7 +295,6 @@ class ProductoController extends Controller
             'marca'             => $request->marca         ? mb_strtoupper($request->marca)        : null,
             'fabricante_id'     => $request->fabricante_id ?: null,
             'unidad_id'         => $request->unidad_id     ?: null,
-            'tipo'              => mb_strtoupper($request->tipo),
             'tipo_producto_id'  => $request->tipo_producto_id ?: null,
             'precio'            => $request->precio ?: 0,
         ]);
@@ -309,7 +307,6 @@ class ProductoController extends Controller
         $producto = Producto::findOrFail($id);
         $request->validate([
             'nombre'            => 'required|string|max:255',
-            'tipo'              => 'required|string|max:80',
             'precio'            => 'nullable|numeric|min:0',
             'tipo_producto_id'  => 'nullable|exists:tipo_productos,id',
         ]);
@@ -320,7 +317,6 @@ class ProductoController extends Controller
             'marca'             => $request->marca         ? mb_strtoupper($request->marca)        : null,
             'fabricante_id'     => $request->fabricante_id ?: null,
             'unidad_id'         => $request->unidad_id     ?: null,
-            'tipo'              => mb_strtoupper($request->tipo),
             'tipo_producto_id'  => $request->tipo_producto_id ?: null,
             'precio'            => $request->precio ?: 0,
         ]);
@@ -340,15 +336,11 @@ class ProductoController extends Controller
     {
         $this->req($request, 'Ver Productos');
         ini_set('memory_limit', '1024M');
-        $tipo           = $request->input('tipo', 'FARMACIA');
         $q              = $request->input('q', '');
         $tipoProductoId = $request->input('tipo_producto_id', '');
 
         $query = Producto::with(['fabricante:id,nombre', 'unidad:id,nombre,abreviatura', 'tipoProducto:id,nombre,color'])
             ->orderBy('nombre');
-        if ($tipo) {
-            $query->where('tipo', $tipo);
-        }
         if ($tipoProductoId) {
             $query->where('tipo_producto_id', $tipoProductoId);
         }
@@ -364,7 +356,6 @@ class ProductoController extends Controller
         $pdf = Pdf::loadView('reportes.productos', [
             'items'   => $items,
             'q'       => $q,
-            'tipo'    => $tipo,
             'total'   => $items->count(),
         ])->setPaper('letter', 'landscape');
 
@@ -374,7 +365,7 @@ class ProductoController extends Controller
     public function exportProductosExcel(Request $request)
     {
         $this->req($request, 'Ver Productos');
-        $filters = $request->only(['tipo', 'q', 'tipo_producto_id']);
+        $filters = $request->only(['q', 'tipo_producto_id']);
         return Excel::download(new ProductosExport($filters), 'productos_' . now()->format('Ymd_His') . '.xlsx');
     }
 

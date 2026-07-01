@@ -2,7 +2,7 @@
 
 namespace App\Exports;
 
-use App\Models\Producto;
+use App\Models\Compra;
 use Maatwebsite\Excel\Concerns\FromCollection;
 use Maatwebsite\Excel\Concerns\WithHeadings;
 use Maatwebsite\Excel\Concerns\WithStyles;
@@ -13,7 +13,7 @@ use PhpOffice\PhpSpreadsheet\Style\Fill;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Border;
 
-class ProductosExport implements FromCollection, WithHeadings, WithStyles, WithTitle, ShouldAutoSize
+class ComprasExport implements FromCollection, WithHeadings, WithStyles, WithTitle, ShouldAutoSize
 {
     protected array $filters;
 
@@ -24,43 +24,45 @@ class ProductosExport implements FromCollection, WithHeadings, WithStyles, WithT
 
     public function collection()
     {
-        $query = Producto::with(['fabricante:id,nombre', 'unidad:id,nombre,abreviatura', 'tipoProducto:id,nombre'])
-            ->orderBy('nombre');
+        $query = Compra::with(['proveedor:id,nombre', 'user:id,name'])
+            ->orderByDesc('fecha_hora');
 
-        $tipoProductoId = $this->filters['tipo_producto_id'] ?? '';
-        if ($tipoProductoId) {
-            $query->where('tipo_producto_id', $tipoProductoId);
+        if (!empty($this->filters['fecha_inicio'])) {
+            $query->whereDate('fecha_hora', '>=', $this->filters['fecha_inicio']);
+        }
+        if (!empty($this->filters['fecha_fin'])) {
+            $query->whereDate('fecha_hora', '<=', $this->filters['fecha_fin']);
+        }
+        if (!empty($this->filters['proveedor_id'])) {
+            $query->where('proveedor_id', $this->filters['proveedor_id']);
+        }
+        if (!empty($this->filters['user_id'])) {
+            $query->where('user_id', $this->filters['user_id']);
+        }
+        if (!empty($this->filters['estado'])) {
+            $query->where('estado', $this->filters['estado']);
         }
 
-        $q = $this->filters['q'] ?? '';
-        if ($q) {
-            $query->where(function ($sq) use ($q) {
-                $sq->where('nombre', 'like', "%$q%")
-                   ->orWhere('codigo', 'like', "%$q%")
-                   ->orWhere('marca', 'like', "%$q%");
-            });
-        }
-
-        return $query->get()->map(fn($p) => [
-            $p->codigo                                                 ?? '',
-            $p->nombre                                                 ?? '',
-            $p->marca                                                  ?? '',
-            $p->descripcion                                            ?? '',
-            $p->fabricante?->nombre                                    ?? '',
-            $p->unidad ? ($p->unidad->abreviatura ?: $p->unidad->nombre) : '',
-            $p->tipoProducto?->nombre                                  ?? '',
-            $p->precio                                                 ?? 0,
+        return $query->get()->map(fn($c) => [
+            $c->id,
+            $c->fecha_hora?->format('d/m/Y H:i'),
+            $c->proveedor?->nombre ?? '',
+            $c->user?->name ?? '',
+            $c->estado,
+            $c->tipo_pago,
+            $c->nro_factura ?? '',
+            $c->total,
         ]);
     }
 
     public function headings(): array
     {
-        return ['Código', 'Nombre', 'Marca', 'Descripción', 'Fabricante', 'Unidad', 'Categoría', 'Precio'];
+        return ['ID', 'Fecha', 'Proveedor', 'Usuario', 'Estado', 'Pago', 'Nro. Factura', 'Total'];
     }
 
     public function title(): string
     {
-        return 'Productos';
+        return 'Compras';
     }
 
     public function styles(Worksheet $sheet): array
@@ -69,14 +71,14 @@ class ProductosExport implements FromCollection, WithHeadings, WithStyles, WithT
 
         $sheet->getStyle('A1:H1')->applyFromArray([
             'font'      => ['bold' => true, 'color' => ['rgb' => 'FFFFFF'], 'size' => 11],
-            'fill'      => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => '00695C']],
+            'fill'      => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => '1565C0']],
             'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER],
             'borders'   => ['allBorders' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['rgb' => 'FFFFFF']]],
         ]);
         $sheet->getRowDimension(1)->setRowHeight(20);
 
         for ($row = 2; $row <= $last; $row++) {
-            $color = ($row % 2 === 0) ? 'E0F2F1' : 'FFFFFF';
+            $color = ($row % 2 === 0) ? 'E3F2FD' : 'FFFFFF';
             $sheet->getStyle("A{$row}:H{$row}")->applyFromArray([
                 'fill'      => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => $color]],
                 'alignment' => ['vertical' => Alignment::VERTICAL_CENTER],

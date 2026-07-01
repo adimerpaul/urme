@@ -3,6 +3,11 @@
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\ProductoController;
 use App\Http\Controllers\SeguroController;
+use App\Http\Controllers\PacienteController;
+use App\Http\Controllers\InternacionController;
+use App\Http\Controllers\InternacionItemController;
+use App\Http\Controllers\CompraController;
+use App\Http\Controllers\ProveedorController;
 use Illuminate\Support\Facades\Route;
 
 // ── Rutas públicas ────────────────────────────────────────────
@@ -67,4 +72,36 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/seguros',                      [SeguroController::class, 'store']);
     Route::put('/seguros/{id}',                  [SeguroController::class, 'update']);
     Route::delete('/seguros/{id}',               [SeguroController::class, 'destroy']);
+
+    // Pacientes
+    Route::get('/pacientes',                     [PacienteController::class, 'index']);
+    Route::get('/pacientes/{id}',                [PacienteController::class, 'show']);
+    Route::post('/pacientes',                    [PacienteController::class, 'store']);
+    Route::put('/pacientes/{id}',                [PacienteController::class, 'update']);
+    Route::delete('/pacientes/{id}',             [PacienteController::class, 'destroy']);
+
+    // Internaciones
+    Route::get('/internaciones',                          [InternacionController::class, 'index']);
+    Route::get('/internaciones/{id}/pdf',                 [InternacionController::class, 'pdf']);
+    Route::post('/internaciones',                         [InternacionController::class, 'store']);
+    Route::put('/internaciones/{id}',                     [InternacionController::class, 'update']);
+    Route::delete('/internaciones/{id}',                  [InternacionController::class, 'destroy']);
+
+    // Cargos de internación (productos/servicios)
+    Route::post('/internaciones/{internacionId}/items',   [InternacionItemController::class, 'store']);
+    Route::put('/internacion-items/{id}',                 [InternacionItemController::class, 'update']);
+    Route::delete('/internacion-items/{id}',              [InternacionItemController::class, 'destroy']);
+
+    // Proveedores
+    Route::get('/proveedores',                   [ProveedorController::class, 'index']);
+    Route::post('/proveedores',                  [ProveedorController::class, 'store']);
+    Route::put('/proveedores/{id}',              [ProveedorController::class, 'update']);
+    Route::delete('/proveedores/{id}',           [ProveedorController::class, 'destroy']);
+
+    // Compras
+    Route::get('/compras/export-excel',          [CompraController::class, 'exportExcel']);
+    Route::get('/compras',                       [CompraController::class, 'index']);
+    Route::get('/compras/{id}',                  [CompraController::class, 'show']);
+    Route::post('/compras',                      [CompraController::class, 'store']);
+    Route::delete('/compras/{id}',               [CompraController::class, 'destroy']);
 });

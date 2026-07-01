@@ -18,8 +18,14 @@ class DatabaseSeeder extends Seeder
             // Pacientes
             'Ver Pacientes', 'Crear Pacientes', 'Editar Pacientes', 'Eliminar Pacientes',
 
+            // Internaciones
+            'Ver Internaciones', 'Crear Internaciones', 'Editar Internaciones', 'Eliminar Internaciones',
+
             // Productos / Farmacia
             'Ver Productos', 'Crear Productos', 'Editar Productos', 'Eliminar Productos',
+
+            // Compras
+            'Ver Compras', 'Crear Compras', 'Editar Compras', 'Eliminar Compras',
 
             // Seguros
             'Ver Seguros', 'Crear Seguros', 'Editar Seguros', 'Eliminar Seguros',
@@ -35,6 +41,8 @@ class DatabaseSeeder extends Seeder
         }
 
         $this->call(SeguroSeeder::class);
+        $this->call(PacienteSeeder::class);
+        $this->call(InternacionSeeder::class);
 
         // Admin
         $admin = User::create([

@@ -24,7 +24,7 @@ class ProductosExport implements FromCollection, WithHeadings, WithStyles, WithT
 
     public function collection()
     {
-        $query = Producto::with(['fabricante:id,nombre', 'unidad:id,nombre,abreviatura'])
+        $query = Producto::with(['fabricante:id,nombre', 'unidad:id,nombre,abreviatura', 'tipoProducto:id,nombre'])
             ->orderBy('nombre');
 
         $tipo = $this->filters['tipo'] ?? 'FARMACIA';
@@ -39,13 +39,15 @@ class ProductosExport implements FromCollection, WithHeadings, WithStyles, WithT
             $p->descripcion                                            ?? '',
             $p->fabricante?->nombre                                    ?? '',
             $p->unidad ? ($p->unidad->abreviatura ?: $p->unidad->nombre) : '',
+            $p->tipoProducto?->nombre                                  ?? '',
+            $p->precio                                                 ?? 0,
             $p->tipo                                                   ?? '',
         ]);
     }
 
     public function headings(): array
     {
-        return ['Código', 'Nombre', 'Marca', 'Descripción', 'Fabricante', 'Unidad', 'Tipo'];
+        return ['Código', 'Nombre', 'Marca', 'Descripción', 'Fabricante', 'Unidad', 'Categoría', 'Precio', 'Tipo'];
     }
 
     public function title(): string
@@ -57,7 +59,7 @@ class ProductosExport implements FromCollection, WithHeadings, WithStyles, WithT
     {
         $last = $sheet->getHighestRow();
 
-        $sheet->getStyle('A1:G1')->applyFromArray([
+        $sheet->getStyle('A1:I1')->applyFromArray([
             'font'      => ['bold' => true, 'color' => ['rgb' => 'FFFFFF'], 'size' => 11],
             'fill'      => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => '00695C']],
             'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER],
@@ -67,7 +69,7 @@ class ProductosExport implements FromCollection, WithHeadings, WithStyles, WithT
 
         for ($row = 2; $row <= $last; $row++) {
             $color = ($row % 2 === 0) ? 'E0F2F1' : 'FFFFFF';
-            $sheet->getStyle("A{$row}:G{$row}")->applyFromArray([
+            $sheet->getStyle("A{$row}:I{$row}")->applyFromArray([
                 'fill'      => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => $color]],
                 'alignment' => ['vertical' => Alignment::VERTICAL_CENTER],
                 'borders'   => ['allBorders' => ['borderStyle' => Border::BORDER_HAIR, 'color' => ['rgb' => 'CCCCCC']]],

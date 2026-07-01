@@ -17,12 +17,14 @@
         .filters { border: 1px solid #ddd; padding: 3px 6px; margin-bottom: 6px; font-size: 7px; color: #475569; }
         .th { background: #00695C; color: #fff; font-size: 7.5px; font-weight: bold; text-transform: uppercase; padding: 4px 3px; overflow: hidden; }
         .cell { display: inline-block; vertical-align: top; overflow: hidden; }
-        .c-cod  { width:  7%; }
-        .c-nom  { width: 28%; }
-        .c-marc { width: 12%; }
-        .c-desc { width: 23%; }
-        .c-fab  { width: 15%; }
-        .c-unid { width:  7%; }
+        .c-cod  { width:  6%; }
+        .c-nom  { width: 22%; }
+        .c-marc { width:  9%; }
+        .c-desc { width: 16%; }
+        .c-fab  { width: 12%; }
+        .c-unid { width:  6%; }
+        .c-cat  { width: 11%; }
+        .c-prec { width:  7%; text-align: right; }
         .c-tipo { width:  6%; text-align: center; }
         .row-item { border-bottom: 1px solid #dbe4ee; padding: 3px; page-break-inside: avoid; }
         .row-item:nth-child(even) { background: #F1F8F7; }
@@ -62,6 +64,8 @@
             <span class="cell c-desc">Descripción</span>
             <span class="cell c-fab">Fabricante</span>
             <span class="cell c-unid">Unidad</span>
+            <span class="cell c-cat">Categoría</span>
+            <span class="cell c-prec">Precio</span>
             <span class="cell c-tipo">Tipo</span>
         </div>
         @foreach ($items as $item)
@@ -72,6 +76,8 @@
                 <span class="cell c-desc">{{ $item->descripcion ?: '—' }}</span>
                 <span class="cell c-fab">{{ $item->fabricante?->nombre ?: '—' }}</span>
                 <span class="cell c-unid">{{ $item->unidad?->abreviatura ?: ($item->unidad?->nombre ?: '—') }}</span>
+                <span class="cell c-cat">{{ $item->tipoProducto?->nombre ?: '—' }}</span>
+                <span class="cell c-prec">{{ $item->precio ? number_format($item->precio, 2, ',', '.') : '—' }}</span>
                 <span class="cell c-tipo"><span class="badge">{{ $item->tipo }}</span></span>
             </div>
         @endforeach

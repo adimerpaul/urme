@@ -47,6 +47,12 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/unidades/{id}',                 [ProductoController::class, 'updateUnidad']);
     Route::delete('/unidades/{id}',              [ProductoController::class, 'destroyUnidad']);
 
+    // Catálogos - Tipos de producto
+    Route::get('/tipo-productos',                [ProductoController::class, 'tiposProducto']);
+    Route::post('/tipo-productos',               [ProductoController::class, 'storeTipoProducto']);
+    Route::put('/tipo-productos/{id}',           [ProductoController::class, 'updateTipoProducto']);
+    Route::delete('/tipo-productos/{id}',        [ProductoController::class, 'destroyTipoProducto']);
+
     // Productos
     Route::get('/productos/export-pdf',          [ProductoController::class, 'exportProductosPdf']);
     Route::get('/productos/export-excel',        [ProductoController::class, 'exportProductosExcel']);

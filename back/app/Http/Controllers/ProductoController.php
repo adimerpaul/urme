@@ -7,6 +7,7 @@ use App\Exports\ProductosExport;
 use App\Exports\UnidadesExport;
 use App\Models\Fabricante;
 use App\Models\Producto;
+use App\Models\TipoProducto;
 use App\Models\Unidad;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
@@ -23,12 +24,15 @@ class ProductoController extends Controller
         $qProductos    = $request->input('q_prod', '');
         $qFabricantes   = $request->input('q_fab', '');
         $qUnidades     = $request->input('q_unid', '');
+        $qTipos        = $request->input('q_tipo', '');
+        $tipoProductoId = $request->input('tipo_producto_id', '');
         $perPage       = (int) $request->input('per_page', 15);
         $pageProductos = (int) $request->input('page_prod', 1);
         $pageFabrican  = (int) $request->input('page_fab', 1);
         $pageUnidades  = (int) $request->input('page_unid', 1);
+        $pageTipos     = (int) $request->input('page_tipo', 1);
 
-        $productosQuery = Producto::with(['fabricante:id,nombre', 'unidad:id,nombre,abreviatura'])
+        $productosQuery = Producto::with(['fabricante:id,nombre', 'unidad:id,nombre,abreviatura', 'tipoProducto:id,nombre'])
             ->where('tipo', 'FARMACIA')
             ->orderBy('nombre');
         if ($qProductos) {
@@ -37,6 +41,9 @@ class ProductoController extends Controller
                    ->orWhere('codigo', 'like', "%$qProductos%")
                    ->orWhere('marca', 'like', "%$qProductos%");
             });
+        }
+        if ($tipoProductoId) {
+            $productosQuery->where('tipo_producto_id', $tipoProductoId);
         }
 
         $fabricantesQuery = Fabricante::orderBy('nombre');
@@ -55,17 +62,25 @@ class ProductoController extends Controller
             });
         }
 
+        $tiposQuery = TipoProducto::orderBy('nombre');
+        if ($qTipos) {
+            $tiposQuery->where('nombre', 'like', "%$qTipos%");
+        }
+
         return response()->json([
             'resumen' => [
                 'productos'   => Producto::where('tipo', 'FARMACIA')->count(),
                 'fabricantes' => Fabricante::count(),
                 'unidades'    => Unidad::count(),
+                'tipos'       => TipoProducto::count(),
             ],
             'productos' => $productosQuery->paginate($perPage, ['*'], 'page_prod', $pageProductos),
             'fabricantes' => $fabricantesQuery->paginate($perPage, ['*'], 'page_fab', $pageFabrican),
             'unidades' => $unidadesQuery->paginate($perPage, ['*'], 'page_unid', $pageUnidades),
+            'tipos' => $tiposQuery->paginate($perPage, ['*'], 'page_tipo', $pageTipos),
             'allFabricantes' => Fabricante::orderBy('nombre')->get(['id', 'nombre', 'pais']),
             'allUnidades' => Unidad::orderBy('nombre')->get(['id', 'nombre', 'abreviatura']),
+            'allTipoProductos' => TipoProducto::orderBy('nombre')->get(['id', 'nombre']),
         ]);
     }
 
@@ -76,6 +91,7 @@ class ProductoController extends Controller
             'productos'   => Producto::where('tipo', 'FARMACIA')->count(),
             'fabricantes' => Fabricante::count(),
             'unidades'    => Unidad::count(),
+            'tipos'       => TipoProducto::count(),
         ]);
     }
 
@@ -181,6 +197,53 @@ class ProductoController extends Controller
         return response()->json(['message' => 'Unidad eliminada']);
     }
 
+    // ── Catálogos - Tipos de producto ───────────────────────────────
+
+    public function tiposProducto(Request $request)
+    {
+        $this->req($request, 'Ver Productos');
+        $q       = $request->input('q', '');
+        $perPage = $request->input('per_page');
+
+        $query = TipoProducto::orderBy('nombre');
+        if ($q) {
+            $query->where('nombre', 'like', "%$q%");
+        }
+
+        if ($perPage) {
+            return response()->json($query->paginate((int) $perPage));
+        }
+        return response()->json($query->get());
+    }
+
+    public function storeTipoProducto(Request $request)
+    {
+        $this->req($request, 'Crear Productos');
+        $request->validate(['nombre' => 'required|string|max:255']);
+        $tipo = TipoProducto::create([
+            'nombre' => mb_strtoupper($request->nombre),
+        ]);
+        return response()->json($tipo, 201);
+    }
+
+    public function updateTipoProducto(Request $request, $id)
+    {
+        $this->req($request, 'Editar Productos');
+        $request->validate(['nombre' => 'required|string|max:255']);
+        $tipo = TipoProducto::findOrFail($id);
+        $tipo->update([
+            'nombre' => mb_strtoupper($request->nombre),
+        ]);
+        return response()->json($tipo);
+    }
+
+    public function destroyTipoProducto(Request $request, $id)
+    {
+        $this->req($request, 'Eliminar Productos');
+        TipoProducto::findOrFail($id)->delete();
+        return response()->json(['message' => 'Tipo de producto eliminado']);
+    }
+
     // ── Productos ─────────────────────────────────────────────────
 
     public function index(Request $request)
@@ -191,7 +254,7 @@ class ProductoController extends Controller
         $tipo    = $request->input('tipo', '');
         $perPage = (int) $request->input('per_page', 20);
 
-        $query = Producto::with(['fabricante:id,nombre', 'unidad:id,nombre,abreviatura'])
+        $query = Producto::with(['fabricante:id,nombre', 'unidad:id,nombre,abreviatura', 'tipoProducto:id,nombre'])
             ->orderBy('nombre');
 
         if ($q) {
@@ -213,19 +276,23 @@ class ProductoController extends Controller
     {
         $this->req($request, 'Crear Productos');
         $request->validate([
-            'nombre' => 'required|string|max:255',
-            'tipo'   => 'required|string|max:80',
+            'nombre'            => 'required|string|max:255',
+            'tipo'              => 'required|string|max:80',
+            'precio'            => 'nullable|numeric|min:0',
+            'tipo_producto_id'  => 'nullable|exists:tipo_productos,id',
         ]);
         $producto = Producto::create([
-            'codigo'        => $request->codigo       ? mb_strtoupper($request->codigo)      : null,
-            'nombre'        => mb_strtoupper($request->nombre),
-            'descripcion'   => $request->descripcion  ? mb_strtoupper($request->descripcion) : null,
-            'marca'         => $request->marca         ? mb_strtoupper($request->marca)        : null,
-            'fabricante_id' => $request->fabricante_id ?: null,
-            'unidad_id'     => $request->unidad_id     ?: null,
-            'tipo'          => mb_strtoupper($request->tipo),
+            'codigo'            => $request->codigo       ? mb_strtoupper($request->codigo)      : null,
+            'nombre'            => mb_strtoupper($request->nombre),
+            'descripcion'       => $request->descripcion  ? mb_strtoupper($request->descripcion) : null,
+            'marca'             => $request->marca         ? mb_strtoupper($request->marca)        : null,
+            'fabricante_id'     => $request->fabricante_id ?: null,
+            'unidad_id'         => $request->unidad_id     ?: null,
+            'tipo'              => mb_strtoupper($request->tipo),
+            'tipo_producto_id'  => $request->tipo_producto_id ?: null,
+            'precio'            => $request->precio ?: 0,
         ]);
-        return response()->json($producto->load(['fabricante:id,nombre', 'unidad:id,nombre,abreviatura']), 201);
+        return response()->json($producto->load(['fabricante:id,nombre', 'unidad:id,nombre,abreviatura', 'tipoProducto:id,nombre']), 201);
     }
 
     public function update(Request $request, $id)
@@ -233,19 +300,23 @@ class ProductoController extends Controller
         $this->req($request, 'Editar Productos');
         $producto = Producto::findOrFail($id);
         $request->validate([
-            'nombre' => 'required|string|max:255',
-            'tipo'   => 'required|string|max:80',
+            'nombre'            => 'required|string|max:255',
+            'tipo'              => 'required|string|max:80',
+            'precio'            => 'nullable|numeric|min:0',
+            'tipo_producto_id'  => 'nullable|exists:tipo_productos,id',
         ]);
         $producto->update([
-            'codigo'        => $request->codigo       ? mb_strtoupper($request->codigo)      : null,
-            'nombre'        => mb_strtoupper($request->nombre),
-            'descripcion'   => $request->descripcion  ? mb_strtoupper($request->descripcion) : null,
-            'marca'         => $request->marca         ? mb_strtoupper($request->marca)        : null,
-            'fabricante_id' => $request->fabricante_id ?: null,
-            'unidad_id'     => $request->unidad_id     ?: null,
-            'tipo'          => mb_strtoupper($request->tipo),
+            'codigo'            => $request->codigo       ? mb_strtoupper($request->codigo)      : null,
+            'nombre'            => mb_strtoupper($request->nombre),
+            'descripcion'       => $request->descripcion  ? mb_strtoupper($request->descripcion) : null,
+            'marca'             => $request->marca         ? mb_strtoupper($request->marca)        : null,
+            'fabricante_id'     => $request->fabricante_id ?: null,
+            'unidad_id'         => $request->unidad_id     ?: null,
+            'tipo'              => mb_strtoupper($request->tipo),
+            'tipo_producto_id'  => $request->tipo_producto_id ?: null,
+            'precio'            => $request->precio ?: 0,
         ]);
-        return response()->json($producto->load(['fabricante:id,nombre', 'unidad:id,nombre,abreviatura']));
+        return response()->json($producto->load(['fabricante:id,nombre', 'unidad:id,nombre,abreviatura', 'tipoProducto:id,nombre']));
     }
 
     public function destroy(Request $request, $id)
@@ -262,7 +333,7 @@ class ProductoController extends Controller
         $this->req($request, 'Ver Productos');
         $tipo = $request->input('tipo', 'FARMACIA');
 
-        $query = Producto::with(['fabricante:id,nombre', 'unidad:id,nombre,abreviatura'])
+        $query = Producto::with(['fabricante:id,nombre', 'unidad:id,nombre,abreviatura', 'tipoProducto:id,nombre'])
             ->orderBy('nombre');
         if ($tipo) {
             $query->where('tipo', $tipo);

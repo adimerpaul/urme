@@ -21,7 +21,7 @@ export default boot(({ app, router }) => {
   // console.log('VITE_API_BACK', import.meta.env.VITE_API_BACK)
 
   app.config.globalProperties.$axios = axios.create({ baseURL: import.meta.env.VITE_API_BACK })
-  // console.log(import.meta.env.VITE_API_BACK)
+  console.log(import.meta.env.VITE_API_BACK)
   app.config.globalProperties.$alert = Alert
   app.config.globalProperties.$store = useCounterStore()
   app.config.globalProperties.$url = import.meta.env.VITE_API_BACK

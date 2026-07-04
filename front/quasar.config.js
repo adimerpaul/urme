@@ -21,7 +21,11 @@ export default defineConfig((ctx) => {
     ...parseEnvFile('.env'),
     ...(ctx.dev ? parseEnvFile('.env.development') : parseEnvFile('.env.production')),
   }
+  const apiOrigin = env.VITE_API_BACK ? new URL(env.VITE_API_BACK).origin : ''
   return {
+    htmlVariables: {
+      apiOrigin
+    },
     // https://v2.quasar.dev/quasar-cli-vite/prefetch-feature
     // preFetch: true,
 

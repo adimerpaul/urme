@@ -6,7 +6,6 @@ use App\Exports\ComprasExport;
 use App\Models\Compra;
 use App\Models\CompraDetalle;
 use App\Models\Producto;
-use App\Models\ProductoInventario;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Maatwebsite\Excel\Facades\Excel;
@@ -92,7 +91,7 @@ class CompraController extends Controller
                 $lineaTotal = round($precio * $cantidad, 2);
                 $total += $lineaTotal;
 
-                $detalle = CompraDetalle::create([
+                CompraDetalle::create([
                     'compra_id'         => $compra->id,
                     'producto_id'       => $producto?->id,
                     'nombre'            => mb_strtoupper($item['nombre'] ?? $producto?->nombre ?? ''),
@@ -105,12 +104,8 @@ class CompraController extends Controller
                     'fecha_vencimiento' => $item['fecha_vencimiento'] ?? null,
                 ]);
 
-                if ($producto) {
-                    $this->aplicarStock($producto, $detalle, 1);
-
-                    if (!empty($item['precio_venta'])) {
-                        $producto->update(['precio' => $item['precio_venta']]);
-                    }
+                if ($producto && !empty($item['precio_venta'])) {
+                    $producto->update(['precio' => $item['precio_venta']]);
                 }
             }
 
@@ -128,20 +123,13 @@ class CompraController extends Controller
     public function destroy(Request $request, $id)
     {
         $this->req($request, 'Eliminar Compras');
-        $compra = Compra::with('detalles.producto')->findOrFail($id);
+        $compra = Compra::findOrFail($id);
 
         if ($compra->estado === 'ANULADO') {
             abort(422, 'La compra ya se encuentra anulada');
         }
 
-        DB::transaction(function () use ($compra) {
-            foreach ($compra->detalles as $detalle) {
-                if ($detalle->producto) {
-                    $this->aplicarStock($detalle->producto, $detalle, -1);
-                }
-            }
-            $compra->update(['estado' => 'ANULADO']);
-        });
+        $compra->update(['estado' => 'ANULADO']);
 
         return response()->json(['message' => 'Compra anulada']);
     }
@@ -171,38 +159,6 @@ class CompraController extends Controller
         }
         if ($estado) {
             $query->where('estado', $estado);
-        }
-    }
-
-    /**
-     * Aplica (signo 1) o revierte (signo -1) el impacto de una línea de compra
-     * sobre el stock por lote en producto_inventarios.
-     */
-    private function aplicarStock(Producto $producto, CompraDetalle $detalle, int $signo): void
-    {
-        $inventario = ProductoInventario::where('producto_id', $producto->id)
-            ->where('lote', $detalle->lote)
-            ->first();
-
-        if ($signo > 0) {
-            if ($inventario) {
-                $inventario->increment('cantidad_secundaria', $detalle->cantidad);
-            } else {
-                ProductoInventario::create([
-                    'producto_id'          => $producto->id,
-                    'responsable'          => auth()->user()?->name,
-                    'lote'                 => $detalle->lote,
-                    'cantidad_secundaria'  => $detalle->cantidad,
-                    'unidad_secundaria_id' => $producto->unidad_id,
-                    'origen_archivo'       => 'COMPRA #' . $detalle->compra_id,
-                ]);
-            }
-            return;
-        }
-
-        if ($inventario) {
-            $restante = max(0, (float) $inventario->cantidad_secundaria - (float) $detalle->cantidad);
-            $inventario->update(['cantidad_secundaria' => $restante]);
         }
     }
 

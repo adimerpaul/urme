@@ -33,7 +33,9 @@ class ProductoController extends Controller
         $pageTipos     = (int) $request->input('page_tipo', 1);
 
         $productosQuery = Producto::with(['fabricante:id,nombre', 'unidad:id,nombre,abreviatura', 'tipoProducto:id,nombre,color'])
-            ->withSum('inventarios as stock', 'cantidad_secundaria')
+            ->withSum(['compraDetalles as stock' => function ($q) {
+                $q->whereHas('compra', fn($cq) => $cq->where('estado', 'ACTIVO'));
+            }], 'cantidad')
             ->orderBy('nombre');
         if ($qProductos) {
             $productosQuery->where(function ($sq) use ($qProductos) {

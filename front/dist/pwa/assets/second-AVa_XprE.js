@@ -1,0 +1,1 @@
+import{C as e,K as t,O as n,tt as r}from"./QIcon-DBnakEL_.js";import{t as i}from"./QBtn-CkfdxsKS.js";import{t as a}from"./QPage-Dcu8y_wz.js";var o={__name:`second`,setup(o){return(o,s)=>(t(),e(a,{class:`flex flex-center`},{default:r(()=>[n(i,{color:`secondary`,to:`/`,label:`Go to Index Page`,"no-caps":``})]),_:1}))}};export{o as default};

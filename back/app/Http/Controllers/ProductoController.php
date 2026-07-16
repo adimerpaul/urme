@@ -21,27 +21,27 @@ class ProductoController extends Controller
     {
         $this->req($request, 'Ver Productos');
 
-        $qProductos    = $request->input('q_prod', '');
-        $qFabricantes   = $request->input('q_fab', '');
-        $qUnidades     = $request->input('q_unid', '');
-        $qTipos        = $request->input('q_tipo', '');
+        $qProductos = $request->input('q_prod', '');
+        $qFabricantes = $request->input('q_fab', '');
+        $qUnidades = $request->input('q_unid', '');
+        $qTipos = $request->input('q_tipo', '');
         $tipoProductoId = $request->input('tipo_producto_id', '');
-        $perPage       = (int) $request->input('per_page', 15);
+        $perPage = (int) $request->input('per_page', 15);
         $pageProductos = (int) $request->input('page_prod', 1);
-        $pageFabrican  = (int) $request->input('page_fab', 1);
-        $pageUnidades  = (int) $request->input('page_unid', 1);
-        $pageTipos     = (int) $request->input('page_tipo', 1);
+        $pageFabrican = (int) $request->input('page_fab', 1);
+        $pageUnidades = (int) $request->input('page_unid', 1);
+        $pageTipos = (int) $request->input('page_tipo', 1);
 
         $productosQuery = Producto::with(['fabricante:id,nombre', 'unidad:id,nombre,abreviatura', 'tipoProducto:id,nombre,color'])
             ->withSum(['compraDetalles as stock' => function ($q) {
-                $q->whereHas('compra', fn($cq) => $cq->where('estado', 'ACTIVO'));
+                $q->whereHas('compra', fn ($cq) => $cq->where('estado', 'ACTIVO'));
             }], 'cantidad')
             ->orderBy('nombre');
         if ($qProductos) {
             $productosQuery->where(function ($sq) use ($qProductos) {
                 $sq->where('nombre', 'like', "%$qProductos%")
-                   ->orWhere('codigo', 'like', "%$qProductos%")
-                   ->orWhere('marca', 'like', "%$qProductos%");
+                    ->orWhere('codigo', 'like', "%$qProductos%")
+                    ->orWhere('marca', 'like', "%$qProductos%");
             });
         }
         if ($tipoProductoId) {
@@ -52,7 +52,7 @@ class ProductoController extends Controller
         if ($qFabricantes) {
             $fabricantesQuery->where(function ($sq) use ($qFabricantes) {
                 $sq->where('nombre', 'like', "%$qFabricantes%")
-                   ->orWhere('pais', 'like', "%$qFabricantes%");
+                    ->orWhere('pais', 'like', "%$qFabricantes%");
             });
         }
 
@@ -60,7 +60,7 @@ class ProductoController extends Controller
         if ($qUnidades) {
             $unidadesQuery->where(function ($sq) use ($qUnidades) {
                 $sq->where('nombre', 'like', "%$qUnidades%")
-                   ->orWhere('abreviatura', 'like', "%$qUnidades%");
+                    ->orWhere('abreviatura', 'like', "%$qUnidades%");
             });
         }
 
@@ -71,10 +71,10 @@ class ProductoController extends Controller
 
         return response()->json([
             'resumen' => [
-                'productos'   => Producto::count(),
+                'productos' => Producto::count(),
                 'fabricantes' => Fabricante::count(),
-                'unidades'    => Unidad::count(),
-                'tipos'       => TipoProducto::count(),
+                'unidades' => Unidad::count(),
+                'tipos' => TipoProducto::count(),
             ],
             'productos' => $productosQuery->paginate($perPage, ['*'], 'page_prod', $pageProductos),
             'fabricantes' => $fabricantesQuery->paginate($perPage, ['*'], 'page_fab', $pageFabrican),
@@ -89,11 +89,12 @@ class ProductoController extends Controller
     public function resumen(Request $request)
     {
         $this->req($request, 'Ver Productos');
+
         return response()->json([
-            'productos'   => Producto::count(),
+            'productos' => Producto::count(),
             'fabricantes' => Fabricante::count(),
-            'unidades'    => Unidad::count(),
-            'tipos'       => TipoProducto::count(),
+            'unidades' => Unidad::count(),
+            'tipos' => TipoProducto::count(),
         ]);
     }
 
@@ -102,20 +103,21 @@ class ProductoController extends Controller
     public function fabricantes(Request $request)
     {
         $this->req($request, 'Ver Productos');
-        $q       = $request->input('q', '');
+        $q = $request->input('q', '');
         $perPage = $request->input('per_page');
 
         $query = Fabricante::orderBy('nombre');
         if ($q) {
             $query->where(function ($sq) use ($q) {
                 $sq->where('nombre', 'like', "%$q%")
-                   ->orWhere('pais',   'like', "%$q%");
+                    ->orWhere('pais', 'like', "%$q%");
             });
         }
 
         if ($perPage) {
             return response()->json($query->paginate((int) $perPage));
         }
+
         return response()->json($query->get());
     }
 
@@ -125,8 +127,9 @@ class ProductoController extends Controller
         $request->validate(['nombre' => 'required|string|max:255']);
         $fab = Fabricante::create([
             'nombre' => mb_strtoupper($request->nombre),
-            'pais'   => $request->pais ? mb_strtoupper($request->pais) : null,
+            'pais' => $request->pais ? mb_strtoupper($request->pais) : null,
         ]);
+
         return response()->json($fab, 201);
     }
 
@@ -137,8 +140,9 @@ class ProductoController extends Controller
         $fab = Fabricante::findOrFail($id);
         $fab->update([
             'nombre' => mb_strtoupper($request->nombre),
-            'pais'   => $request->pais ? mb_strtoupper($request->pais) : null,
+            'pais' => $request->pais ? mb_strtoupper($request->pais) : null,
         ]);
+
         return response()->json($fab);
     }
 
@@ -146,26 +150,28 @@ class ProductoController extends Controller
     {
         $this->req($request, 'Eliminar Productos');
         Fabricante::findOrFail($id)->delete();
+
         return response()->json(['message' => 'Fabricante eliminado']);
     }
 
     public function unidades(Request $request)
     {
         $this->req($request, 'Ver Productos');
-        $q       = $request->input('q', '');
+        $q = $request->input('q', '');
         $perPage = $request->input('per_page');
 
         $query = Unidad::orderBy('nombre');
         if ($q) {
             $query->where(function ($sq) use ($q) {
-                $sq->where('nombre',       'like', "%$q%")
-                   ->orWhere('abreviatura', 'like', "%$q%");
+                $sq->where('nombre', 'like', "%$q%")
+                    ->orWhere('abreviatura', 'like', "%$q%");
             });
         }
 
         if ($perPage) {
             return response()->json($query->paginate((int) $perPage));
         }
+
         return response()->json($query->get());
     }
 
@@ -174,9 +180,10 @@ class ProductoController extends Controller
         $this->req($request, 'Crear Productos');
         $request->validate(['nombre' => 'required|string|max:255']);
         $u = Unidad::create([
-            'nombre'      => mb_strtoupper($request->nombre),
+            'nombre' => mb_strtoupper($request->nombre),
             'abreviatura' => $request->abreviatura ? mb_strtoupper($request->abreviatura) : null,
         ]);
+
         return response()->json($u, 201);
     }
 
@@ -186,9 +193,10 @@ class ProductoController extends Controller
         $request->validate(['nombre' => 'required|string|max:255']);
         $u = Unidad::findOrFail($id);
         $u->update([
-            'nombre'      => mb_strtoupper($request->nombre),
+            'nombre' => mb_strtoupper($request->nombre),
             'abreviatura' => $request->abreviatura ? mb_strtoupper($request->abreviatura) : null,
         ]);
+
         return response()->json($u);
     }
 
@@ -196,6 +204,7 @@ class ProductoController extends Controller
     {
         $this->req($request, 'Eliminar Productos');
         Unidad::findOrFail($id)->delete();
+
         return response()->json(['message' => 'Unidad eliminada']);
     }
 
@@ -204,7 +213,7 @@ class ProductoController extends Controller
     public function tiposProducto(Request $request)
     {
         $this->req($request, 'Ver Productos');
-        $q       = $request->input('q', '');
+        $q = $request->input('q', '');
         $perPage = $request->input('per_page');
 
         $query = TipoProducto::orderBy('nombre');
@@ -215,6 +224,7 @@ class ProductoController extends Controller
         if ($perPage) {
             return response()->json($query->paginate((int) $perPage));
         }
+
         return response()->json($query->get());
     }
 
@@ -223,12 +233,13 @@ class ProductoController extends Controller
         $this->req($request, 'Crear Productos');
         $request->validate([
             'nombre' => 'required|string|max:255',
-            'color'  => 'nullable|string|max:30',
+            'color' => 'nullable|string|max:30',
         ]);
         $tipo = TipoProducto::create([
             'nombre' => mb_strtoupper($request->nombre),
-            'color'  => $request->color ?: 'primary',
+            'color' => $request->color ?: 'primary',
         ]);
+
         return response()->json($tipo, 201);
     }
 
@@ -237,13 +248,14 @@ class ProductoController extends Controller
         $this->req($request, 'Editar Productos');
         $request->validate([
             'nombre' => 'required|string|max:255',
-            'color'  => 'nullable|string|max:30',
+            'color' => 'nullable|string|max:30',
         ]);
         $tipo = TipoProducto::findOrFail($id);
         $tipo->update([
             'nombre' => mb_strtoupper($request->nombre),
-            'color'  => $request->color ?: 'primary',
+            'color' => $request->color ?: 'primary',
         ]);
+
         return response()->json($tipo);
     }
 
@@ -251,6 +263,7 @@ class ProductoController extends Controller
     {
         $this->req($request, 'Eliminar Productos');
         TipoProducto::findOrFail($id)->delete();
+
         return response()->json(['message' => 'Tipo de producto eliminado']);
     }
 
@@ -260,23 +273,28 @@ class ProductoController extends Controller
     {
         $this->req($request, 'Ver Productos');
 
-        $q               = $request->input('q', '');
-        $tipoProductoId  = $request->input('tipo_producto_id', '');
-        $perPage         = (int) $request->input('per_page', 20);
+        $q = $request->input('q', '');
+        $tipoProductoId = $request->input('tipo_producto_id', '');
+        $tipoNombre = $request->input('tipo', '');
+        $perPage = (int) $request->input('per_page', 20);
 
         $query = Producto::with(['fabricante:id,nombre', 'unidad:id,nombre,abreviatura', 'tipoProducto:id,nombre,color'])
             ->orderBy('nombre');
 
         if ($q) {
             $query->where(function ($sq) use ($q) {
-                $sq->where('nombre',  'like', "%$q%")
-                   ->orWhere('codigo', 'like', "%$q%")
-                   ->orWhere('marca',  'like', "%$q%");
+                $sq->where('nombre', 'like', "%$q%")
+                    ->orWhere('codigo', 'like', "%$q%")
+                    ->orWhere('marca', 'like', "%$q%");
             });
         }
 
         if ($tipoProductoId) {
             $query->where('tipo_producto_id', $tipoProductoId);
+        }
+
+        if ($tipoNombre) {
+            $query->whereHas('tipoProducto', fn ($tq) => $tq->where('nombre', mb_strtoupper($tipoNombre)));
         }
 
         return response()->json($query->paginate($perPage));
@@ -286,20 +304,21 @@ class ProductoController extends Controller
     {
         $this->req($request, 'Crear Productos');
         $request->validate([
-            'nombre'            => 'required|string|max:255',
-            'precio'            => 'nullable|numeric|min:0',
-            'tipo_producto_id'  => 'nullable|exists:tipo_productos,id',
+            'nombre' => 'required|string|max:255',
+            'precio' => 'nullable|numeric|min:0',
+            'tipo_producto_id' => 'nullable|exists:tipo_productos,id',
         ]);
         $producto = Producto::create([
-            'codigo'            => $request->codigo       ? mb_strtoupper($request->codigo)      : null,
-            'nombre'            => mb_strtoupper($request->nombre),
-            'descripcion'       => $request->descripcion  ? mb_strtoupper($request->descripcion) : null,
-            'marca'             => $request->marca         ? mb_strtoupper($request->marca)        : null,
-            'fabricante_id'     => $request->fabricante_id ?: null,
-            'unidad_id'         => $request->unidad_id     ?: null,
-            'tipo_producto_id'  => $request->tipo_producto_id ?: null,
-            'precio'            => $request->precio ?: 0,
+            'codigo' => $request->codigo ? mb_strtoupper($request->codigo) : null,
+            'nombre' => mb_strtoupper($request->nombre),
+            'descripcion' => $request->descripcion ? mb_strtoupper($request->descripcion) : null,
+            'marca' => $request->marca ? mb_strtoupper($request->marca) : null,
+            'fabricante_id' => $request->fabricante_id ?: null,
+            'unidad_id' => $request->unidad_id ?: null,
+            'tipo_producto_id' => $request->tipo_producto_id ?: null,
+            'precio' => $request->precio ?: 0,
         ]);
+
         return response()->json($producto->load(['fabricante:id,nombre', 'unidad:id,nombre,abreviatura', 'tipoProducto:id,nombre,color']), 201);
     }
 
@@ -308,20 +327,21 @@ class ProductoController extends Controller
         $this->req($request, 'Editar Productos');
         $producto = Producto::findOrFail($id);
         $request->validate([
-            'nombre'            => 'required|string|max:255',
-            'precio'            => 'nullable|numeric|min:0',
-            'tipo_producto_id'  => 'nullable|exists:tipo_productos,id',
+            'nombre' => 'required|string|max:255',
+            'precio' => 'nullable|numeric|min:0',
+            'tipo_producto_id' => 'nullable|exists:tipo_productos,id',
         ]);
         $producto->update([
-            'codigo'            => $request->codigo       ? mb_strtoupper($request->codigo)      : null,
-            'nombre'            => mb_strtoupper($request->nombre),
-            'descripcion'       => $request->descripcion  ? mb_strtoupper($request->descripcion) : null,
-            'marca'             => $request->marca         ? mb_strtoupper($request->marca)        : null,
-            'fabricante_id'     => $request->fabricante_id ?: null,
-            'unidad_id'         => $request->unidad_id     ?: null,
-            'tipo_producto_id'  => $request->tipo_producto_id ?: null,
-            'precio'            => $request->precio ?: 0,
+            'codigo' => $request->codigo ? mb_strtoupper($request->codigo) : null,
+            'nombre' => mb_strtoupper($request->nombre),
+            'descripcion' => $request->descripcion ? mb_strtoupper($request->descripcion) : null,
+            'marca' => $request->marca ? mb_strtoupper($request->marca) : null,
+            'fabricante_id' => $request->fabricante_id ?: null,
+            'unidad_id' => $request->unidad_id ?: null,
+            'tipo_producto_id' => $request->tipo_producto_id ?: null,
+            'precio' => $request->precio ?: 0,
         ]);
+
         return response()->json($producto->load(['fabricante:id,nombre', 'unidad:id,nombre,abreviatura', 'tipoProducto:id,nombre,color']));
     }
 
@@ -329,6 +349,7 @@ class ProductoController extends Controller
     {
         $this->req($request, 'Eliminar Productos');
         Producto::findOrFail($id)->delete();
+
         return response()->json(['message' => 'Producto eliminado']);
     }
 
@@ -338,7 +359,7 @@ class ProductoController extends Controller
     {
         $this->req($request, 'Ver Productos');
         ini_set('memory_limit', '1024M');
-        $q              = $request->input('q', '');
+        $q = $request->input('q', '');
         $tipoProductoId = $request->input('tipo_producto_id', '');
 
         $query = Producto::with(['fabricante:id,nombre', 'unidad:id,nombre,abreviatura', 'tipoProducto:id,nombre,color'])
@@ -349,26 +370,27 @@ class ProductoController extends Controller
         if ($q) {
             $query->where(function ($sq) use ($q) {
                 $sq->where('nombre', 'like', "%$q%")
-                   ->orWhere('codigo', 'like', "%$q%")
-                   ->orWhere('marca', 'like', "%$q%");
+                    ->orWhere('codigo', 'like', "%$q%")
+                    ->orWhere('marca', 'like', "%$q%");
             });
         }
         $items = $query->get();
 
         $pdf = Pdf::loadView('reportes.productos', [
-            'items'   => $items,
-            'q'       => $q,
-            'total'   => $items->count(),
+            'items' => $items,
+            'q' => $q,
+            'total' => $items->count(),
         ])->setPaper('letter', 'landscape');
 
-        return $pdf->stream('productos_' . now()->format('Ymd_His') . '.pdf');
+        return $pdf->stream('productos_'.now()->format('Ymd_His').'.pdf');
     }
 
     public function exportProductosExcel(Request $request)
     {
         $this->req($request, 'Ver Productos');
         $filters = $request->only(['q', 'tipo_producto_id']);
-        return Excel::download(new ProductosExport($filters), 'productos_' . now()->format('Ymd_His') . '.xlsx');
+
+        return Excel::download(new ProductosExport($filters), 'productos_'.now()->format('Ymd_His').'.xlsx');
     }
 
     // ── Exportar Fabricantes ──────────────────────────────────────
@@ -381,17 +403,18 @@ class ProductoController extends Controller
 
         $pdf = Pdf::loadView('reportes.fabricantes', [
             'items' => $items,
-            'q'     => '',
+            'q' => '',
             'total' => $items->count(),
         ])->setPaper('letter', 'portrait');
 
-        return $pdf->stream('fabricantes_' . now()->format('Ymd_His') . '.pdf');
+        return $pdf->stream('fabricantes_'.now()->format('Ymd_His').'.pdf');
     }
 
     public function exportFabricantesExcel(Request $request)
     {
         $this->req($request, 'Ver Productos');
-        return Excel::download(new FabricantesExport(), 'fabricantes_' . now()->format('Ymd_His') . '.xlsx');
+
+        return Excel::download(new FabricantesExport, 'fabricantes_'.now()->format('Ymd_His').'.xlsx');
     }
 
     // ── Exportar Unidades ─────────────────────────────────────────
@@ -404,27 +427,30 @@ class ProductoController extends Controller
 
         $pdf = Pdf::loadView('reportes.unidades', [
             'items' => $items,
-            'q'     => '',
+            'q' => '',
             'total' => $items->count(),
         ])->setPaper('letter', 'portrait');
 
-        return $pdf->stream('unidades_' . now()->format('Ymd_His') . '.pdf');
+        return $pdf->stream('unidades_'.now()->format('Ymd_His').'.pdf');
     }
 
     public function exportUnidadesExcel(Request $request)
     {
         $this->req($request, 'Ver Productos');
-        return Excel::download(new UnidadesExport(), 'unidades_' . now()->format('Ymd_His') . '.xlsx');
+
+        return Excel::download(new UnidadesExport, 'unidades_'.now()->format('Ymd_His').'.xlsx');
     }
 
     // ── Helper ────────────────────────────────────────────────────
 
     private function req(Request $request, string|array $permission): void
     {
-        $user  = $request->user();
+        $user = $request->user();
         $perms = is_array($permission) ? $permission : [$permission];
         foreach ($perms as $p) {
-            if ($user->hasPermissionTo($p)) return;
+            if ($user->hasPermissionTo($p)) {
+                return;
+            }
         }
         abort(403, 'No tiene permiso para realizar esta acción');
     }

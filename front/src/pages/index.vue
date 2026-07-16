@@ -1,7 +1,7 @@
 <template>
   <q-layout view="lHh Lpr lFf">
     <!-- HEADER -->
-    <q-header class="bg-white text-black" bordered>
+    <q-header class="app-header">
       <q-toolbar>
         <q-btn
           flat
@@ -22,8 +22,8 @@
 
         <q-btn-dropdown flat unelevated no-caps dropdown-icon="expand_more">
           <template v-slot:label>
-            <div class="row items-center no-wrap q-gutter-sm">
-              <q-avatar rounded size="32px" style="border:2px solid #e2e8f0">
+            <div class="header-user row items-center no-wrap">
+              <q-avatar rounded size="30px" style="border:2px solid #e4eae7">
                 <img :src="$store.user.avatar ? imgUrlBase + '/images/' + $store.user.avatar : imgUrlBase + '/images/default.png'"
                      style="object-fit:cover;width:100%;height:100%"
                      @error="$event.target.src = imgUrlBase + '/images/default.png'" />
@@ -62,8 +62,12 @@
       <q-scroll-area class="fit">
         <div class="drawer-shell">
           <div class="drawer-brand">
+            <div class="drawer-brand__logo">
+              <q-icon name="medical_services" size="17px" />
+            </div>
             <div class="drawer-brand__text">
-              <div class="drawer-brand__caption">Clínica URME<br>Sistema de Laboratorio</div>
+              <div class="drawer-brand__title">Clínica URME</div>
+              <div class="drawer-brand__caption">Sistema de gestión</div>
             </div>
           </div>
 
@@ -133,7 +137,7 @@
     </q-drawer>
 
     <!-- PAGE -->
-    <q-page-container class="bg-grey-2">
+    <q-page-container class="page-bg">
       <router-view />
     </q-page-container>
   </q-layout>
@@ -176,6 +180,7 @@ const menuSections = [
     links: [
       { title: 'Productos', icon: 'inventory_2', link: '/farmacia', can: 'Ver Productos' },
       { title: 'Compras',   icon: 'shopping_cart', link: '/compras', can: 'Ver Compras' },
+      { title: 'Ventas',    icon: 'point_of_sale', link: '/ventas',  can: 'Ver Ventas' },
     ],
   },
   {
@@ -245,7 +250,7 @@ function logout () {
 
 <style>
 .app-drawer {
-  background: linear-gradient(180deg, #0b5ea8 0%, #0a477f 48%, #08355f 100%);
+  background: linear-gradient(180deg, #0e5c50 0%, #0a4038 55%, #072e28 100%);
   color: #ffffff;
 }
 
@@ -254,7 +259,7 @@ function logout () {
 .app-drawer .q-scrollarea,
 .app-drawer .q-scrollarea__container,
 .app-drawer .q-scrollarea__content {
-  background: linear-gradient(180deg, #0b5ea8 0%, #0a477f 48%, #08355f 100%) !important;
+  background: linear-gradient(180deg, #0e5c50 0%, #0a4038 55%, #072e28 100%) !important;
 }
 
 .drawer-shell {
@@ -268,9 +273,30 @@ function logout () {
   gap: 8px;
   padding: 7px;
   margin-bottom: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.drawer-brand__logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
   border-radius: 10px;
-  background: rgba(255, 255, 255, 0.09);
+  background: linear-gradient(135deg, #19b88a, #0e7a5f);
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+}
+
+.drawer-brand__title {
+  color: #ffffff;
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.1;
 }
 
 .drawer-brand__text {
@@ -310,8 +336,8 @@ function logout () {
 }
 
 .drawer-section-header--active {
-  background: rgba(87, 185, 255, 0.24);
-  box-shadow: inset 3px 0 0 #8fd3ff;
+  background: rgba(25, 184, 138, 0.24);
+  box-shadow: inset 3px 0 0 #8fe6c3;
 }
 
 .drawer-section__icon {
@@ -356,9 +382,9 @@ function logout () {
 }
 
 .drawer-menu-link--active {
-  background: #0b76c5;
+  background: linear-gradient(135deg, #12996f, #0d6b52);
   color: #ffffff !important;
-  box-shadow: inset 3px 0 0 #ffd166;
+  box-shadow: inset 3px 0 0 #8fe6c3;
 }
 
 .drawer-footer {
@@ -373,7 +399,31 @@ function logout () {
   min-height: 30px;
   margin: 2px 5px 0;
   border-radius: 9px;
-  color: #ffe6e3;
-  background: rgba(229, 57, 53, 0.16);
+  color: #ffd9d4;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.app-header {
+  background: #ffffff;
+  border-bottom: 1px solid #e4eae7;
+  color: #16241f;
+}
+
+.app-header .q-toolbar {
+  min-height: 54px;
+}
+
+.header-user {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #f2f5f3;
+  border-radius: 99px;
+  padding: 4px 12px 4px 5px;
+}
+
+.page-bg {
+  background: #f2f5f3;
 }
 </style>

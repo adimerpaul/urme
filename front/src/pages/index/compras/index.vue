@@ -1,5 +1,5 @@
 <template>
-  <q-page class="q-pa-xs">
+  <q-page class="q-pa-md">
 
     <!-- Sin acceso -->
     <div v-if="proxy.$store.isLogged && !canVer"
@@ -11,35 +11,40 @@
 
     <template v-else-if="proxy.$store.isLogged">
 
+      <div class="q-mb-md">
+        <div class="text-h5 text-weight-bold">Compras</div>
+        <div class="text-body2 text-grey-6">Historial de compras y proveedores</div>
+      </div>
+
       <!-- Tarjetas resumen -->
-      <div class="row q-col-gutter-xs q-mb-xs">
-        <div class="col-4">
-          <q-card flat bordered class="text-center q-pa-xs">
-            <div class="text-caption text-grey-6">Compras Totales</div>
-            <div class="text-h6 text-green-8 text-weight-bold">{{ money(resumen.total_compras) }} Bs</div>
+      <div class="row q-col-gutter-md q-mb-md">
+        <div class="col-12 col-sm-4">
+          <q-card flat class="bg-primary text-white q-pa-md rounded-borders full-height">
+            <div class="text-caption text-teal-2 text-uppercase text-weight-bold">Compras activas</div>
+            <div class="text-h5 text-weight-bold">{{ money(resumen.total_compras) }} <span class="text-caption text-teal-2">Bs</span></div>
           </q-card>
         </div>
-        <div class="col-4">
-          <q-card flat bordered class="text-center q-pa-xs">
-            <div class="text-caption text-grey-6">Compras Anuladas</div>
-            <div class="text-h6 text-red-8 text-weight-bold">{{ money(resumen.total_anuladas) }} Bs</div>
+        <div class="col-12 col-sm-4">
+          <q-card flat bordered class="q-pa-md rounded-borders full-height">
+            <div class="text-caption text-grey-6 text-uppercase text-weight-bold">Anuladas</div>
+            <div class="text-h5 text-weight-bold text-negative">{{ money(resumen.total_anuladas) }} <span class="text-caption text-grey-6">Bs</span></div>
           </q-card>
         </div>
-        <div class="col-4">
-          <q-card flat bordered class="text-center q-pa-xs">
-            <div class="text-caption text-grey-6">Total Compras</div>
-            <div class="text-h6 text-blue-8 text-weight-bold">{{ resumen.cantidad }}</div>
+        <div class="col-12 col-sm-4">
+          <q-card flat bordered class="q-pa-md rounded-borders full-height">
+            <div class="text-caption text-grey-6 text-uppercase text-weight-bold">Total registros</div>
+            <div class="text-h5 text-weight-bold">{{ resumen.cantidad }}</div>
           </q-card>
         </div>
       </div>
 
-      <q-tabs v-model="tab" dense align="left"
-              active-color="primary" indicator-color="primary" class="q-mb-xs">
+      <q-tabs v-model="tab" dense align="left" no-caps
+              active-color="primary" indicator-color="primary" class="q-mb-sm text-grey-7">
         <q-tab name="historial"  icon="history"       label="Historial" no-caps />
         <q-tab name="nueva"      icon="add_shopping_cart" label="Nueva compra" no-caps />
         <q-tab name="proveedores" icon="local_shipping" label="Proveedores" no-caps />
       </q-tabs>
-      <q-separator class="q-mb-xs" />
+      <q-separator class="q-mb-md" />
 
       <!-- ══ TAB HISTORIAL ══════════════════════════════════════════ -->
       <div v-show="tab === 'historial'">
@@ -62,14 +67,15 @@
                       :options="['ACTIVO', 'ANULADO']" style="width:130px" @update:model-value="onFiltroChange" />
           </div>
           <q-space />
-          <q-btn color="green-8" icon="table_view" no-caps dense :loading="exportingExcel" @click="exportExcel">
+          <q-btn outline rounded no-caps color="grey-7" icon="table_view" label="Excel"
+                 :loading="exportingExcel" @click="exportExcel">
             <q-tooltip>Exportar Excel</q-tooltip>
           </q-btn>
         </div>
 
-        <q-markup-table dense flat bordered separator="cell" class="full-width">
+        <q-markup-table dense flat bordered separator="horizontal" class="full-width rounded-borders tabla-compacta">
           <thead>
-            <tr class="bg-grey-2">
+            <tr class="bg-grey-1 text-grey-7 text-uppercase">
               <th class="text-left" style="width:64px"></th>
               <th class="text-left">ID</th>
               <th class="text-left">Fecha</th>
@@ -78,21 +84,28 @@
               <th class="text-center">Estado</th>
               <th class="text-left">Pago</th>
               <th class="text-right">Total</th>
-              <th class="text-center">Detalle</th>
             </tr>
           </thead>
           <tbody>
             <tr v-if="loadingCompras">
-              <td colspan="9" class="text-center q-pa-md"><q-spinner color="primary" size="24px" /></td>
+              <td colspan="8" class="text-center q-pa-md"><q-spinner color="primary" size="24px" /></td>
             </tr>
             <tr v-else-if="!compras.length">
-              <td colspan="9" class="text-center text-grey-5 q-pa-md">Sin datos</td>
+              <td colspan="8" class="text-center text-grey-5 q-pa-md">Sin datos</td>
             </tr>
             <tr v-else v-for="row in compras" :key="row.id">
               <td class="q-pa-xs">
-                <q-btn-dropdown v-if="canEliminar" label="Opciones" no-caps size="10px" dense color="primary">
-                  <q-list>
-                    <q-item :disable="row.estado === 'ANULADO'" clickable v-close-popup @click="anular(row)">
+                <q-btn-dropdown label="Opciones" no-caps size="10px" dense rounded unelevated color="primary">
+                  <q-list dense>
+                    <q-item clickable v-close-popup @click="verDetalle(row)">
+                      <q-item-section avatar><q-icon name="visibility" color="primary" /></q-item-section>
+                      <q-item-section><q-item-label>Ver detalle ({{ row.detalles_count }})</q-item-label></q-item-section>
+                    </q-item>
+                    <q-item clickable v-close-popup @click="imprimir(row)">
+                      <q-item-section avatar><q-icon name="print" color="primary" /></q-item-section>
+                      <q-item-section><q-item-label>Imprimir</q-item-label></q-item-section>
+                    </q-item>
+                    <q-item v-if="canEliminar" :disable="row.estado === 'ANULADO'" clickable v-close-popup @click="anular(row)">
                       <q-item-section avatar><q-icon name="block" color="negative" /></q-item-section>
                       <q-item-section><q-item-label class="text-negative">Anular</q-item-label></q-item-section>
                     </q-item>
@@ -104,15 +117,13 @@
               <td>{{ row.proveedor ? row.proveedor.nombre : '—' }}</td>
               <td>{{ row.user ? row.user.name : '—' }}</td>
               <td class="text-center">
-                <q-badge :color="row.estado === 'ANULADO' ? 'negative' : 'positive'">{{ row.estado }}</q-badge>
+                <q-badge rounded
+                         :color="row.estado === 'ANULADO' ? 'red-1' : 'green-1'"
+                         :text-color="row.estado === 'ANULADO' ? 'negative' : 'positive'"
+                         class="text-weight-bold">{{ row.estado }}</q-badge>
               </td>
               <td>{{ row.tipo_pago }}</td>
               <td class="text-right">{{ money(row.total) }}</td>
-              <td class="text-center">
-                <q-btn flat dense round icon="visibility" color="primary" @click="verDetalle(row)">
-                  <q-tooltip>Ver detalle ({{ row.detalles_count }})</q-tooltip>
-                </q-btn>
-              </td>
             </tr>
           </tbody>
         </q-markup-table>
@@ -158,15 +169,15 @@
           </div>
 
           <div class="row items-center q-mb-xs">
-            <span class="text-subtitle2 text-grey-7">Líneas de compra</span>
+            <span class="text-subtitle2 text-weight-bold text-grey-8">Líneas de compra</span>
             <q-space />
-            <q-btn color="positive" label="Agregar línea" icon="add_circle_outline" no-caps dense
-                   @click="agregarLinea" />
+            <q-btn rounded unelevated dense no-caps color="teal-1" text-color="primary" class="text-weight-bold"
+                   label="Agregar línea" icon="add" @click="agregarLinea" />
           </div>
 
-          <q-markup-table dense flat bordered separator="cell" class="full-width q-mb-sm">
+          <q-markup-table dense flat bordered separator="horizontal" class="full-width q-mb-sm rounded-borders">
             <thead>
-              <tr class="bg-grey-2">
+              <tr class="bg-grey-1 text-grey-7 text-uppercase">
                 <th style="width:40px"></th>
                 <th class="text-left" style="min-width:220px">Producto / Nombre</th>
                 <th class="text-right" style="width:100px">Cantidad</th>
@@ -191,7 +202,7 @@
                             input-debounce="300" :options="opcionesProducto"
                             option-value="id" option-label="nombre" emit-value map-options
                             @filter="filtrarProductos" @update:model-value="v => onProductoSeleccionado(linea, v)"
-                            placeholder="Buscar producto (o dejar vacío y escribir nombre)">
+                            placeholder="Buscar producto de farmacia (o dejar vacío y escribir nombre)">
                     <template v-slot:no-option>
                       <q-item><q-item-section class="text-grey">Sin resultados</q-item-section></q-item>
                     </template>
@@ -216,8 +227,8 @@
           </q-markup-table>
 
           <div class="row items-center justify-end q-gutter-md">
-            <div class="text-h6">Total: {{ money(totalNueva) }} Bs</div>
-            <q-btn color="primary" label="Registrar compra" icon-right="save" no-caps
+            <div class="text-h6">Total: <span class="text-primary text-weight-bold">{{ money(totalNueva) }} Bs</span></div>
+            <q-btn rounded unelevated color="primary" label="Registrar compra" icon-right="save" no-caps
                    type="submit" :loading="registrando" :disable="!nueva.detalles.length" />
           </div>
         </q-form>
@@ -225,20 +236,20 @@
 
       <!-- ══ TAB PROVEEDORES ════════════════════════════════════════ -->
       <div v-show="tab === 'proveedores'">
-        <div class="row items-center q-gutter-xs q-mb-xs">
-          <span class="text-subtitle2 text-grey-7">Proveedores</span>
+        <div class="row items-center q-gutter-sm q-mb-sm">
+          <span class="text-subtitle2 text-weight-bold text-grey-8">Proveedores</span>
           <q-space />
-          <q-input v-model="filterProv" label="Buscar" dense outlined clearable style="width:180px"
-                   @update:model-value="loadProveedores">
-            <template v-slot:append><q-icon name="search" /></template>
+          <q-input v-model="filterProv" placeholder="Buscar…" dense outlined rounded clearable
+                   bg-color="white" style="width:200px" @update:model-value="loadProveedores">
+            <template v-slot:prepend><q-icon name="search" /></template>
           </q-input>
-          <q-btn v-if="canCrear" color="positive" label="Nuevo" icon="add_circle_outline" no-caps dense
+          <q-btn v-if="canCrear" rounded unelevated color="primary" label="Nuevo proveedor" icon="add" no-caps
                  @click="provNew" />
         </div>
 
-        <q-markup-table dense flat bordered separator="cell" class="full-width">
+        <q-markup-table dense flat bordered separator="horizontal" class="full-width rounded-borders">
           <thead>
-            <tr class="bg-grey-2">
+            <tr class="bg-grey-1 text-grey-7 text-uppercase">
               <th class="text-left" style="width:64px"></th>
               <th class="text-left">Nombre</th>
               <th class="text-left">NIT</th>
@@ -256,7 +267,7 @@
             </tr>
             <tr v-else v-for="row in proveedores" :key="row.id">
               <td class="q-pa-xs">
-                <q-btn-dropdown v-if="canEditar || canEliminar" label="Opciones" no-caps size="10px" dense color="primary">
+                <q-btn-dropdown v-if="canEditar || canEliminar" label="Opciones" no-caps size="10px" dense rounded unelevated color="primary">
                   <q-list>
                     <q-item v-if="canEditar" clickable v-close-popup @click="provEdit(row)">
                       <q-item-section avatar><q-icon name="edit" /></q-item-section>
@@ -274,7 +285,10 @@
               <td>{{ row.contacto || '—' }}</td>
               <td>{{ row.telefono || '—' }}</td>
               <td class="text-center">
-                <q-badge :color="row.estado === 'ACTIVO' ? 'positive' : 'grey-6'">{{ row.estado }}</q-badge>
+                <q-badge rounded
+                         :color="row.estado === 'ACTIVO' ? 'green-1' : 'grey-3'"
+                         :text-color="row.estado === 'ACTIVO' ? 'positive' : 'grey-7'"
+                         class="text-weight-bold">{{ row.estado }}</q-badge>
               </td>
             </tr>
           </tbody>
@@ -286,16 +300,16 @@
     <!-- DIALOG DETALLE COMPRA -->
     <q-dialog v-model="dialogDetalle">
       <q-card style="width:min(96vw,700px)">
-        <q-card-section class="row items-center bg-blue-8 text-white q-py-sm">
+        <q-card-section class="row items-center bg-primary text-white q-py-sm">
           <q-icon name="receipt_long" size="20px" class="q-mr-sm" />
           <span class="text-subtitle1 text-weight-bold">Detalle de compra #{{ detalleCompra?.id }}</span>
           <q-space />
           <q-btn icon="close" flat round dense color="white" @click="dialogDetalle = false" />
         </q-card-section>
         <q-card-section style="max-height:70vh;overflow-y:auto">
-          <q-markup-table dense flat bordered separator="cell">
+          <q-markup-table dense flat bordered separator="horizontal">
             <thead>
-              <tr class="bg-grey-2">
+              <tr class="bg-grey-1 text-grey-7 text-uppercase">
                 <th class="text-left">Producto</th>
                 <th class="text-right">Cantidad</th>
                 <th class="text-right">Precio</th>
@@ -322,7 +336,7 @@
     <!-- DIALOG PROVEEDOR -->
     <q-dialog v-model="dialogProv" persistent>
       <q-card style="width:min(96vw,480px)">
-        <q-card-section class="row items-center bg-blue-8 text-white q-py-sm">
+        <q-card-section class="row items-center bg-primary text-white q-py-sm">
           <q-icon name="local_shipping" size="20px" class="q-mr-sm" />
           <span class="text-subtitle1 text-weight-bold">{{ provAction }} proveedor</span>
           <q-space />
@@ -359,7 +373,7 @@
     <!-- Quick proveedor -->
     <q-dialog v-model="provQuick" persistent>
       <q-card style="width:min(96vw,380px)">
-        <q-card-section class="bg-blue-8 text-white q-py-sm">
+        <q-card-section class="bg-primary text-white q-py-sm">
           <span class="text-subtitle2 text-weight-bold">Nuevo proveedor rápido</span>
         </q-card-section>
         <q-card-section>
@@ -380,6 +394,7 @@
 
 <script setup>
 import { ref, computed, watch, getCurrentInstance } from 'vue'
+import { imprimirCompra } from '../../../addons/compraPrint'
 
 const { proxy } = getCurrentInstance()
 
@@ -446,6 +461,15 @@ async function verDetalle (row) {
     dialogDetalle.value = true
   } catch (e) {
     proxy.$alert.error('Error al cargar el detalle')
+  }
+}
+
+async function imprimir (row) {
+  try {
+    const res = await proxy.$axios.get('compras/' + row.id)
+    imprimirCompra(res.data)
+  } catch (e) {
+    proxy.$alert.error('Error al imprimir la compra')
   }
 }
 
@@ -536,7 +560,7 @@ function recalcularDesdeTotal (linea) {
 
 async function filtrarProductos (val, update) {
   try {
-    const res = await proxy.$axios.get('productos', { params: { q: val, per_page: 20 } })
+    const res = await proxy.$axios.get('productos', { params: { q: val, tipo: 'FARMACIA', per_page: 20 } })
     update(() => { opcionesProducto.value = res.data?.data || [] })
   } catch (e) {
     update(() => { opcionesProducto.value = [] })
@@ -674,3 +698,11 @@ function init () {
 
 watch(() => proxy.$store.isLogged, (val) => { if (val) init() }, { immediate: true })
 </script>
+
+<style scoped>
+.tabla-compacta :deep(th),
+.tabla-compacta :deep(td) {
+  font-size: 11px;
+  padding: 3px 8px;
+}
+</style>

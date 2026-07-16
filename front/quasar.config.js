@@ -93,7 +93,18 @@ export default defineConfig((ctx) => {
 
     // https://v2.quasar.dev/quasar-cli-vite/quasar-config-file#framework
     framework: {
-      config: {},
+      config: {
+        brand: {
+          primary: '#0e7a5f',
+          secondary: '#12996f',
+          accent: '#19b88a',
+          dark: '#0a4038',
+          positive: '#1a7f45',
+          negative: '#b3453f',
+          info: '#0e7a5f',
+          warning: '#a86a12'
+        }
+      },
 
       // iconSet: 'material-icons', // Quasar icon set
       lang: 'es', // Quasar language pack

@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  html,body{margin:0;padding:0;background:#f2f5f3;}
+  *{box-sizing:border-box;}
+  a{color:#0e7a5f;text-decoration:none;}
+  a:hover{color:#0a6650;text-decoration:underline;}
+  input::placeholder{color:#9aa8a1;}
+  ::-webkit-scrollbar{width:10px;height:10px;}
+  ::-webkit-scrollbar-thumb{background:#cfdad4;border-radius:8px;border:2px solid #f2f5f3;}
+</style>
+</helmet>
+<div data-screen-label="Clínica URME" style="display:flex;height:100vh;overflow:hidden;background:#f2f5f3;font-family:'Instrument Sans',Helvetica,Arial,sans-serif;color:#16241f;">
+  <!-- SIDEBAR (degradé) -->
+  <aside style="width:252px;flex-shrink:0;background:linear-gradient(180deg,#0e5c50 0%,#0a4038 55%,#072e28 100%);display:flex;flex-direction:column;padding:20px 14px;gap:4px;">
+    <div style="display:flex;align-items:center;gap:11px;padding:4px 8px 20px 8px;">
+      <div style="width:40px;height:40px;border-radius:12px;background:linear-gradient(135deg,#19b88a,#0e7a5f);display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 4px 12px rgba(0,0,0,.25);">
+        <svg width="18" height="18" viewBox="0 0 18 18"><rect x="7" y="2" width="4" height="14" rx="1.6" fill="#ffffff"></rect><rect x="2" y="7" width="14" height="4" rx="1.6" fill="#ffffff"></rect></svg>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:1px;">
+        <span style="font-size:15.5px;font-weight:700;letter-spacing:-.01em;color:#ffffff;">Clínica URME</span>
+        <span style="font-size:11px;color:rgba(255,255,255,.55);">Sistema de gestión</span>
+      </div>
+    </div>
+    <div style="font-size:10.5px;font-weight:700;letter-spacing:.12em;color:rgba(255,255,255,.4);padding:2px 12px 8px 12px;">GENERAL</div>
+    <div onClick="{{ goInicio }}" style="{{ navInicio }}" style-hover="background:rgba(255,255,255,.1);">
+      <svg width="17" height="17" viewBox="0 0 18 18"><rect x="2" y="2" width="6" height="6" rx="1.6" fill="currentColor"></rect><rect x="10" y="2" width="6" height="6" rx="1.6" fill="currentColor" opacity=".45"></rect><rect x="2" y="10" width="6" height="6" rx="1.6" fill="currentColor" opacity=".45"></rect><rect x="10" y="10" width="6" height="6" rx="1.6" fill="currentColor"></rect></svg>
+      <span>Inicio</span>
+    </div>
+    <div onClick="{{ goUsuarios }}" style="{{ navUsuarios }}" style-hover="background:rgba(255,255,255,.1);">
+      <svg width="17" height="17" viewBox="0 0 18 18"><circle cx="9" cy="5.5" r="3.2" fill="currentColor"></circle><rect x="2.5" y="10.5" width="13" height="5.5" rx="2.75" fill="currentColor" opacity=".55"></rect></svg>
+      <span>Usuarios</span>
+    </div>
+    <div style="font-size:10.5px;font-weight:700;letter-spacing:.12em;color:rgba(255,255,255,.4);padding:16px 12px 8px 12px;">GESTIÓN</div>
+    <div onClick="{{ goPacientes }}" style="{{ navPacientes }}" style-hover="background:rgba(255,255,255,.1);">
+      <svg width="17" height="17" viewBox="0 0 18 18"><rect x="2" y="4" width="14" height="12" rx="3" fill="currentColor"></rect><rect x="8" y="7" width="2" height="6" rx="1" fill="#0a4038"></rect><rect x="6" y="9" width="6" height="2" rx="1" fill="#0a4038"></rect></svg>
+      <span style="flex:1;">Pacientes</span>
+      <span style="font-size:11px;font-weight:700;background:rgba(255,255,255,.16);color:#ffffff;border-radius:99px;padding:2px 8px;">10</span>
+    </div>
+    <div onClick="{{ goFarmacia }}" style="{{ navFarmacia }}" style-hover="background:rgba(255,255,255,.1);">
+      <svg width="17" height="17" viewBox="0 0 18 18"><rect x="2" y="2" width="14" height="14" rx="4" fill="currentColor" opacity=".5"></rect><rect x="8" y="5" width="2" height="8" rx="1" fill="currentColor"></rect><rect x="5" y="8" width="8" height="2" rx="1" fill="currentColor"></rect></svg>
+      <span>Farmacia</span>
+    </div>
+    <div onClick="{{ goCompras }}" style="{{ navCompras }}" style-hover="background:rgba(255,255,255,.1);">
+      <svg width="17" height="17" viewBox="0 0 18 18"><rect x="2" y="3" width="14" height="9" rx="2" fill="currentColor"></rect><circle cx="6" cy="15" r="1.6" fill="currentColor" opacity=".6"></circle><circle cx="12" cy="15" r="1.6" fill="currentColor" opacity=".6"></circle></svg>
+      <span>Compras</span>
+    </div>
+    <div onClick="{{ goSeguros }}" style="{{ navSeguros }}" style-hover="background:rgba(255,255,255,.1);">
+      <svg width="17" height="17" viewBox="0 0 18 18"><rect x="4.4" y="4.4" width="9.2" height="9.2" rx="2" transform="rotate(45 9 9)" fill="currentColor"></rect></svg>
+      <span style="flex:1;">Seguros</span>
+      <span style="font-size:11px;font-weight:700;background:rgba(255,255,255,.16);color:#ffffff;border-radius:99px;padding:2px 8px;">14</span>
+    </div>
+    <div style="flex:1;"></div>
+    <div style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);border-radius:14px;padding:12px;display:flex;align-items:center;gap:10px;">
+      <div style="width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,#19b88a,#0e7a5f);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex-shrink:0;">AD</div>
+      <div style="display:flex;flex-direction:column;gap:0;flex:1;min-width:0;">
+        <span style="font-size:13px;font-weight:600;color:#ffffff;">admin</span>
+        <span style="font-size:11px;color:rgba(255,255,255,.55);">Administrador</span>
+      </div>
+      <span style="font-size:12px;font-weight:700;color:#ffd9d4;cursor:pointer;">Salir</span>
+    </div>
+    <div style="font-size:10.5px;color:rgba(255,255,255,.35);padding:12px 8px 0 8px;">URME v1.0.0 · © 2026</div>
+  </aside>
+
+  <!-- MAIN -->
+  <main style="flex:1;overflow-y:auto;min-width:0;display:flex;flex-direction:column;">
+    <!-- TOPBAR -->
+    <div style="background:#ffffff;border-bottom:1px solid #e4eae7;padding:14px 32px;display:flex;align-items:center;gap:16px;position:sticky;top:0;z-index:5;">
+      <input placeholder="Buscar en el sistema…" style="flex:1;max-width:420px;background:#f2f5f3;border:1px solid #e4eae7;border-radius:99px;padding:10px 18px;font-size:13.5px;color:#16241f;outline:none;font-family:inherit;">
+      <span style="flex:1;"></span>
+      <span style="font-size:12.5px;color:#6d7d75;font-weight:500;">miércoles 15 de julio, 2026</span>
+      <div style="display:flex;align-items:center;gap:10px;background:#f2f5f3;border-radius:99px;padding:5px 14px 5px 5px;">
+        <div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#19b88a,#0e7a5f);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;">AD</div>
+        <span style="font-size:13px;font-weight:600;">admin</span>
+      </div>
+    </div>
+    <div style="max-width:1180px;width:100%;margin:0 auto;padding:26px 32px 48px 32px;display:flex;flex-direction:column;gap:22px;">
+
+      <!-- ============ INICIO ============ -->
+      <sc-if value="{{ vInicio }}" hint-placeholder-val="{{ true }}">
+        <div style="display:flex;flex-direction:column;gap:20px;">
+          <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;">
+            <div style="display:flex;flex-direction:column;gap:4px;">
+              <h1 style="margin:0;font-size:25px;font-weight:700;letter-spacing:-.02em;">Buenos días, admin</h1>
+              <span style="font-size:13.5px;color:#6d7d75;">Resumen general de la clínica</span>
+            </div>
+            <button onClick="{{ goPacientes }}" style="background:linear-gradient(135deg,#12996f,#0d6b52);color:#fff;border:none;border-radius:99px;padding:11px 22px;font-size:13.5px;font-weight:600;cursor:pointer;font-family:inherit;box-shadow:0 4px 14px rgba(14,122,95,.3);" style-hover="filter:brightness(1.08);">+ Nuevo paciente</button>
+          </div>
+          <sc-if value="{{ verKpis }}" hint-placeholder-val="{{ true }}">
+            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;">
+              <div style="background:linear-gradient(135deg,#0f6b57 0%,#0a4038 100%);border-radius:18px;padding:20px;display:flex;flex-direction:column;gap:8px;box-shadow:0 8px 24px rgba(10,64,56,.25);">
+                <span style="font-size:11px;font-weight:700;letter-spacing:.08em;color:rgba(255,255,255,.65);">PACIENTES</span>
+                <span style="font-size:32px;font-weight:700;letter-spacing:-.02em;color:#ffffff;">10</span>
+                <span style="font-size:12px;color:#8fe6c3;font-weight:600;">4 internados ahora</span>
+              </div>
+              <div style="background:#fff;border:1px solid #e4eae7;border-radius:18px;padding:20px;display:flex;flex-direction:column;gap:8px;">
+                <span style="font-size:11px;font-weight:700;letter-spacing:.08em;color:#8b9a92;">PRODUCTOS</span>
+                <span style="font-size:32px;font-weight:700;letter-spacing:-.02em;">832</span>
+                <span style="font-size:12px;color:#6d7d75;">84 fabricantes · 16 tipos</span>
+              </div>
+              <div style="background:#fff;border:1px solid #e4eae7;border-radius:18px;padding:20px;display:flex;flex-direction:column;gap:8px;">
+                <span style="font-size:11px;font-weight:700;letter-spacing:.08em;color:#8b9a92;">COMPRAS DEL MES</span>
+                <span style="font-size:32px;font-weight:700;letter-spacing:-.02em;">3 150 <span style="font-size:14px;font-weight:600;color:#8b9a92;">Bs</span></span>
+                <span style="font-size:12px;color:#a86a12;font-weight:600;">1 compra anulada</span>
+              </div>
+              <div style="background:#fff;border:1px solid #e4eae7;border-radius:18px;padding:20px;display:flex;flex-direction:column;gap:8px;">
+                <span style="font-size:11px;font-weight:700;letter-spacing:.08em;color:#8b9a92;">SEGUROS</span>
+                <span style="font-size:32px;font-weight:700;letter-spacing:-.02em;">14</span>
+                <span style="font-size:12px;color:#6d7d75;">aseguradoras activas</span>
+              </div>
+            </div>
+          </sc-if>
+          <div style="display:grid;grid-template-columns:1.6fr 1fr;gap:14px;align-items:start;">
+            <div style="background:#fff;border:1px solid #e4eae7;border-radius:18px;overflow:hidden;">
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid #eef2ef;">
+                <span style="font-size:15px;font-weight:700;">Pacientes internados</span>
+                <span onClick="{{ goPacientes }}" style="font-size:12.5px;font-weight:600;color:#0e7a5f;cursor:pointer;background:#e4f2ec;border-radius:99px;padding:5px 12px;">Ver todos</span>
+              </div>
+              <sc-for list="{{ internados }}" as="p" hint-placeholder-count="4">
+                <div onClick="{{ p.open }}" style="display:flex;align-items:center;gap:12px;padding:12px 20px;border-top:1px solid #f2f5f3;cursor:pointer;" style-hover="background:#f7faf8;">
+                  <div style="width:34px;height:34px;border-radius:50%;background:#fbf0dc;color:#a86a12;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;flex-shrink:0;">{{ p.ini }}</div>
+                  <div style="display:flex;flex-direction:column;gap:1px;flex:1;min-width:0;">
+                    <span style="font-size:13.5px;font-weight:600;">{{ p.nombre }}</span>
+                    <span style="font-size:11.5px;color:#8b9a92;">{{ p.sub }}</span>
+                  </div>
+                  <span style="{{ p.tipoStyle }}">{{ p.tipo }}</span>
+                  <span style="font-size:12px;font-weight:700;background:#fbf0dc;color:#a86a12;border-radius:99px;padding:3px 10px;">Internado</span>
+                </div>
+              </sc-for>
+            </div>
+            <div style="background:#fff;border:1px solid #e4eae7;border-radius:18px;padding:18px 20px;display:flex;flex-direction:column;gap:10px;">
+              <span style="font-size:15px;font-weight:700;">Accesos rápidos</span>
+              <button onClick="{{ goPacientes }}" style="text-align:left;background:#f0f7f3;border:1px solid #dcece3;border-radius:12px;padding:12px 16px;font-size:13.5px;font-weight:600;color:#0d6b52;cursor:pointer;font-family:inherit;" style-hover="background:#e4f2ec;">Registrar internación</button>
+              <button onClick="{{ goCompras }}" style="text-align:left;background:#f0f7f3;border:1px solid #dcece3;border-radius:12px;padding:12px 16px;font-size:13.5px;font-weight:600;color:#0d6b52;cursor:pointer;font-family:inherit;" style-hover="background:#e4f2ec;">Nueva compra de farmacia</button>
+              <button onClick="{{ goFarmacia }}" style="text-align:left;background:#f0f7f3;border:1px solid #dcece3;border-radius:12px;padding:12px 16px;font-size:13.5px;font-weight:600;color:#0d6b52;cursor:pointer;font-family:inherit;" style-hover="background:#e4f2ec;">Buscar producto</button>
+              <button onClick="{{ goSeguros }}" style="text-align:left;background:#f0f7f3;border:1px solid #dcece3;border-radius:12px;padding:12px 16px;font-size:13.5px;font-weight:600;color:#0d6b52;cursor:pointer;font-family:inherit;" style-hover="background:#e4f2ec;">Ver aseguradoras</button>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ============ PACIENTES (LISTA) ============ -->
+      <sc-if value="{{ vPacientes }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex;flex-direction:column;gap:18px;">
+          <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;">
+            <div style="display:flex;flex-direction:column;gap:4px;">
+              <h1 style="margin:0;font-size:25px;font-weight:700;letter-spacing:-.02em;">Pacientes</h1>
+              <span style="font-size:13.5px;color:#6d7d75;">{{ nPacientes }} pacientes registrados</span>
+            </div>
+            <button style="background:linear-gradient(135deg,#12996f,#0d6b52);color:#fff;border:none;border-radius:99px;padding:11px 22px;font-size:13.5px;font-weight:600;cursor:pointer;font-family:inherit;box-shadow:0 4px 14px rgba(14,122,95,.3);" style-hover="filter:brightness(1.08);">+ Nuevo paciente</button>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+            <input onChange="{{ onBuscar }}" value="{{ q }}" placeholder="Buscar por nombre o CI…" style="flex:1;min-width:240px;background:#fff;border:1px solid #dde5e0;border-radius:99px;padding:10px 18px;font-size:14px;color:#16241f;outline:none;font-family:inherit;">
+            <div style="display:flex;background:#e6ece8;border-radius:99px;padding:3px;gap:2px;">
+              <sc-for list="{{ filtros }}" as="f" hint-placeholder-count="3">
+                <button onClick="{{ f.onClick }}" style="{{ f.style }}">{{ f.label }}</button>
+              </sc-for>
+            </div>
+          </div>
+          <div style="background:#fff;border:1px solid #e4eae7;border-radius:18px;overflow:hidden;box-shadow:0 1px 3px rgba(16,42,34,.05);">
+            <div style="display:grid;grid-template-columns:2.4fr 1.1fr 1fr .9fr .5fr 1fr 24px;gap:12px;align-items:center;padding:12px 20px;background:#fafcfb;border-bottom:1px solid #eef2ef;">
+              <span style="font-size:11px;font-weight:700;letter-spacing:.08em;color:#8b9a92;">PACIENTE</span>
+              <span style="font-size:11px;font-weight:700;letter-spacing:.08em;color:#8b9a92;">TIPO</span>
+              <span style="font-size:11px;font-weight:700;letter-spacing:.08em;color:#8b9a92;">INTERNACIÓN</span>
+              <span style="font-size:11px;font-weight:700;letter-spacing:.08em;color:#8b9a92;">TELÉFONO</span>
+              <span style="font-size:11px;font-weight:700;letter-spacing:.08em;color:#8b9a92;">SEXO</span>
+              <span style="font-size:11px;font-weight:700;letter-spacing:.08em;color:#8b9a92;text-align:right;">FECHA ALTA</span>
+              <span></span>
+            </div>
+            <sc-for list="{{ pacientes }}" as="p" hint-placeholder-count="8">
+              <div onClick="{{ p.open }}" style="display:grid;grid-template-columns:2.4fr 1.1fr 1fr .9fr .5fr 1fr 24px;gap:12px;align-items:center;padding:11px 20px;border-top:1px solid #f2f5f3;cursor:pointer;" style-hover="background:#f7faf8;">
+                <div style="display:flex;align-items:center;gap:12px;min-width:0;">
+                  <div style="width:36px;height:36px;border-radius:50%;background:#e4f2ec;color:#0d6b52;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12.5px;flex-shrink:0;">{{ p.ini }}</div>
+                  <div style="display:flex;flex-direction:column;gap:1px;min-width:0;">
+                    <span style="font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ p.nombre }}</span>
+                    <span style="font-size:11.5px;color:#8b9a92;">CI {{ p.ci }}</span>
+                  </div>
+                </div>
+                <span><span style="{{ p.tipoStyle }}">{{ p.tipo }}</span></span>
+                <span><span style="{{ p.estadoStyle }}">{{ p.estado }}</span></span>
+                <span style="font-size:13.5px;color:#4b5b53;">{{ p.tel }}</span>
+                <span style="font-size:13.5px;color:#4b5b53;">{{ p.sexo }}</span>
+                <span style="font-size:13.5px;color:#4b5b53;text-align:right;">{{ p.alta }}</span>
+                <span style="color:#b3c3ba;font-size:16px;">›</span>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ============ DETALLE PACIENTE / HISTORIAL ============ -->
+      <sc-if value="{{ vDetalle }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex;flex-direction:column;gap:18px;">
+          <div style="display:flex;align-items:center;gap:8px;font-size:13px;color:#8b9a92;">
+            <span onClick="{{ goPacientes }}" style="color:#0e7a5f;font-weight:600;cursor:pointer;">Pacientes</span>
+            <span>/</span>
+            <span>Historial del paciente</span>
+          </div>
+          <!-- Hero degradé -->
+          <div style="background:linear-gradient(135deg,#0f6b57 0%,#0a4038 70%);border-radius:20px;padding:26px;display:flex;flex-direction:column;gap:22px;box-shadow:0 10px 30px rgba(10,64,56,.28);">
+            <div style="display:flex;align-items:center;gap:18px;flex-wrap:wrap;">
+              <div style="width:62px;height:62px;border-radius:50%;background:rgba(255,255,255,.14);border:2px solid rgba(255,255,255,.3);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:20px;flex-shrink:0;">{{ sel.ini }}</div>
+              <div style="display:flex;flex-direction:column;gap:7px;flex:1;min-width:220px;">
+                <span style="font-size:22px;font-weight:700;letter-spacing:-.01em;color:#ffffff;">{{ sel.nombre }}</span>
+                <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                  <span style="font-size:12px;font-weight:700;background:rgba(255,255,255,.16);color:#ffffff;border-radius:99px;padding:4px 12px;">{{ sel.estado }}</span>
+                  <span style="font-size:12px;font-weight:700;background:rgba(255,255,255,.16);color:#ffffff;border-radius:99px;padding:4px 12px;">{{ sel.tipo }}</span>
+                  <span style="font-size:12px;color:rgba(255,255,255,.6);">Historia clínica del paciente</span>
+                </div>
+              </div>
+              <div style="display:flex;gap:8px;">
+                <button style="background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.25);color:#fff;border-radius:99px;padding:9px 18px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;" style-hover="background:rgba(255,255,255,.22);">Editar</button>
+                <button style="background:#ffffff;border:none;color:#0d6b52;border-radius:99px;padding:9px 18px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;" style-hover="filter:brightness(.95);">+ Nueva internación</button>
+              </div>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;">
+              <div style="background:rgba(255,255,255,.08);border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:3px;"><span style="font-size:10.5px;font-weight:700;letter-spacing:.08em;color:rgba(255,255,255,.55);">SEXO</span><span style="font-size:14px;font-weight:600;color:#ffffff;">{{ sel.sexoFull }}</span></div>
+              <div style="background:rgba(255,255,255,.08);border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:3px;"><span style="font-size:10.5px;font-weight:700;letter-spacing:.08em;color:rgba(255,255,255,.55);">CI</span><span style="font-size:14px;font-weight:600;color:#ffffff;">{{ sel.ci }}</span></div>
+              <div style="background:rgba(255,255,255,.08);border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:3px;"><span style="font-size:10.5px;font-weight:700;letter-spacing:.08em;color:rgba(255,255,255,.55);">TELÉFONO</span><span style="font-size:14px;font-weight:600;color:#ffffff;">{{ sel.tel }}</span></div>
+              <div style="background:rgba(255,255,255,.08);border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:3px;"><span style="font-size:10.5px;font-weight:700;letter-spacing:.08em;color:rgba(255,255,255,.55);">FECHA ALTA</span><span style="font-size:14px;font-weight:600;color:#ffffff;">{{ sel.alta }}</span></div>
+              <div style="background:rgba(255,255,255,.08);border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:3px;"><span style="font-size:10.5px;font-weight:700;letter-spacing:.08em;color:rgba(255,255,255,.55);">DIRECCIÓN</span><span style="font-size:14px;font-weight:600;color:#ffffff;">{{ sel.dir }}</span></div>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;">
+            <span style="font-size:17px;font-weight:700;">Historial de internaciones</span>
+            <span style="font-size:12px;font-weight:700;background:#e4f2ec;color:#0d6b52;border-radius:99px;padding:3px 10px;">{{ nInternaciones }}</span>
+          </div>
+          <sc-if value="{{ sel.sinInternaciones }}" hint-placeholder-val="{{ false }}">
+            <div style="background:#fff;border:1px dashed #c9d6cf;border-radius:18px;padding:40px;display:flex;flex-direction:column;align-items:center;gap:8px;">
+              <span style="font-size:14.5px;font-weight:600;color:#6d7d75;">Sin internaciones registradas</span>
+              <span style="font-size:13px;color:#9aa8a1;">Cuando el paciente sea internado, aparecerá aquí su historial.</span>
+            </div>
+          </sc-if>
+          <sc-for list="{{ selInternaciones }}" as="i" hint-placeholder-count="1">
+            <div style="background:#fff;border:1px solid #e4eae7;border-radius:18px;overflow:hidden;box-shadow:0 1px 3px rgba(16,42,34,.05);">
+              <div style="display:flex;align-items:center;gap:10px;padding:14px 20px;background:linear-gradient(90deg,#eef7f2,#f7faf8);border-bottom:1px solid #e4eae7;flex-wrap:wrap;">
+                <div style="width:30px;height:30px;border-radius:9px;background:linear-gradient(135deg,#12996f,#0d6b52);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;">{{ i.n }}</div>
+                <span style="font-size:14.5px;font-weight:700;color:#0d6b52;">Internación</span>
+                <span style="font-size:12px;font-weight:700;background:#e4f2ec;color:#0d6b52;border-radius:99px;padding:3px 10px;">{{ i.dias }}</span>
+                <span style="{{ i.tipoStyle }}">{{ i.tipo }}</span>
+                <span style="font-size:12px;font-weight:700;background:#eef2ef;color:#4b5b53;border-radius:99px;padding:3px 10px;">Sala {{ i.sala }}</span>
+                <span style="flex:1;"></span>
+                <button style="background:#fff;border:1px solid #dde5e0;color:#4b5b53;border-radius:99px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;" style-hover="background:#f2f5f3;">Imprimir</button>
+                <button style="background:#fff;border:1px solid #dde5e0;color:#4b5b53;border-radius:99px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;" style-hover="background:#f2f5f3;">Editar</button>
+              </div>
+              <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;padding:16px 20px;">
+                <div style="display:flex;flex-direction:column;gap:3px;"><span style="font-size:11px;font-weight:700;letter-spacing:.08em;color:#8b9a92;">FECHA INGRESO</span><span style="font-size:14px;font-weight:600;">{{ i.ingreso }}</span></div>
+                <div style="display:flex;flex-direction:column;gap:3px;"><span style="font-size:11px;font-weight:700;letter-spacing:.08em;color:#8b9a92;">FECHA ALTA</span><span style="font-size:14px;font-weight:600;">{{ i.alta }}</span></div>
+                <div style="display:flex;flex-direction:column;gap:3px;"><span style="font-size:11px;font-weight:700;letter-spacing:.08em;color:#8b9a92;">CÓDIGO H.C.</span><span style="font-size:14px;font-weight:600;">{{ i.hc }}</span></div>
+                <div style="display:flex;flex-direction:column;gap:3px;"><span style="font-size:11px;font-weight:700;letter-spacing:.08em;color:#8b9a92;">TOTAL CARGOS</span><span style="font-size:14px;font-weight:700;color:#0d6b52;">{{ i.total }} Bs</span></div>
+              </div>
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:0 20px 12px 20px;">
+                <span style="font-size:13.5px;font-weight:700;color:#4b5b53;">Cargos de internación</span>
+                <button style="background:#e4f2ec;border:none;color:#0d6b52;border-radius:99px;padding:7px 16px;font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit;" style-hover="background:#d3eadf;">+ Agregar cargo</button>
+              </div>
+              <sc-if value="{{ i.sinCargos }}" hint-placeholder-val="{{ false }}">
+                <div style="padding:20px;border-top:1px solid #f2f5f3;text-align:center;font-size:13px;color:#9aa8a1;">Sin cargos registrados</div>
+              </sc-if>
+              <sc-if value="{{ i.conCargos }}" hint-placeholder-val="{{ true }}">
+                <div style="border-top:1px solid #eef2ef;">
+                  <div style="display:grid;grid-template-columns:2.4fr .6fr .8fr .8fr 1.2fr .7fr;gap:12px;padding:9px 20px;background:#fafcfb;border-bottom:1px solid #f2f5f3;">
+                    <span style="font-size:11px;font-weight:700;letter-spacing:.08em;color:#8b9a92;">ÍTEM</span>
+                    <span style="font-size:11px;font-weight:700;letter-spacing:.08em;color:#8b9a92;text-align:right;">CANT.</span>
+                    <span style="font-size:11px;font-weight:700;letter-spacing:.08em;color:#8b9a92;text-align:right;">PRECIO</span>
+                    <span style="font-size:11px;font-weight:700;letter-spacing:.08em;color:#8b9a92;text-align:right;">TOTAL</span>
+                    <span style="font-size:11px;font-weight:700;letter-spacing:.08em;color:#8b9a92;">REGISTRADO POR</span>
+                    <span style="font-size:11px;font-weight:700;letter-spacing:.08em;color:#8b9a92;text-align:right;">HORA</span>
+                  </div>
+                  <sc-for list="{{ i.cargos }}" as="c" hint-placeholder-count="2">
+                    <div style="display:grid;grid-template-columns:2.4fr .6fr .8fr .8fr 1.2fr .7fr;gap:12px;padding:11px 20px;border-top:1px solid #f2f5f3;align-items:center;">
+                      <span style="font-size:13.5px;font-weight:600;">{{ c.item }}</span>
+                      <span style="font-size:13.5px;color:#4b5b53;text-align:right;">{{ c.cant }}</span>
+                      <span style="font-size:13.5px;color:#4b5b53;text-align:right;">{{ c.precio }}</span>
+                      <span style="font-size:13.5px;font-weight:700;text-align:right;">{{ c.total }}</span>
+                      <span style="font-size:12.5px;color:#8b9a92;">{{ c.por }}</span>
+                      <span style="font-size:13px;color:#4b5b53;text-align:right;">{{ c.hora }}</span>
+                    </div>
+                  </sc-for>
+                </div>
+              </sc-if>
+            </div>
+          </sc-for>
+        </div>
+      </sc-if>
+
+      <!-- ============ FARMACIA ============ -->
+      <sc-if value="{{ vFarmacia }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex;flex-direction:column;gap:18px;">
+          <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;">
+            <div style="display:flex;flex-direction:column;gap:4px;">
+              <h1 style="margin:0;font-size:25px;font-weight:700;letter-spacing:-.02em;">Farmacia</h1>
+              <span style="font-size:13.5px;color:#6d7d75;">Inventario y catálogo de productos</span>
+            </div>
+            <div style="display:flex;gap:8px;">
+              <button style="background:#fff;border:1px solid #dde5e0;color:#4b5b53;border-radius:99px;padding:10px 18px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;" style-hover="background:#f2f5f3;">Exportar PDF</button>
+              <button style="background:linear-gradient(135deg,#12996f,#0d6b52);color:#fff;border:none;border-radius:99px;padding:11px 22px;font-size:13.5px;font-weight:600;cursor:pointer;font-family:inherit;box-shadow:0 4px 14px rgba(14,122,95,.3);" style-hover="filter:brightness(1.08);">+ Nuevo producto</button>
+            </div>
+          </div>
+          <sc-if value="{{ verKpis }}" hint-placeholder-val="{{ true }}">
+            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;">
+              <div style="background:linear-gradient(135deg,#0f6b57 0%,#0a4038 100%);border-radius:18px;padding:18px 20px;display:flex;flex-direction:column;gap:5px;box-shadow:0 8px 24px rgba(10,64,56,.22);"><span style="font-size:11px;font-weight:700;letter-spacing:.08em;color:rgba(255,255,255,.65);">PRODUCTOS</span><span style="font-size:26px;font-weight:700;color:#fff;">832</span></div>
+              <div style="background:#fff;border:1px solid #e4eae7;border-radius:18px;padding:18px 20px;display:flex;flex-direction:column;gap:5px;"><span style="font-size:11px;font-weight:700;letter-spacing:.08em;color:#8b9a92;">FABRICANTES</span><span style="font-size:26px;font-weight:700;">84</span></div>
+              <div style="background:#fff;border:1px solid #e4eae7;border-radius:18px;padding:18px 20px;display:flex;flex-direction:column;gap:5px;"><span style="font-size:11px;font-weight:700;letter-spacing:.08em;color:#8b9a92;">UNIDADES</span><span style="font-size:26px;font-weight:700;">65</span></div>
+              <div style="background:#fff;border:1px solid #e4eae7;border-radius:18px;padding:18px 20px;display:flex;flex-direction:column;gap:5px;"><span style="font-size:11px;font-weight:700;letter-spacing:.08em;color:#8b9a92;">TIPOS</span><span style="font-size:26px;font-weight:700;">16</span></div>
+            </div>
+          </sc-if>
+          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+            <div style="display:flex;background:#e6ece8;border-radius:99px;padding:3px;gap:2px;">
+              <sc-for list="{{ fTabs }}" as="t" hint-placeholder-count="4">
+                <button onClick="{{ t.onClick }}" style="{{ t.style }}">{{ t.label }}</button>
+              </sc-for>
+            </div>
+            <span style="flex:1;"></span>
+            <input onChange="{{ onBuscarProd }}" value="{{ qProd }}" placeholder="Buscar producto…" style="width:260px;background:#fff;border:1px solid #dde5e0;border-radius:99px;padding:10px 18px;font-size:14px;color:#16241f;outline:none;font-family:inherit;">
+          </div>
+          <sc-if value="{{ fProductos }}" hint-placeholder-val="{{ true }}">
+            <div style="background:#fff;border:1px solid #e4eae7;border-radius:18px;overflow:hidden;box-shadow:0 1px 3px rgba(16,42,34,.05);">
+              <div style="display:grid;grid-template-columns:2.6fr 1.2fr 1fr 1fr;gap:12px;padding:12px 20px;background:#fafcfb;border-bottom:1px solid #eef2ef;">
+                <span style="font-size:11px;font-weight:700;letter-spacing:.08em;color:#8b9a92;">NOMBRE</span>
+                <span style="font-size:11px;font-weight:700;letter-spacing:.08em;color:#8b9a92;">TIPO</span>
+                <span style="font-size:11px;font-weight:700;letter-spacing:.08em;color:#8b9a92;text-align:right;">PRECIO (BS)</span>
+                <span style="font-size:11px;font-weight:700;letter-spacing:.08em;color:#8b9a92;text-align:right;">STOCK</span>
+              </div>
+              <sc-for list="{{ productos }}" as="pr" hint-placeholder-count="8">
+                <div style="display:grid;grid-template-columns:2.6fr 1.2fr 1fr 1fr;gap:12px;padding:12px 20px;border-top:1px solid #f2f5f3;align-items:center;" style-hover="background:#f7faf8;">
+                  <span style="font-size:14px;font-weight:600;">{{ pr.nombre }}</span>
+                  <span><span style="{{ pr.tipoStyle }}">{{ pr.tipo }}</span></span>
+                  <span style="font-size:14px;font-weight:600;text-align:right;">{{ pr.precio }}</span>
+                  <span style="text-align:right;"><span style="{{ pr.stockStyle }}">{{ pr.stock }}</span></span>
+                </div>
+              </sc-for>
+            </div>
+          </sc-if>
+          <sc-if value="{{ fFabricantes }}" hint-placeholder-val="{{ false }}">
+            <div style="background:#fff;border:1px solid #e4eae7;border-radius:18px;overflow:hidden;">
+              <div style="display:grid;grid-template-columns:2fr 1fr;gap:12px;padding:12px 20px;background:#fafcfb;border-bottom:1px solid #eef2ef;">
+                <span style="font-size:11px;font-weight:700;letter-spacing:.08em;color:#8b9a92;">FABRICANTE</span>
+                <span style="font-size:11px;font-weight:700;letter-spacing:.08em;color:#8b9a92;">PAÍS</span>
+              </div>
+              <sc-for list="{{ fabricantes }}" as="fb" hint-placeholder-count="6">
+                <div style="display:grid;grid-template-columns:2fr 1fr;gap:12px;padding:12px 20px;border-top:1px solid #f2f5f3;" style-hover="background:#f7faf8;">
+                  <span style="font-size:14px;font-weight:600;">{{ fb.nombre }}</span>
+                  <span style="font-size:13.5px;color:#4b5b53;">{{ fb.pais }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </sc-if>
+          <sc-if value="{{ fUnidades }}" hint-placeholder-val="{{ false }}">
+            <div style="background:#fff;border:1px solid #e4eae7;border-radius:18px;padding:20px;display:flex;flex-wrap:wrap;gap:8px;">
+              <sc-for list="{{ unidades }}" as="u" hint-placeholder-count="8">
+                <span style="font-size:13px;font-weight:600;background:#eef2ef;color:#4b5b53;border-radius:99px;padding:6px 14px;">{{ u.nombre }}</span>
+              </sc-for>
+            </div>
+          </sc-if>
+          <sc-if value="{{ fTipos }}" hint-placeholder-val="{{ false }}">
+            <div style="background:#fff;border:1px solid #e4eae7;border-radius:18px;padding:20px;display:flex;flex-wrap:wrap;gap:8px;">
+              <sc-for list="{{ tipos }}" as="tp" hint-placeholder-count="6">
+                <span style="font-size:13px;font-weight:600;background:#e4f2ec;color:#0d6b52;border-radius:99px;padding:6px 14px;">{{ tp.nombre }}</span>
+              </sc-for>
+            </div>
+          </sc-if>
+        </div>
+      </sc-if>
+
+      <!-- ============ COMPRAS ============ -->
+      <sc-if value="{{ vCompras }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex;flex-direction:column;gap:18px;">
+          <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;">
+            <div style="display:flex;flex-direction:column;gap:4px;">
+              <h1 style="margin:0;font-size:25px;font-weight:700;letter-spacing:-.02em;">Compras</h1>
+              <span style="font-size:13.5px;color:#6d7d75;">Historial de compras y proveedores</span>
+            </div>
+            <button style="background:linear-gradient(135deg,#12996f,#0d6b52);color:#fff;border:none;border-radius:99px;padding:11px 22px;font-size:13.5px;font-weight:600;cursor:pointer;font-family:inherit;box-shadow:0 4px 14px rgba(14,122,95,.3);" style-hover="filter:brightness(1.08);">+ Nueva compra</button>
+          </div>
+          <sc-if value="{{ verKpis }}" hint-placeholder-val="{{ true }}">
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;">
+              <div style="background:linear-gradient(135deg,#0f6b57 0%,#0a4038 100%);border-radius:18px;padding:18px 20px;display:flex;flex-direction:column;gap:5px;box-shadow:0 8px 24px rgba(10,64,56,.22);"><span style="font-size:11px;font-weight:700;letter-spacing:.08em;color:rgba(255,255,255,.65);">COMPRAS ACTIVAS</span><span style="font-size:26px;font-weight:700;color:#fff;">3 150.10 <span style="font-size:13px;font-weight:600;color:rgba(255,255,255,.6);">Bs</span></span></div>
+              <div style="background:#fff;border:1px solid #e4eae7;border-radius:18px;padding:18px 20px;display:flex;flex-direction:column;gap:5px;"><span style="font-size:11px;font-weight:700;letter-spacing:.08em;color:#8b9a92;">ANULADAS</span><span style="font-size:26px;font-weight:700;color:#b3453f;">1 500.10 <span style="font-size:13px;font-weight:600;color:#8b9a92;">Bs</span></span></div>
+              <div style="background:#fff;border:1px solid #e4eae7;border-radius:18px;padding:18px 20px;display:flex;flex-direction:column;gap:5px;"><span style="font-size:11px;font-weight:700;letter-spacing:.08em;color:#8b9a92;">TOTAL REGISTROS</span><span style="font-size:26px;font-weight:700;">3</span></div>
+            </div>
+          </sc-if>
+          <div style="display:flex;background:#e6ece8;border-radius:99px;padding:3px;gap:2px;align-self:flex-start;">
+            <sc-for list="{{ cTabs }}" as="t" hint-placeholder-count="2">
+              <button onClick="{{ t.onClick }}" style="{{ t.style }}">{{ t.label }}</button>
+            </sc-for>
+          </div>
+          <sc-if value="{{ cHistorial }}" hint-placeholder-val="{{ true }}">
+            <div style="background:#fff;border:1px solid #e4eae7;border-radius:18px;overflow:hidden;box-shadow:0 1px 3px rgba(16,42,34,.05);">
+              <div style="display:grid;grid-template-columns:.5fr 1.3fr 1.5fr 1.3fr .9fr 1fr .9fr;gap:12px;padding:12px 20px;background:#fafcfb;border-bottom:1px solid #eef2ef;">
+                <span style="font-size:11px;font-weight:700;letter-spacing:.08em;color:#8b9a92;">ID</span>
+                <span style="font-size:11px;font-weight:700;letter-spacing:.08em;color:#8b9a92;">FECHA</span>
+                <span style="font-size:11px;font-weight:700;letter-spacing:.08em;color:#8b9a92;">PROVEEDOR</span>
+                <span style="font-size:11px;font-weight:700;letter-spacing:.08em;color:#8b9a92;">USUARIO</span>
+                <span style="font-size:11px;font-weight:700;letter-spacing:.08em;color:#8b9a92;">ESTADO</span>
+                <span style="font-size:11px;font-weight:700;letter-spacing:.08em;color:#8b9a92;">PAGO</span>
+                <span style="font-size:11px;font-weight:700;letter-spacing:.08em;color:#8b9a92;text-align:right;">TOTAL (BS)</span>
+              </div>
+              <sc-for list="{{ compras }}" as="co" hint-placeholder-count="3">
+                <div style="display:grid;grid-template-columns:.5fr 1.3fr 1.5fr 1.3fr .9fr 1fr .9fr;gap:12px;padding:13px 20px;border-top:1px solid #f2f5f3;align-items:center;cursor:pointer;" style-hover="background:#f7faf8;">
+                  <span style="font-size:13.5px;color:#8b9a92;font-weight:600;">#{{ co.id }}</span>
+                  <span style="font-size:13.5px;color:#4b5b53;">{{ co.fecha }}</span>
+                  <span style="font-size:14px;font-weight:600;">{{ co.prov }}</span>
+                  <span style="font-size:13.5px;color:#4b5b53;">{{ co.user }}</span>
+                  <span><span style="{{ co.estadoStyle }}">{{ co.estado }}</span></span>
+                  <span style="font-size:13.5px;color:#4b5b53;">{{ co.pago }}</span>
+                  <span style="font-size:14px;font-weight:700;text-align:right;">{{ co.total }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </sc-if>
+          <sc-if value="{{ cProveedores }}" hint-placeholder-val="{{ false }}">
+            <div style="background:#fff;border:1px solid #e4eae7;border-radius:18px;overflow:hidden;">
+              <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:12px;padding:12px 20px;background:#fafcfb;border-bottom:1px solid #eef2ef;">
+                <span style="font-size:11px;font-weight:700;letter-spacing:.08em;color:#8b9a92;">PROVEEDOR</span>
+                <span style="font-size:11px;font-weight:700;letter-spacing:.08em;color:#8b9a92;">NIT</span>
+                <span style="font-size:11px;font-weight:700;letter-spacing:.08em;color:#8b9a92;">TELÉFONO</span>
+              </div>
+              <sc-for list="{{ proveedores }}" as="pv" hint-placeholder-count="3">
+                <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:12px;padding:12px 20px;border-top:1px solid #f2f5f3;" style-hover="background:#f7faf8;">
+                  <span style="font-size:14px;font-weight:600;">{{ pv.nombre }}</span>
+                  <span style="font-size:13.5px;color:#4b5b53;">{{ pv.nit }}</span>
+                  <span style="font-size:13.5px;color:#4b5b53;">{{ pv.tel }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </sc-if>
+        </div>
+      </sc-if>
+
+      <!-- ============ SEGUROS ============ -->
+      <sc-if value="{{ vSeguros }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex;flex-direction:column;gap:18px;">
+          <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;">
+            <div style="display:flex;flex-direction:column;gap:4px;">
+              <h1 style="margin:0;font-size:25px;font-weight:700;letter-spacing:-.02em;">Seguros</h1>
+              <span style="font-size:13.5px;color:#6d7d75;">{{ nSeguros }} aseguradoras registradas</span>
+            </div>
+            <button style="background:linear-gradient(135deg,#12996f,#0d6b52);color:#fff;border:none;border-radius:99px;padding:11px 22px;font-size:13.5px;font-weight:600;cursor:pointer;font-family:inherit;box-shadow:0 4px 14px rgba(14,122,95,.3);" style-hover="filter:brightness(1.08);">+ Nueva aseguradora</button>
+          </div>
+          <input onChange="{{ onBuscarSeg }}" value="{{ qSeg }}" placeholder="Buscar aseguradora o NIT…" style="max-width:360px;background:#fff;border:1px solid #dde5e0;border-radius:99px;padding:10px 18px;font-size:14px;color:#16241f;outline:none;font-family:inherit;">
+          <div style="background:#fff;border:1px solid #e4eae7;border-radius:18px;overflow:hidden;box-shadow:0 1px 3px rgba(16,42,34,.05);">
+            <div style="display:grid;grid-template-columns:2.6fr 1fr 100px;gap:12px;padding:12px 20px;background:#fafcfb;border-bottom:1px solid #eef2ef;">
+              <span style="font-size:11px;font-weight:700;letter-spacing:.08em;color:#8b9a92;">NOMBRE</span>
+              <span style="font-size:11px;font-weight:700;letter-spacing:.08em;color:#8b9a92;">NIT</span>
+              <span></span>
+            </div>
+            <sc-for list="{{ seguros }}" as="s" hint-placeholder-count="10">
+              <div style="display:grid;grid-template-columns:2.6fr 1fr 100px;gap:12px;padding:12px 20px;border-top:1px solid #f2f5f3;align-items:center;" style-hover="background:#f7faf8;">
+                <div style="display:flex;align-items:center;gap:12px;">
+                  <div style="width:30px;height:30px;border-radius:9px;background:#e4f2ec;color:#0d6b52;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:11.5px;flex-shrink:0;">{{ s.ini }}</div>
+                  <span style="font-size:14px;font-weight:600;">{{ s.nombre }}</span>
+                </div>
+                <span style="font-size:13.5px;color:#4b5b53;">{{ s.nit }}</span>
+                <button style="background:#fff;border:1px solid #dde5e0;color:#4b5b53;border-radius:99px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;justify-self:end;" style-hover="background:#f2f5f3;">Editar</button>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ============ USUARIOS ============ -->
+      <sc-if value="{{ vUsuarios }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex;flex-direction:column;gap:18px;">
+          <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;">
+            <div style="display:flex;flex-direction:column;gap:4px;">
+              <h1 style="margin:0;font-size:25px;font-weight:700;letter-spacing:-.02em;">Usuarios</h1>
+              <span style="font-size:13.5px;color:#6d7d75;">Cuentas con acceso al sistema</span>
+            </div>
+            <button style="background:linear-gradient(135deg,#12996f,#0d6b52);color:#fff;border:none;border-radius:99px;padding:11px 22px;font-size:13.5px;font-weight:600;cursor:pointer;font-family:inherit;box-shadow:0 4px 14px rgba(14,122,95,.3);" style-hover="filter:brightness(1.08);">+ Nuevo usuario</button>
+          </div>
+          <div style="background:#fff;border:1px solid #e4eae7;border-radius:18px;overflow:hidden;box-shadow:0 1px 3px rgba(16,42,34,.05);">
+            <div style="display:grid;grid-template-columns:2fr 1.4fr 1fr 100px;gap:12px;padding:12px 20px;background:#fafcfb;border-bottom:1px solid #eef2ef;">
+              <span style="font-size:11px;font-weight:700;letter-spacing:.08em;color:#8b9a92;">USUARIO</span>
+              <span style="font-size:11px;font-weight:700;letter-spacing:.08em;color:#8b9a92;">ROL</span>
+              <span style="font-size:11px;font-weight:700;letter-spacing:.08em;color:#8b9a92;">ESTADO</span>
+              <span></span>
+            </div>
+            <sc-for list="{{ usuarios }}" as="u" hint-placeholder-count="2">
+              <div style="display:grid;grid-template-columns:2fr 1.4fr 1fr 100px;gap:12px;padding:12px 20px;border-top:1px solid #f2f5f3;align-items:center;" style-hover="background:#f7faf8;">
+                <div style="display:flex;align-items:center;gap:12px;">
+                  <div style="width:34px;height:34px;border-radius:50%;background:#e4f2ec;color:#0d6b52;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;flex-shrink:0;">{{ u.ini }}</div>
+                  <span style="font-size:14px;font-weight:600;">{{ u.nombre }}</span>
+                </div>
+                <span style="font-size:13.5px;color:#4b5b53;">{{ u.rol }}</span>
+                <span><span style="font-size:12px;font-weight:700;background:#e2f4e8;color:#1a7f45;border-radius:99px;padding:3px 10px;">Activo</span></span>
+                <button style="background:#fff;border:1px solid #dde5e0;color:#4b5b53;border-radius:99px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;justify-self:end;" style-hover="background:#f2f5f3;">Editar</button>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-if>
+
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;vistaInicial&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;inicio&quot;,&quot;pacientes&quot;,&quot;farmacia&quot;,&quot;compras&quot;,&quot;seguros&quot;],&quot;default&quot;:&quot;inicio&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;General&quot;},&quot;mostrarKpis&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;General&quot;}}">
+class Component extends DCLogic {
+  state = { view: null, pid: null, fTab: 'productos', cTab: 'historial', q: '', qSeg: '', qProd: '', estF: 'TODOS' };
+
+  chipTipo(t) {
+    if (!t) return 'font-size:13px;color:#b3c3ba;';
+    const m = {
+      'INSTITUCIONAL': ['#e4f2ec', '#0d6b52'],
+      'EXTERNO': ['#e8f0fb', '#3b5bdb'],
+      'AMBULANCIA': ['#fdeaea', '#b3453f'],
+      'MEDICAMENTO': ['#e4f2ec', '#0d6b52'],
+      'INSUMO': ['#e8f0fb', '#3b5bdb'],
+      'SERVICIO': ['#f1e9fb', '#7048a8'],
+    };
+    const [bg, fg] = m[t] || ['#eef2ef', '#4b5b53'];
+    return `display:inline-block;font-size:11.5px;font-weight:700;letter-spacing:.02em;background:${bg};color:${fg};border-radius:99px;padding:3px 10px;`;
+  }
+  chipEstado(e) {
+    const m = { 'Internado': ['#fbf0dc', '#a86a12'], 'Alta': ['#e2f4e8', '#1a7f45'], 'ACTIVO': ['#e2f4e8', '#1a7f45'], 'ANULADO': ['#fdeaea', '#b3453f'] };
+    const [bg, fg] = m[e] || ['#eef2ef', '#4b5b53'];
+    return `display:inline-block;font-size:12px;font-weight:700;background:${bg};color:${fg};border-radius:99px;padding:3px 10px;`;
+  }
+  ini(n) {
+    const w = n.trim().split(/\s+/);
+    return (w.length > 1 ? w[0][0] + w[1][0] : n.slice(0, 2)).toUpperCase();
+  }
+
+  get data() {
+    if (this._data) return this._data;
+    const iJuan = [{ n: 1, ingreso: '2026-05-10', alta: '2026-05-13', dias: '3 días', tipo: 'INSTITUCIONAL', sala: '1-B', hc: '12/M/26', cargos: [
+      { item: 'DENTRO RADIO URBANO', cant: '1', precio: '150.00', total: '150.00', por: 'ADMINISTRADOR', hora: '09:12' },
+      { item: 'SUERO FISIOLÓGICO 1000ML', cant: '2', precio: '18.50', total: '37.00', por: 'ADMINISTRADOR', hora: '11:45' },
+    ], total: '187.00' }];
+    const iJose = [{ n: 1, ingreso: '2026-07-10', alta: '—', dias: '5 días', tipo: 'INSTITUCIONAL', sala: '2-A', hc: '15/M/26', cargos: [
+      { item: 'GUANTES NITRILO (CAJA 100)', cant: '1', precio: '45.00', total: '45.00', por: 'ADMINISTRADOR', hora: '08:30' },
+    ], total: '45.00' }];
+    this._data = [
+      { id: 1, nombre: 'ANA PAULA FERNANDEZ GONDORCET', tipo: null, estado: 'Alta', ci: '7336199', sexo: 'F', tel: '—', alta: '2026-07-03', dir: '—', internaciones: [] },
+      { id: 2, nombre: 'CARMEN ROSA VELASQUEZ NINA', tipo: null, estado: 'Alta', ci: '—', sexo: 'F', tel: '77889900', alta: '2026-08-08', dir: '—', internaciones: [] },
+      { id: 3, nombre: 'ERICKA ESTHER CAYOJA BARRERA', tipo: 'EXTERNO', estado: 'Internado', ci: '0', sexo: 'F', tel: '—', alta: '—', dir: '—', internaciones: [] },
+      { id: 4, nombre: 'JOSE LUIS GUTIERREZ SORIA', tipo: 'INSTITUCIONAL', estado: 'Internado', ci: '2345678', sexo: 'M', tel: '—', alta: '—', dir: '—', internaciones: iJose },
+      { id: 5, nombre: 'JUAN CARLOS MAMANI QUISPE', tipo: 'INSTITUCIONAL', estado: 'Alta', ci: '4521367', sexo: 'M', tel: '71234567', alta: '2026-05-13', dir: 'AV. AROCE #245', internaciones: iJuan },
+      { id: 6, nombre: 'LUCIA FERNANDA APAZA TICONA', tipo: 'EXTERNO', estado: 'Alta', ci: '5678234', sexo: 'F', tel: '76543210', alta: '2026-03-16', dir: '—', internaciones: [] },
+      { id: 7, nombre: 'MARIA ELENA ROJAS VARGAS', tipo: 'INSTITUCIONAL', estado: 'Alta', ci: '3894521', sexo: 'F', tel: '70112233', alta: '2026-04-05', dir: '—', internaciones: [] },
+      { id: 8, nombre: 'MIGUEL ANGEL TORREZ CHOQUE', tipo: 'INSTITUCIONAL', estado: 'Alta', ci: '6789123', sexo: 'M', tel: '71122334', alta: '2026-06-04', dir: '—', internaciones: [] },
+      { id: 9, nombre: 'PEDRO ANTONIO CONDORI FLORES', tipo: null, estado: 'Internado', ci: '—', sexo: 'M', tel: '—', alta: '—', dir: '—', internaciones: [] },
+      { id: 10, nombre: 'SN', tipo: null, estado: 'Internado', ci: '—', sexo: '—', tel: '—', alta: '—', dir: '—', internaciones: [] },
+    ];
+    return this._data;
+  }
+
+  renderVals() {
+    const st = this.state;
+    const view = st.view ?? (this.props.vistaInicial ?? 'inicio');
+    const go = (v) => () => this.setState({ view: v, pid: null });
+    const nav = (v) => {
+      const a = view === v || (v === 'pacientes' && view === 'detalle');
+      return `display:flex;align-items:center;gap:11px;padding:10px 12px;border-radius:11px;cursor:pointer;font-size:13.5px;font-weight:${a ? 600 : 500};color:${a ? '#0a4038' : 'rgba(255,255,255,.78)'};background:${a ? '#ffffff' : 'transparent'};box-shadow:${a ? '0 4px 12px rgba(0,0,0,.18)' : 'none'};`;
+    };
+    const seg = (active) => `border:none;border-radius:99px;padding:7px 16px;font-size:12.5px;font-weight:600;cursor:pointer;font-family:inherit;background:${active ? '#ffffff' : 'transparent'};color:${active ? '#0d6b52' : '#6d7d75'};box-shadow:${active ? '0 1px 3px rgba(16,42,34,.14)' : 'none'};`;
+
+    const decorate = (p) => ({
+      ...p, ini: this.ini(p.nombre), tipo: p.tipo || '—',
+      tipoStyle: this.chipTipo(p.tipo), estadoStyle: this.chipEstado(p.estado),
+      sexoFull: p.sexo === 'M' ? 'Masculino' : (p.sexo === 'F' ? 'Femenino' : '—'),
+      sub: `CI ${p.ci} · ${p.sexo}`,
+      open: () => this.setState({ view: 'detalle', pid: p.id }),
+    });
+
+    const q = st.q.toLowerCase();
+    const pacientes = this.data.map(decorate).filter(p =>
+      (st.estF === 'TODOS' || p.estado === st.estF) &&
+      (!q || p.nombre.toLowerCase().includes(q) || String(p.ci).includes(q)));
+    const internados = this.data.filter(p => p.estado === 'Internado').map(decorate);
+
+    const selRaw = this.data.find(p => p.id === st.pid);
+    const sel = selRaw ? decorate(selRaw) : {};
+    const selInternaciones = (selRaw && view === 'detalle') ? selRaw.internaciones.map(i => ({
+      ...i, tipoStyle: this.chipTipo(i.tipo), sinCargos: i.cargos.length === 0, conCargos: i.cargos.length > 0,
+    })) : [];
+    if (selRaw) { sel.sinInternaciones = selRaw.internaciones.length === 0; }
+
+    const filtros = [['TODOS', 'Todos'], ['Internado', 'Internados'], ['Alta', 'Alta']].map(([v, label]) => ({
+      label, style: seg(st.estF === v), onClick: () => this.setState({ estF: v }),
+    }));
+    const fTabs = [['productos', 'Productos'], ['fabricantes', 'Fabricantes'], ['unidades', 'Unidades'], ['tipos', 'Tipos']].map(([v, label]) => ({
+      label, style: seg(st.fTab === v), onClick: () => this.setState({ fTab: v }),
+    }));
+    const cTabs = [['historial', 'Historial'], ['proveedores', 'Proveedores']].map(([v, label]) => ({
+      label, style: seg(st.cTab === v), onClick: () => this.setState({ cTab: v }),
+    }));
+
+    const qp = st.qProd.toLowerCase();
+    const productos = [
+      ['DENTRO RADIO URBANO', 'AMBULANCIA', '150.00', 'Servicio'],
+      ['FUERA DEL RADIO URBANO', 'AMBULANCIA', '200.00', 'Servicio'],
+      ['PARACETAMOL 500MG', 'MEDICAMENTO', '1.50', 320],
+      ['AMOXICILINA 500MG', 'MEDICAMENTO', '2.80', 145],
+      ['IBUPROFENO 400MG', 'MEDICAMENTO', '1.20', 0],
+      ['SUERO FISIOLÓGICO 1000ML', 'INSUMO', '18.50', 64],
+      ['GUANTES NITRILO (CAJA 100)', 'INSUMO', '45.00', 12],
+      ['JERINGA DESCARTABLE 5ML', 'INSUMO', '0.80', 480],
+    ].filter(r => !qp || r[0].toLowerCase().includes(qp)).map(([nombre, tipo, precio, stock]) => {
+      let stockTxt = String(stock), style = 'font-size:13.5px;font-weight:600;color:#4b5b53;';
+      if (stock === 0) { stockTxt = 'Sin stock'; style = this.chipEstado('ANULADO'); }
+      else if (typeof stock === 'number' && stock < 20) { stockTxt = `${stock} · Bajo`; style = this.chipEstado('Internado'); }
+      else if (stock === 'Servicio') { style = 'font-size:12.5px;color:#9aa8a1;'; }
+      return { nombre, tipo, precio, tipoStyle: this.chipTipo(tipo), stock: stockTxt, stockStyle: style };
+    });
+
+    const qs = st.qSeg.toLowerCase();
+    const seguros = [
+      ['ALIANZA VIDA S.A.', '1015327022'], ['ASEGURADORA FORTALEZA', '—'],
+      ['BISA SEGUROS Y REASEGUROS S.A.', '1020655027'], ['CAJA BANCA ESTAL DE SALUD', '1016529025'],
+      ['CAJA DE SALUD DE LA BANCA PRIVADA', '1020635028'], ['CIES SALUD SEXUAL SALUD REPRODUCTIVA', '1006987025'],
+      ['CORPORACION DEL SEGURO SOCIAL MILITAR COSSMIL', '1019635023'], ['CORPORACION MINERA DE BOLIVIA (COLQUIRI)', '1006965023'],
+      ['CREDISEGURO S.A. SEGUROS PERSONALES', '191310020'], ['HOSPITAL GENERAL SAN JUAN DE DIOS', '1023357026'],
+      ['LA BOLIVIANA CIACRUZ SEGUROS PERSONALES S.A.', '1006989027'], ['NACIONAL SEGUROS VIDA Y SALUD S.A.', '1028483024'],
+      ['SEGURO F.O.C.A.T', '—'], ['SEGUROS Y REASEGUROS PERSONALES UNIVIDA S.A.', '301204024'],
+    ].filter(r => !qs || r[0].toLowerCase().includes(qs) || r[1].includes(qs))
+      .map(([nombre, nit]) => ({ nombre, nit, ini: this.ini(nombre) }));
+
+    return {
+      vInicio: view === 'inicio', vPacientes: view === 'pacientes', vDetalle: view === 'detalle' && !!selRaw,
+      vFarmacia: view === 'farmacia', vCompras: view === 'compras', vSeguros: view === 'seguros', vUsuarios: view === 'usuarios',
+      goInicio: go('inicio'), goPacientes: go('pacientes'), goFarmacia: go('farmacia'),
+      goCompras: go('compras'), goSeguros: go('seguros'), goUsuarios: go('usuarios'),
+      navInicio: nav('inicio'), navPacientes: nav('pacientes'), navFarmacia: nav('farmacia'),
+      navCompras: nav('compras'), navSeguros: nav('seguros'), navUsuarios: nav('usuarios'),
+      verKpis: this.props.mostrarKpis ?? true,
+      q: st.q, onBuscar: (e) => this.setState({ q: e.target.value }),
+      qSeg: st.qSeg, onBuscarSeg: (e) => this.setState({ qSeg: e.target.value }),
+      qProd: st.qProd, onBuscarProd: (e) => this.setState({ qProd: e.target.value }),
+      filtros, fTabs, cTabs,
+      fProductos: st.fTab === 'productos', fFabricantes: st.fTab === 'fabricantes',
+      fUnidades: st.fTab === 'unidades', fTipos: st.fTab === 'tipos',
+      cHistorial: st.cTab === 'historial', cProveedores: st.cTab === 'proveedores',
+      pacientes, nPacientes: pacientes.length, internados, sel, selInternaciones,
+      nInternaciones: selInternaciones.length,
+      productos, seguros, nSeguros: seguros.length,
+      fabricantes: [['LABORATORIOS BAGÓ', 'Bolivia'], ['DROGUERÍA INTI S.A.', 'Bolivia'], ['LABORATORIOS COFAR', 'Bolivia'], ['LABORATORIOS VITA', 'Bolivia'], ['SIGMA CORP', 'Bolivia'], ['PFIZER', 'Estados Unidos']].map(([nombre, pais]) => ({ nombre, pais })),
+      unidades: ['COMPRIMIDO', 'CÁPSULA', 'CAJA', 'FRASCO', 'AMPOLLA', 'SOBRE', 'TUBO', 'ML', 'UNIDAD', 'BLISTER'].map(nombre => ({ nombre })),
+      tipos: ['MEDICAMENTO', 'INSUMO', 'AMBULANCIA', 'LABORATORIO', 'SERVICIO', 'EQUIPO'].map(nombre => ({ nombre })),
+      compras: [
+        { id: 3, fecha: '2026-07-01 08:37', prov: '—', user: 'ADMINISTRADOR', estado: 'ANULADO', pago: 'EFECTIVO', total: '1 500.10' },
+        { id: 2, fecha: '2026-06-18 15:02', prov: 'DROGUERÍA INTI S.A.', user: 'ADMINISTRADOR', estado: 'ACTIVO', pago: 'TRANSFERENCIA', total: '2 310.50' },
+        { id: 1, fecha: '2026-06-03 10:21', prov: 'LABORATORIOS COFAR', user: 'ADMINISTRADOR', estado: 'ACTIVO', pago: 'EFECTIVO', total: '839.60' },
+      ].map(c => ({ ...c, estadoStyle: this.chipEstado(c.estado) })),
+      proveedores: [['DROGUERÍA INTI S.A.', '1002365028', '2 2440456'], ['LABORATORIOS COFAR', '1020144023', '2 2811325'], ['FARMACORP DISTRIBUCIÓN', '1015887021', '3 3364411']].map(([nombre, nit, tel]) => ({ nombre, nit, tel })),
+      usuarios: [{ nombre: 'admin', rol: 'ADMINISTRADOR', ini: 'AD' }, { nombre: 'recepcion', rol: 'RECEPCIÓN', ini: 'RE' }],
+    };
+  }
+}
+</script>
+</body>
+</html>

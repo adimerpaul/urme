@@ -1,0 +1,170 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\Producto;
+use App\Models\Venta;
+use App\Models\VentaDetalle;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+
+class VentaController extends Controller
+{
+    public function index(Request $request)
+    {
+        $this->req($request, 'Ver Ventas');
+
+        $fechaInicio = $request->input('fecha_inicio', '');
+        $fechaFin = $request->input('fecha_fin', '');
+        $pacienteId = $request->input('paciente_id', '');
+        $userId = $request->input('user_id', '');
+        $estado = $request->input('estado', '');
+        $perPage = (int) $request->input('per_page', 15);
+
+        $query = Venta::with(['paciente:id,nombre_completo,ci', 'user:id,name'])
+            ->withCount('detalles')
+            ->orderByDesc('fecha_hora');
+
+        $this->applyFiltros($query, $fechaInicio, $fechaFin, $pacienteId, $userId, $estado);
+
+        $resumenQuery = Venta::query();
+        $this->applyFiltros($resumenQuery, $fechaInicio, $fechaFin, $pacienteId, $userId, '');
+
+        return response()->json([
+            'resumen' => [
+                'total_ventas' => (clone $resumenQuery)->where('estado', 'ACTIVO')->sum('total'),
+                'total_anuladas' => (clone $resumenQuery)->where('estado', 'ANULADO')->sum('total'),
+                'cantidad' => (clone $resumenQuery)->count(),
+            ],
+            'ventas' => $query->paginate($perPage),
+        ]);
+    }
+
+    public function show(Request $request, $id)
+    {
+        $this->req($request, 'Ver Ventas');
+        $venta = Venta::with(['paciente:id,nombre_completo,ci', 'user:id,name', 'detalles.producto:id,nombre,codigo'])
+            ->findOrFail($id);
+
+        return response()->json($venta);
+    }
+
+    public function store(Request $request)
+    {
+        $this->req($request, 'Crear Ventas');
+
+        $request->validate([
+            'paciente_id' => 'nullable|exists:pacientes,id',
+            'cliente' => 'nullable|string|max:255',
+            'doctor' => 'nullable|string|max:255',
+            'fecha_hora' => 'required|date',
+            'tipo_pago' => 'nullable|string|max:50',
+            'comentario' => 'nullable|string|max:500',
+            'pago' => 'nullable|numeric|min:0',
+            'detalles' => 'required|array|min:1',
+            'detalles.*.producto_id' => 'nullable|exists:productos,id',
+            'detalles.*.nombre' => 'required_without:detalles.*.producto_id|nullable|string|max:255',
+            'detalles.*.precio' => 'required|numeric|min:0',
+            'detalles.*.cantidad' => 'required|numeric|min:0.0001',
+        ]);
+
+        $venta = DB::transaction(function () use ($request) {
+            $venta = Venta::create([
+                'user_id' => $request->user()->id,
+                'paciente_id' => $request->paciente_id ?: null,
+                'cliente' => $request->cliente ?: null,
+                'doctor' => $request->doctor ?: null,
+                'fecha_hora' => $request->fecha_hora,
+                'tipo_pago' => $request->tipo_pago ? mb_strtoupper($request->tipo_pago) : 'EFECTIVO',
+                'comentario' => $request->comentario ?: null,
+                'estado' => 'ACTIVO',
+                'total' => 0,
+                'pago' => 0,
+                'cambio' => 0,
+            ]);
+
+            $total = 0;
+            foreach ($request->detalles as $item) {
+                $producto = ! empty($item['producto_id']) ? Producto::find($item['producto_id']) : null;
+                $precio = (float) $item['precio'];
+                $cantidad = (float) $item['cantidad'];
+                $lineaTotal = round($precio * $cantidad, 2);
+                $total += $lineaTotal;
+
+                VentaDetalle::create([
+                    'venta_id' => $venta->id,
+                    'producto_id' => $producto?->id,
+                    'nombre' => mb_strtoupper($item['nombre'] ?? $producto?->nombre ?? ''),
+                    'precio' => $precio,
+                    'cantidad' => $cantidad,
+                    'total' => $lineaTotal,
+                ]);
+            }
+
+            $pago = (float) ($request->pago ?: $total);
+            if ($pago < $total) {
+                abort(422, 'El pago no puede ser menor al total de la venta');
+            }
+
+            $venta->update([
+                'total' => $total,
+                'pago' => $pago,
+                'cambio' => round($pago - $total, 2),
+            ]);
+
+            return $venta;
+        });
+
+        return response()->json(
+            $venta->load(['paciente:id,nombre_completo,ci', 'user:id,name', 'detalles.producto:id,nombre,codigo']),
+            201
+        );
+    }
+
+    public function destroy(Request $request, $id)
+    {
+        $this->req($request, 'Eliminar Ventas');
+        $venta = Venta::findOrFail($id);
+
+        if ($venta->estado === 'ANULADO') {
+            abort(422, 'La venta ya se encuentra anulada');
+        }
+
+        $venta->update(['estado' => 'ANULADO']);
+
+        return response()->json(['message' => 'Venta anulada']);
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────
+
+    private function applyFiltros($query, $fechaInicio, $fechaFin, $pacienteId, $userId, $estado): void
+    {
+        if ($fechaInicio) {
+            $query->whereDate('fecha_hora', '>=', $fechaInicio);
+        }
+        if ($fechaFin) {
+            $query->whereDate('fecha_hora', '<=', $fechaFin);
+        }
+        if ($pacienteId) {
+            $query->where('paciente_id', $pacienteId);
+        }
+        if ($userId) {
+            $query->where('user_id', $userId);
+        }
+        if ($estado) {
+            $query->where('estado', $estado);
+        }
+    }
+
+    private function req(Request $request, string|array $permission): void
+    {
+        $user = $request->user();
+        $perms = is_array($permission) ? $permission : [$permission];
+        foreach ($perms as $p) {
+            if ($user->hasPermissionTo($p)) {
+                return;
+            }
+        }
+        abort(403, 'No tiene permiso para realizar esta acción');
+    }
+}

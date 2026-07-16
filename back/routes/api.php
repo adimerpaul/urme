@@ -8,6 +8,7 @@ use App\Http\Controllers\InternacionController;
 use App\Http\Controllers\InternacionItemController;
 use App\Http\Controllers\CompraController;
 use App\Http\Controllers\ProveedorController;
+use App\Http\Controllers\VentaController;
 use Illuminate\Support\Facades\Route;
 
 // ── Rutas públicas ────────────────────────────────────────────
@@ -104,4 +105,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/compras/{id}',                  [CompraController::class, 'show']);
     Route::post('/compras',                      [CompraController::class, 'store']);
     Route::delete('/compras/{id}',               [CompraController::class, 'destroy']);
+
+    // Ventas
+    Route::get('/ventas',                        [VentaController::class, 'index']);
+    Route::get('/ventas/{id}',                   [VentaController::class, 'show']);
+    Route::post('/ventas',                       [VentaController::class, 'store']);
+    Route::delete('/ventas/{id}',                [VentaController::class, 'destroy']);
 });

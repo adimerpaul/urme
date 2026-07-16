@@ -11,6 +11,24 @@
     </div>
 
     <template v-else>
+      <div class="row items-end q-col-gutter-sm q-mb-md">
+        <div class="col">
+          <div class="text-h5 text-weight-bold">Usuarios</div>
+          <div class="text-body2 text-grey-6">Cuentas con acceso al sistema</div>
+        </div>
+        <div class="col-auto row items-center q-gutter-sm">
+          <q-input v-model="filter" placeholder="Buscar…" dense outlined rounded
+                   clearable bg-color="white" style="width:200px">
+            <template v-slot:prepend><q-icon name="search" /></template>
+          </q-input>
+          <q-btn outline rounded no-caps color="grey-7" icon="refresh" @click="usersGet">
+            <q-tooltip>Actualizar</q-tooltip>
+          </q-btn>
+          <q-btn v-if="canCrear" rounded unelevated no-caps color="primary"
+                 label="Nuevo usuario" icon="add" @click="userNew" />
+        </div>
+      </div>
+
       <q-table
         :rows="users"
         :columns="columns"
@@ -18,21 +36,12 @@
         dense
         flat
         bordered
+        class="rounded-borders"
+        table-header-class="bg-grey-1 text-grey-7 text-uppercase"
         :rows-per-page-options="[0]"
-        title="Usuarios"
         :filter="filter"
         :loading="loading"
       >
-        <template v-slot:top-right>
-          <q-btn v-if="canCrear"
-                 color="positive" label="Nuevo" icon="add_circle_outline"
-                 no-caps @click="userNew" class="q-mr-sm" />
-          <q-btn color="primary" label="Actualizar" icon="refresh"
-                 no-caps @click="usersGet" class="q-mr-sm" />
-          <q-input v-model="filter" label="Buscar" dense outlined style="width:180px">
-            <template v-slot:append><q-icon name="search" /></template>
-          </q-input>
-        </template>
 
         <template v-slot:body-cell-avatar="props">
           <q-td :props="props" auto-width>
@@ -52,7 +61,7 @@
           <q-td :props="props">
             <q-btn-dropdown
               v-if="canEditar || canEliminar"
-              label="Opciones" no-caps size="10px" dense color="primary"
+              label="Opciones" no-caps size="10px" dense rounded unelevated color="primary"
             >
               <q-list>
                 <q-item v-if="canEditar" clickable v-close-popup @click="openDialog(props.row)">
@@ -74,10 +83,10 @@
 
         <template v-slot:body-cell-perms="props">
           <q-td :props="props">
-            <q-badge v-if="(props.row.permissions||[]).length" color="primary" outline>
+            <q-badge v-if="(props.row.permissions||[]).length" rounded color="teal-1" text-color="primary" class="text-weight-bold">
               {{ (props.row.permissions||[]).length }} permisos
             </q-badge>
-            <q-badge v-else color="grey-4" text-color="grey-7" outline>Sin permisos</q-badge>
+            <q-badge v-else rounded color="grey-3" text-color="grey-7">Sin permisos</q-badge>
           </q-td>
         </template>
       </q-table>
@@ -423,11 +432,11 @@ function setAll (val) {
   transition: background 0.12s;
 }
 
-.perm-item:hover { background: #eef4ff; }
+.perm-item:hover { background: #eef7f2; }
 
 .perm-item--on {
-  border-color: #90caf9;
-  background: #e8f4fd;
+  border-color: #8fd4bb;
+  background: #e4f2ec;
 }
 
 .perm-item__label {

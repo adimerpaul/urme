@@ -18,19 +18,25 @@
 
       <!-- Tarjetas resumen -->
       <div class="row q-col-gutter-md q-mb-md">
-        <div class="col-12 col-sm-4">
+        <div class="col-12 col-sm-3">
           <q-card flat class="bg-primary text-white q-pa-md rounded-borders full-height">
             <div class="text-caption text-teal-2 text-uppercase text-weight-bold">Ventas activas</div>
             <div class="text-h5 text-weight-bold">{{ money(resumen.total_ventas) }} <span class="text-caption text-teal-2">Bs</span></div>
           </q-card>
         </div>
-        <div class="col-12 col-sm-4">
+        <div class="col-12 col-sm-3">
+          <q-card flat bordered class="q-pa-md rounded-borders full-height">
+            <div class="text-caption text-grey-6 text-uppercase text-weight-bold">Pendientes</div>
+            <div class="text-h5 text-weight-bold text-orange-8">{{ money(resumen.total_pendientes) }} <span class="text-caption text-grey-6">Bs</span></div>
+          </q-card>
+        </div>
+        <div class="col-12 col-sm-3">
           <q-card flat bordered class="q-pa-md rounded-borders full-height">
             <div class="text-caption text-grey-6 text-uppercase text-weight-bold">Anuladas</div>
             <div class="text-h5 text-weight-bold text-negative">{{ money(resumen.total_anuladas) }} <span class="text-caption text-grey-6">Bs</span></div>
           </q-card>
         </div>
-        <div class="col-12 col-sm-4">
+        <div class="col-12 col-sm-3">
           <q-card flat bordered class="q-pa-md rounded-borders full-height">
             <div class="text-caption text-grey-6 text-uppercase text-weight-bold">Total registros</div>
             <div class="text-h5 text-weight-bold">{{ resumen.cantidad }}</div>
@@ -68,7 +74,7 @@
           </div>
           <div class="col-auto">
             <q-select v-model="filtro.estado" label="Estado" dense outlined clearable
-                      :options="['ACTIVO', 'ANULADO']" style="width:130px" @update:model-value="onFiltroChange" />
+                      :options="['ACTIVO', 'PENDIENTE', 'ANULADO']" style="width:140px" @update:model-value="onFiltroChange" />
           </div>
         </div>
 
@@ -80,6 +86,7 @@
               <th class="text-left">Fecha</th>
               <th class="text-left">Cliente / Paciente</th>
               <th class="text-left">Doctor</th>
+              <th class="text-left">Seguro</th>
               <th class="text-left">Usuario</th>
               <th class="text-center">Estado</th>
               <th class="text-left">Pago</th>
@@ -88,10 +95,10 @@
           </thead>
           <tbody>
             <tr v-if="loadingVentas">
-              <td colspan="9" class="text-center q-pa-md"><q-spinner color="primary" size="24px" /></td>
+              <td colspan="10" class="text-center q-pa-md"><q-spinner color="primary" size="24px" /></td>
             </tr>
             <tr v-else-if="!ventas.length">
-              <td colspan="9" class="text-center text-grey-5 q-pa-md">Sin datos</td>
+              <td colspan="10" class="text-center text-grey-5 q-pa-md">Sin datos</td>
             </tr>
             <tr v-else v-for="row in ventas" :key="row.id">
               <td class="q-pa-xs">
@@ -105,6 +112,10 @@
                       <q-item-section avatar><q-icon name="print" color="primary" /></q-item-section>
                       <q-item-section><q-item-label>Imprimir</q-item-label></q-item-section>
                     </q-item>
+                    <q-item v-if="row.estado === 'PENDIENTE'" clickable v-close-popup @click="abrirCobrar(row)">
+                      <q-item-section avatar><q-icon name="payments" color="positive" /></q-item-section>
+                      <q-item-section><q-item-label class="text-positive">Cobrar venta</q-item-label></q-item-section>
+                    </q-item>
                     <q-item v-if="canEliminar" :disable="row.estado === 'ANULADO'" clickable v-close-popup @click="anular(row)">
                       <q-item-section avatar><q-icon name="block" color="negative" /></q-item-section>
                       <q-item-section><q-item-label class="text-negative">Anular</q-item-label></q-item-section>
@@ -115,12 +126,13 @@
               <td>{{ row.id }}</td>
               <td>{{ formatFecha(row.fecha_hora) }}</td>
               <td>{{ row.paciente ? row.paciente.nombre_completo : (row.cliente || '—') }}</td>
-              <td>{{ row.doctor || '—' }}</td>
+              <td>{{ row.doctor ? row.doctor.nombre : '—' }}</td>
+              <td>{{ row.seguro ? row.seguro.nombre : 'PARTICULAR' }}</td>
               <td>{{ row.user ? row.user.name : '—' }}</td>
               <td class="text-center">
                 <q-badge rounded
-                         :color="row.estado === 'ANULADO' ? 'red-1' : 'green-1'"
-                         :text-color="row.estado === 'ANULADO' ? 'negative' : 'positive'"
+                         :color="estadoColor(row.estado).bg"
+                         :text-color="estadoColor(row.estado).text"
                          class="text-weight-bold">{{ row.estado }}</q-badge>
               </td>
               <td>{{ row.tipo_pago }}</td>
@@ -219,13 +231,36 @@
                       <template v-slot:no-option>
                         <q-item><q-item-section class="text-grey">Sin resultados</q-item-section></q-item>
                       </template>
+                      <template v-slot:after>
+                        <q-btn flat round dense icon="add" color="primary" @click="pacQuick = true">
+                          <q-tooltip>Nuevo paciente</q-tooltip>
+                        </q-btn>
+                      </template>
                     </q-select>
                   </div>
                   <div class="col-12" v-if="!nueva.paciente_id">
                     <q-input v-model="nueva.cliente" label="Cliente (si no es paciente)" dense outlined v-uppercase />
                   </div>
                   <div class="col-12">
-                    <q-input v-model="nueva.doctor" label="Doctor" dense outlined v-uppercase />
+                    <q-select v-model="nueva.doctor_id" label="Doctor" dense outlined clearable use-input
+                              input-debounce="350" :options="opcionesDoctor"
+                              option-value="id" emit-value map-options
+                              :option-label="d => d.nombre + (d.especialidades?.length ? ' — ' + d.especialidades.map(e => e.nombre).join(', ') : '')"
+                              @filter="filtrarDoctores">
+                      <template v-slot:no-option>
+                        <q-item><q-item-section class="text-grey">Sin resultados</q-item-section></q-item>
+                      </template>
+                      <template v-slot:after>
+                        <q-btn flat round dense icon="add" color="primary" @click="abrirDocQuick">
+                          <q-tooltip>Nuevo doctor</q-tooltip>
+                        </q-btn>
+                      </template>
+                    </q-select>
+                  </div>
+                  <div class="col-12">
+                    <q-select v-model="nueva.seguro_id" label="Seguro / Institución" dense outlined clearable
+                              :options="allSeguros" option-value="id" option-label="nombre"
+                              emit-value map-options hint="Vacío = PARTICULAR" />
                   </div>
                   <div class="col-6">
                     <q-input v-model="nueva.fecha_hora" label="Fecha y hora *" dense outlined type="datetime-local"
@@ -283,10 +318,14 @@
                   </div>
                 </div>
 
-                <div class="row items-center justify-between">
+                <div class="row items-center justify-between q-gutter-sm">
                   <div class="text-h6">Total: <span class="text-primary text-weight-bold">{{ money(totalNueva) }} Bs</span></div>
-                  <q-btn rounded unelevated color="primary" label="Registrar venta" icon-right="save" no-caps
-                         type="submit" :loading="registrando" :disable="!nueva.detalles.length" />
+                  <div class="q-gutter-sm">
+                    <q-btn rounded outline color="orange-8" label="Vender luego" icon-right="schedule" no-caps
+                           :loading="registrando" :disable="!nueva.detalles.length" @click="registrarVenta('PENDIENTE')" />
+                    <q-btn rounded unelevated color="primary" label="Registrar venta" icon-right="save" no-caps
+                           type="submit" :loading="registrando" :disable="!nueva.detalles.length" />
+                  </div>
                 </div>
               </q-form>
             </q-card>
@@ -308,9 +347,11 @@
         <q-card-section style="max-height:70vh;overflow-y:auto">
           <div class="row q-col-gutter-sm q-mb-sm text-body2">
             <div class="col-6"><b>Cliente:</b> {{ detalleVenta?.paciente?.nombre_completo || detalleVenta?.cliente || '—' }}</div>
-            <div class="col-6"><b>Doctor:</b> {{ detalleVenta?.doctor || '—' }}</div>
+            <div class="col-6"><b>Doctor:</b> {{ detalleVenta?.doctor?.nombre || '—' }}</div>
+            <div class="col-6"><b>Seguro:</b> {{ detalleVenta?.seguro?.nombre || 'PARTICULAR' }}</div>
             <div class="col-6"><b>Usuario:</b> {{ detalleVenta?.user?.name || '—' }}</div>
             <div class="col-6"><b>Fecha:</b> {{ formatFecha(detalleVenta?.fecha_hora) }}</div>
+            <div class="col-6"><b>Estado:</b> {{ detalleVenta?.estado || '—' }}</div>
           </div>
           <q-markup-table dense flat bordered separator="horizontal">
             <thead>
@@ -341,6 +382,85 @@
       </q-card>
     </q-dialog>
 
+    <!-- DIALOG COBRAR VENTA PENDIENTE -->
+    <q-dialog v-model="dialogCobrar" persistent>
+      <q-card style="width:min(96vw,380px)">
+        <q-card-section class="bg-primary text-white q-py-sm">
+          <span class="text-subtitle2 text-weight-bold">Cobrar venta #{{ ventaCobrar?.id }}</span>
+        </q-card-section>
+        <q-card-section>
+          <q-form @submit.prevent="cobrarVenta">
+            <div class="text-h6 q-mb-sm">Total: <span class="text-primary text-weight-bold">{{ money(ventaCobrar?.total) }} Bs</span></div>
+            <q-input v-model.number="cobrarPago" label="Pago Bs *" dense outlined type="number" step="0.01" min="0"
+                     class="q-mb-xs" autofocus input-class="text-right" />
+            <div class="text-body2 q-mb-md">Cambio:
+              <span class="text-weight-bold" :class="cobrarCambio < 0 ? 'text-negative' : 'text-positive'">
+                {{ money(cobrarCambio) }} Bs
+              </span>
+            </div>
+            <div class="row justify-end q-gutter-sm">
+              <q-btn flat color="grey-7" label="Cancelar" no-caps @click="dialogCobrar = false" />
+              <q-btn color="primary" label="Cobrar e imprimir" icon-right="payments" type="submit" no-caps :loading="cobrando" />
+            </div>
+          </q-form>
+        </q-card-section>
+      </q-card>
+    </q-dialog>
+
+    <!-- DIALOG PACIENTE RÁPIDO -->
+    <q-dialog v-model="pacQuick" persistent>
+      <q-card style="width:min(96vw,420px)">
+        <q-card-section class="bg-primary text-white q-py-sm">
+          <span class="text-subtitle2 text-weight-bold">Nuevo paciente rápido</span>
+        </q-card-section>
+        <q-card-section>
+          <q-form @submit.prevent="pacQuickSave">
+            <q-input v-model="pacQ.nombre_completo" label="Nombre completo *" dense outlined class="q-mb-sm"
+                     :rules="[v => !!v || 'Requerido']" v-uppercase autofocus />
+            <div class="row q-col-gutter-sm q-mb-md">
+              <div class="col-6">
+                <q-input v-model="pacQ.ci" label="CI" dense outlined v-uppercase />
+              </div>
+              <div class="col-6">
+                <q-select v-model="pacQ.sexo" label="Sexo" dense outlined clearable
+                          :options="[{label:'Masculino',value:'M'},{label:'Femenino',value:'F'}]"
+                          emit-value map-options />
+              </div>
+              <div class="col-12">
+                <q-input v-model="pacQ.telefono" label="Teléfono" dense outlined />
+              </div>
+            </div>
+            <div class="row justify-end q-gutter-sm">
+              <q-btn flat color="grey-7" label="Cancelar" no-caps @click="pacQuick = false" />
+              <q-btn color="primary" label="Crear" type="submit" no-caps :loading="savingQuick" />
+            </div>
+          </q-form>
+        </q-card-section>
+      </q-card>
+    </q-dialog>
+
+    <!-- DIALOG DOCTOR RÁPIDO -->
+    <q-dialog v-model="docQuick" persistent>
+      <q-card style="width:min(96vw,420px)">
+        <q-card-section class="bg-primary text-white q-py-sm">
+          <span class="text-subtitle2 text-weight-bold">Nuevo doctor rápido</span>
+        </q-card-section>
+        <q-card-section>
+          <q-form @submit.prevent="docQuickSave">
+            <q-input v-model="docQ.nombre" label="Nombre completo *" dense outlined class="q-mb-sm"
+                     :rules="[v => !!v || 'Requerido']" v-uppercase autofocus />
+            <q-select v-model="docQ.especialidad_ids" label="Especialidades" dense outlined class="q-mb-md"
+                      multiple use-chips :options="especialidades"
+                      option-value="id" option-label="nombre" emit-value map-options />
+            <div class="row justify-end q-gutter-sm">
+              <q-btn flat color="grey-7" label="Cancelar" no-caps @click="docQuick = false" />
+              <q-btn color="primary" label="Crear" type="submit" no-caps :loading="savingQuick" />
+            </div>
+          </q-form>
+        </q-card-section>
+      </q-card>
+    </q-dialog>
+
   </q-page>
 </template>
 
@@ -356,10 +476,16 @@ const canCrear    = computed(() => proxy.$store.hasPermission('Crear Ventas'))
 const canEliminar = computed(() => proxy.$store.hasPermission('Eliminar Ventas'))
 
 const tab     = ref('historial')
-const resumen = ref({ total_ventas: 0, total_anuladas: 0, cantidad: 0 })
+const resumen = ref({ total_ventas: 0, total_pendientes: 0, total_anuladas: 0, cantidad: 0 })
 
 function money (v) { return Number(v || 0).toFixed(2) }
 function formatFecha (v) { return v ? v.replace('T', ' ').slice(0, 16) : '—' }
+
+function estadoColor (estado) {
+  if (estado === 'ANULADO') return { bg: 'red-1', text: 'negative' }
+  if (estado === 'PENDIENTE') return { bg: 'orange-1', text: 'orange-9' }
+  return { bg: 'green-1', text: 'positive' }
+}
 
 // ── Pacientes (select con filtro) ──────────────────────────────
 const opcionesPaciente = ref([])
@@ -370,6 +496,35 @@ async function filtrarPacientes (val, update) {
   } catch (e) {
     update(() => { opcionesPaciente.value = [] })
   }
+}
+
+// ── Doctores (select con filtro) ───────────────────────────────
+const opcionesDoctor = ref([])
+async function filtrarDoctores (val, update) {
+  try {
+    const res = await proxy.$axios.get('doctores', { params: { q: val, estado: 'ACTIVO', per_page: 20 } })
+    update(() => { opcionesDoctor.value = res.data?.data || [] })
+  } catch (e) {
+    update(() => { opcionesDoctor.value = [] })
+  }
+}
+
+// ── Seguros ────────────────────────────────────────────────────
+const allSeguros = ref([])
+async function loadSeguros () {
+  try {
+    const res = await proxy.$axios.get('seguros')
+    allSeguros.value = res.data || []
+  } catch (e) { /* silent */ }
+}
+
+// ── Especialidades (para doctor rápido) ────────────────────────
+const especialidades = ref([])
+async function loadEspecialidades () {
+  try {
+    const res = await proxy.$axios.get('especialidades')
+    especialidades.value = res.data || []
+  } catch (e) { /* silent */ }
 }
 
 // ── Historial ──────────────────────────────────────────────────
@@ -493,8 +648,9 @@ let lineaUid = 0
 function nuevaVentaVacia () {
   return {
     paciente_id: null,
+    doctor_id: null,
+    seguro_id: null,
     cliente: '',
-    doctor: '',
     fecha_hora: new Date().toISOString().slice(0, 16),
     tipo_pago: 'EFECTIVO',
     comentario: '',
@@ -538,13 +694,13 @@ function recalcularLinea (linea) {
   linea.total = Math.round(((Number(linea.cantidad) || 0) * (Number(linea.precio) || 0)) * 100) / 100
 }
 
-async function registrarVenta () {
+async function registrarVenta (estado = 'ACTIVO') {
   if (!nueva.value.detalles.length) {
     proxy.$alert.error('Agregue al menos un producto a la venta')
     return
   }
   const pago = Number(nueva.value.pago) || totalNueva.value
-  if (pago < totalNueva.value) {
+  if (estado !== 'PENDIENTE' && pago < totalNueva.value) {
     proxy.$alert.error('El pago no puede ser menor al total')
     return
   }
@@ -552,12 +708,14 @@ async function registrarVenta () {
   try {
     const payload = {
       paciente_id: nueva.value.paciente_id,
+      doctor_id: nueva.value.doctor_id,
+      seguro_id: nueva.value.seguro_id,
       cliente: nueva.value.paciente_id ? null : nueva.value.cliente,
-      doctor: nueva.value.doctor,
       fecha_hora: nueva.value.fecha_hora.replace('T', ' '),
       tipo_pago: nueva.value.tipo_pago,
       comentario: nueva.value.comentario,
       pago,
+      estado,
       detalles: nueva.value.detalles.map(l => ({
         producto_id: l.producto_id || null,
         nombre: l.nombre,
@@ -566,15 +724,97 @@ async function registrarVenta () {
       })),
     }
     const res = await proxy.$axios.post('ventas', payload)
-    proxy.$alert.success('Venta registrada')
+    proxy.$alert.success(estado === 'PENDIENTE' ? 'Venta guardada como pendiente' : 'Venta registrada')
     nueva.value = nuevaVentaVacia()
     tab.value = 'historial'
     loadVentas()
-    imprimirVenta(res.data)
+    if (estado !== 'PENDIENTE') {
+      imprimirVenta(res.data)
+    }
   } catch (e) {
     proxy.$alert.error(e.response?.data?.message || 'Error al registrar la venta')
   } finally {
     registrando.value = false
+  }
+}
+
+// ── Cobrar venta pendiente ─────────────────────────────────────
+const dialogCobrar = ref(false)
+const ventaCobrar  = ref(null)
+const cobrarPago   = ref(0)
+const cobrando     = ref(false)
+
+const cobrarCambio = computed(() => {
+  const pago = Number(cobrarPago.value) || 0
+  return Math.round((pago - Number(ventaCobrar.value?.total || 0)) * 100) / 100
+})
+
+function abrirCobrar (row) {
+  ventaCobrar.value = row
+  cobrarPago.value = Number(row.total)
+  dialogCobrar.value = true
+}
+
+async function cobrarVenta () {
+  if (Number(cobrarPago.value) < Number(ventaCobrar.value?.total || 0)) {
+    proxy.$alert.error('El pago no puede ser menor al total')
+    return
+  }
+  cobrando.value = true
+  try {
+    const res = await proxy.$axios.put('ventas/' + ventaCobrar.value.id + '/completar', { pago: cobrarPago.value })
+    proxy.$alert.success('Venta cobrada')
+    dialogCobrar.value = false
+    loadVentas()
+    imprimirVenta(res.data)
+  } catch (e) {
+    proxy.$alert.error(e.response?.data?.message || 'Error al cobrar')
+  } finally {
+    cobrando.value = false
+  }
+}
+
+// ── Paciente / Doctor rápido ───────────────────────────────────
+const savingQuick = ref(false)
+const pacQuick = ref(false)
+const pacQ = ref({ nombre_completo: '', ci: '', sexo: null, telefono: '' })
+const docQuick = ref(false)
+const docQ = ref({ nombre: '', especialidad_ids: [] })
+
+async function pacQuickSave () {
+  savingQuick.value = true
+  try {
+    const res = await proxy.$axios.post('pacientes', pacQ.value)
+    opcionesPaciente.value = [res.data, ...opcionesPaciente.value]
+    nueva.value.paciente_id = res.data.id
+    pacQuick.value = false
+    pacQ.value = { nombre_completo: '', ci: '', sexo: null, telefono: '' }
+    proxy.$alert.success('Paciente creado')
+  } catch (e) {
+    proxy.$alert.error(e.response?.data?.message || 'Error al crear paciente')
+  } finally {
+    savingQuick.value = false
+  }
+}
+
+function abrirDocQuick () {
+  if (!especialidades.value.length) loadEspecialidades()
+  docQuick.value = true
+}
+
+async function docQuickSave () {
+  savingQuick.value = true
+  try {
+    const res = await proxy.$axios.post('doctores', docQ.value)
+    opcionesDoctor.value = [res.data, ...opcionesDoctor.value]
+    nueva.value.doctor_id = res.data.id
+    docQuick.value = false
+    docQ.value = { nombre: '', especialidad_ids: [] }
+    proxy.$alert.success('Doctor creado')
+  } catch (e) {
+    proxy.$alert.error(e.response?.data?.message || 'Error al crear doctor')
+  } finally {
+    savingQuick.value = false
   }
 }
 
@@ -583,6 +823,8 @@ function init () {
   loadVentas()
   loadProductos()
   loadTiposProducto()
+  loadSeguros()
+  loadEspecialidades()
 }
 
 watch(() => proxy.$store.isLogged, (val) => { if (val) init() }, { immediate: true })

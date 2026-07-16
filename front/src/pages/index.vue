@@ -85,7 +85,7 @@
             >
               <template v-slot:header>
                 <q-item-section avatar class="drawer-section__icon">
-                  <q-icon :name="section.icon" size="18px" />
+                  <q-icon :name="section.icon" size="15px" />
                 </q-item-section>
                 <q-item-section>
                   <q-item-label class="drawer-section__label">{{ section.title }}</q-item-label>
@@ -109,7 +109,7 @@
                   active-class="drawer-menu-link--active"
                 >
                   <q-item-section avatar class="drawer-menu-link__avatar">
-                    <q-icon :name="link.icon" size="17px" />
+                    <q-icon :name="link.icon" size="14px" />
                   </q-item-section>
                   <q-item-section>
                     <q-item-label class="drawer-menu-link__label" lines="1">{{ link.title }}</q-item-label>
@@ -195,6 +195,7 @@ const menuSections = [
     icon: 'badge',
     links: [
       { title: 'Pacientes', icon: 'badge', link: '/pacientes', can: ['Ver Pacientes', 'Ver Internaciones'] },
+      { title: 'Doctores',  icon: 'medical_information', link: '/doctores', can: 'Ver Doctores' },
     ],
   },
 ]
@@ -264,15 +265,15 @@ function logout () {
 
 .drawer-shell {
   min-height: 100%;
-  padding: 8px 7px 10px;
+  padding: 6px 6px 8px;
 }
 
 .drawer-brand {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 7px;
-  margin-bottom: 6px;
+  padding: 5px 6px;
+  margin-bottom: 4px;
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.08);
@@ -312,7 +313,7 @@ function logout () {
 }
 
 .drawer-eyebrow {
-  padding: 3px 8px 5px;
+  padding: 2px 8px 3px;
   color: rgba(255, 255, 255, 0.66);
   font-size: 10px;
   font-weight: 800;
@@ -323,14 +324,14 @@ function logout () {
 .drawer-menu {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 1px;
 }
 
 .drawer-section-header {
-  min-height: 30px;
-  padding: 0 7px;
-  margin: 1px 2px;
-  border-radius: 9px;
+  min-height: 24px;
+  padding: 0 6px;
+  margin: 0 2px;
+  border-radius: 8px;
   color: #ffffff;
   background: rgba(255, 255, 255, 0.08);
 }
@@ -341,41 +342,41 @@ function logout () {
 }
 
 .drawer-section__icon {
-  min-width: 26px;
+  min-width: 22px;
 }
 
 .drawer-section__label {
-  font-size: 11px;
+  font-size: 10.5px;
   font-weight: 800;
   letter-spacing: 0;
 }
 
 .drawer-section__count {
-  min-width: 20px;
+  min-width: 18px;
   justify-content: center;
   background: rgba(255, 255, 255, 0.18);
   color: #ffffff;
-  font-size: 10px;
+  font-size: 9px;
 }
 
 .drawer-submenu {
-  padding: 1px 0 3px;
+  padding: 0 0 1px;
 }
 
 .drawer-menu-link {
-  min-height: 28px;
-  margin: 1px 5px 1px 13px;
-  padding: 0 7px;
-  border-radius: 8px;
+  min-height: 22px;
+  margin: 0 4px 0 12px;
+  padding: 0 6px;
+  border-radius: 7px;
   color: rgba(255, 255, 255, 0.86);
 }
 
 .drawer-menu-link__avatar {
-  min-width: 24px;
+  min-width: 20px;
 }
 
 .drawer-menu-link__label {
-  font-size: 11px;
+  font-size: 10.5px;
   font-weight: 650;
   line-height: 1.1;
   letter-spacing: 0;
@@ -388,15 +389,15 @@ function logout () {
 }
 
 .drawer-footer {
-  padding: 8px 9px 6px;
-  margin-top: 8px;
+  padding: 6px 8px 4px;
+  margin-top: 6px;
   color: rgba(255, 255, 255, 0.58);
   font-size: 10px;
   line-height: 1.35;
 }
 
 .drawer-logout {
-  min-height: 30px;
+  min-height: 24px;
   margin: 2px 5px 0;
   border-radius: 9px;
   color: #ffd9d4;

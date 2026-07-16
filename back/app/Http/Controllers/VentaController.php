@@ -21,7 +21,7 @@ class VentaController extends Controller
         $estado = $request->input('estado', '');
         $perPage = (int) $request->input('per_page', 15);
 
-        $query = Venta::with(['paciente:id,nombre_completo,ci', 'user:id,name'])
+        $query = Venta::with(['paciente:id,nombre_completo,ci', 'doctor:id,nombre', 'seguro:id,nombre', 'user:id,name'])
             ->withCount('detalles')
             ->orderByDesc('fecha_hora');
 
@@ -33,6 +33,7 @@ class VentaController extends Controller
         return response()->json([
             'resumen' => [
                 'total_ventas' => (clone $resumenQuery)->where('estado', 'ACTIVO')->sum('total'),
+                'total_pendientes' => (clone $resumenQuery)->where('estado', 'PENDIENTE')->sum('total'),
                 'total_anuladas' => (clone $resumenQuery)->where('estado', 'ANULADO')->sum('total'),
                 'cantidad' => (clone $resumenQuery)->count(),
             ],
@@ -43,7 +44,7 @@ class VentaController extends Controller
     public function show(Request $request, $id)
     {
         $this->req($request, 'Ver Ventas');
-        $venta = Venta::with(['paciente:id,nombre_completo,ci', 'user:id,name', 'detalles.producto:id,nombre,codigo'])
+        $venta = Venta::with(['paciente:id,nombre_completo,ci', 'doctor:id,nombre', 'seguro:id,nombre', 'user:id,name', 'detalles.producto:id,nombre,codigo'])
             ->findOrFail($id);
 
         return response()->json($venta);
@@ -55,12 +56,14 @@ class VentaController extends Controller
 
         $request->validate([
             'paciente_id' => 'nullable|exists:pacientes,id',
+            'doctor_id' => 'nullable|exists:doctores,id',
+            'seguro_id' => 'nullable|exists:seguros,id',
             'cliente' => 'nullable|string|max:255',
-            'doctor' => 'nullable|string|max:255',
             'fecha_hora' => 'required|date',
             'tipo_pago' => 'nullable|string|max:50',
             'comentario' => 'nullable|string|max:500',
             'pago' => 'nullable|numeric|min:0',
+            'estado' => 'nullable|in:ACTIVO,PENDIENTE',
             'detalles' => 'required|array|min:1',
             'detalles.*.producto_id' => 'nullable|exists:productos,id',
             'detalles.*.nombre' => 'required_without:detalles.*.producto_id|nullable|string|max:255',
@@ -68,16 +71,19 @@ class VentaController extends Controller
             'detalles.*.cantidad' => 'required|numeric|min:0.0001',
         ]);
 
-        $venta = DB::transaction(function () use ($request) {
+        $estado = $request->estado === 'PENDIENTE' ? 'PENDIENTE' : 'ACTIVO';
+
+        $venta = DB::transaction(function () use ($request, $estado) {
             $venta = Venta::create([
                 'user_id' => $request->user()->id,
                 'paciente_id' => $request->paciente_id ?: null,
+                'doctor_id' => $request->doctor_id ?: null,
+                'seguro_id' => $request->seguro_id ?: null,
                 'cliente' => $request->cliente ?: null,
-                'doctor' => $request->doctor ?: null,
                 'fecha_hora' => $request->fecha_hora,
                 'tipo_pago' => $request->tipo_pago ? mb_strtoupper($request->tipo_pago) : 'EFECTIVO',
                 'comentario' => $request->comentario ?: null,
-                'estado' => 'ACTIVO',
+                'estado' => $estado,
                 'total' => 0,
                 'pago' => 0,
                 'cambio' => 0,
@@ -101,6 +107,12 @@ class VentaController extends Controller
                 ]);
             }
 
+            if ($estado === 'PENDIENTE') {
+                $venta->update(['total' => $total]);
+
+                return $venta;
+            }
+
             $pago = (float) ($request->pago ?: $total);
             if ($pago < $total) {
                 abort(422, 'El pago no puede ser menor al total de la venta');
@@ -116,8 +128,36 @@ class VentaController extends Controller
         });
 
         return response()->json(
-            $venta->load(['paciente:id,nombre_completo,ci', 'user:id,name', 'detalles.producto:id,nombre,codigo']),
+            $venta->load(['paciente:id,nombre_completo,ci', 'doctor:id,nombre', 'seguro:id,nombre', 'user:id,name', 'detalles.producto:id,nombre,codigo']),
             201
+        );
+    }
+
+    public function completar(Request $request, $id)
+    {
+        $this->req($request, 'Crear Ventas');
+
+        $request->validate(['pago' => 'nullable|numeric|min:0']);
+
+        $venta = Venta::findOrFail($id);
+
+        if ($venta->estado !== 'PENDIENTE') {
+            abort(422, 'Solo se pueden cobrar ventas pendientes');
+        }
+
+        $pago = (float) ($request->pago ?: $venta->total);
+        if ($pago < (float) $venta->total) {
+            abort(422, 'El pago no puede ser menor al total de la venta');
+        }
+
+        $venta->update([
+            'estado' => 'ACTIVO',
+            'pago' => $pago,
+            'cambio' => round($pago - (float) $venta->total, 2),
+        ]);
+
+        return response()->json(
+            $venta->load(['paciente:id,nombre_completo,ci', 'doctor:id,nombre', 'seguro:id,nombre', 'user:id,name', 'detalles.producto:id,nombre,codigo'])
         );
     }
 

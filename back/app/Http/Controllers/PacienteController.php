@@ -9,7 +9,7 @@ class PacienteController extends Controller
 {
     public function index(Request $request)
     {
-        $this->req($request, 'Ver Pacientes');
+        $this->req($request, ['Ver Pacientes', 'Ver Ventas', 'Crear Ventas']);
 
         $q                 = $request->input('q', '');
         $tipoPaciente      = $request->input('tipo_paciente', '');
@@ -58,7 +58,7 @@ class PacienteController extends Controller
 
     public function store(Request $request)
     {
-        $this->req($request, 'Crear Pacientes');
+        $this->req($request, ['Crear Pacientes', 'Crear Ventas']);
         $request->validate([
             'nombre_completo' => 'required|string|max:255',
             'sexo'            => 'nullable|in:M,F',

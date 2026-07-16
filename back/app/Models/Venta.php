@@ -14,7 +14,7 @@ class Venta extends Model implements AuditableContract
     protected $table = 'ventas';
 
     protected $fillable = [
-        'user_id', 'paciente_id', 'cliente', 'doctor', 'fecha_hora',
+        'user_id', 'paciente_id', 'doctor_id', 'seguro_id', 'cliente', 'fecha_hora',
         'tipo_pago', 'comentario', 'estado', 'total', 'pago', 'cambio',
     ];
 
@@ -32,11 +32,6 @@ class Venta extends Model implements AuditableContract
         $this->attributes['cliente'] = $value !== null ? mb_strtoupper($value) : $value;
     }
 
-    public function setDoctorAttribute($value): void
-    {
-        $this->attributes['doctor'] = $value !== null ? mb_strtoupper($value) : $value;
-    }
-
     public function user()
     {
         return $this->belongsTo(User::class);
@@ -45,6 +40,16 @@ class Venta extends Model implements AuditableContract
     public function paciente()
     {
         return $this->belongsTo(Paciente::class);
+    }
+
+    public function doctor()
+    {
+        return $this->belongsTo(Doctor::class);
+    }
+
+    public function seguro()
+    {
+        return $this->belongsTo(Seguro::class);
     }
 
     public function detalles()

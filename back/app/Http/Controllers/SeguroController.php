@@ -9,7 +9,7 @@ class SeguroController extends Controller
 {
     public function index(Request $request)
     {
-        $this->req($request, 'Ver Seguros');
+        $this->req($request, ['Ver Seguros', 'Ver Ventas', 'Crear Ventas']);
 
         $q       = $request->input('q', '');
         $perPage = $request->input('per_page');

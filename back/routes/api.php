@@ -9,6 +9,7 @@ use App\Http\Controllers\InternacionItemController;
 use App\Http\Controllers\CompraController;
 use App\Http\Controllers\ProveedorController;
 use App\Http\Controllers\VentaController;
+use App\Http\Controllers\DoctorController;
 use Illuminate\Support\Facades\Route;
 
 // ── Rutas públicas ────────────────────────────────────────────
@@ -110,5 +111,14 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/ventas',                        [VentaController::class, 'index']);
     Route::get('/ventas/{id}',                   [VentaController::class, 'show']);
     Route::post('/ventas',                       [VentaController::class, 'store']);
+    Route::put('/ventas/{id}/completar',         [VentaController::class, 'completar']);
     Route::delete('/ventas/{id}',                [VentaController::class, 'destroy']);
+
+    // Doctores y especialidades
+    Route::get('/especialidades',                [DoctorController::class, 'especialidades']);
+    Route::post('/especialidades',               [DoctorController::class, 'storeEspecialidad']);
+    Route::get('/doctores',                      [DoctorController::class, 'index']);
+    Route::post('/doctores',                     [DoctorController::class, 'store']);
+    Route::put('/doctores/{id}',                 [DoctorController::class, 'update']);
+    Route::delete('/doctores/{id}',              [DoctorController::class, 'destroy']);
 });

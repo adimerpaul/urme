@@ -2,8 +2,8 @@ import {boot} from 'quasar/wrappers'
 import axios from 'axios'
 import {Alert} from "../addons/Alert";
 import {useCounterStore} from "../stores/example-store";
-import moment from "moment";
 import VueApexCharts from "vue3-apexcharts";
+import { formatBoliviaDateDmYHis, formatBoliviaDate, formatBoliviaTime } from "../addons/dateTime";
 
 import {computed} from "vue";
 // Be careful when using SSR for cross-request state pollution
@@ -29,18 +29,13 @@ export default boot(({ app, router }) => {
   app.config.globalProperties.$version = import.meta.env.VITE_VERSION
   app.config.globalProperties.$filters = {
     dateDmYHis (value) {
-      const meses = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Set', 'Oct', 'Nov', 'Dic']
-      const mes = meses[moment(String(value)).format('MM') - 1]
-      if (!value) return ''
-      return moment(String(value)).format('DD') + ' ' + mes + ' ' + moment(String(value)).format('YYYY') + ' ' + moment(String(value)).format('hh:mm A')
+      return formatBoliviaDateDmYHis(value, '')
     },
     date: (value) => {
-      if (!value) return ''
-      return new Date(value).toLocaleDateString()
+      return formatBoliviaDate(value, '')
     },
     time: (value) => {
-      if (!value) return ''
-      return new Date(value).toLocaleTimeString()
+      return formatBoliviaTime(value, '')
     },
     textCapitalize: (value) => {
       if (!value) return ''

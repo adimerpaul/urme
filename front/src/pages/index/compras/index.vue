@@ -395,6 +395,7 @@
 <script setup>
 import { ref, computed, watch, getCurrentInstance } from 'vue'
 import { imprimirCompra } from '../../../addons/compraPrint'
+import { formatBoliviaDateTime, nowBoliviaDateTimeInput } from '../../../addons/dateTime'
 
 const { proxy } = getCurrentInstance()
 
@@ -409,17 +410,7 @@ const resumen = ref({ total_compras: 0, total_anuladas: 0, cantidad: 0 })
 const allProveedores = ref([])
 
 function money (v) { return Number(v || 0).toFixed(2) }
-function formatFecha (v) {
-  if (!v) return '—'
-  const valor = String(v).trim().replace('T', ' ').replace('Z', '')
-  const [fecha, hora = ''] = valor.split(' ')
-  return hora ? `${fecha} ${hora.slice(0, 5)}` : fecha
-}
-function nowLocalDateTimeInput () {
-  const now = new Date()
-  const local = new Date(now.getTime() - (now.getTimezoneOffset() * 60000))
-  return local.toISOString().slice(0, 16)
-}
+function formatFecha (v) { return formatBoliviaDateTime(v) }
 
 // ── Historial ──────────────────────────────────────────────────
 const compras        = ref([])
@@ -521,7 +512,7 @@ let lineaUid = 0
 function nuevaCompraVacia () {
   return {
     proveedor_id: null,
-    fecha_hora: nowLocalDateTimeInput(),
+    fecha_hora: nowBoliviaDateTimeInput(),
     nro_factura: '',
     tipo_pago: 'EFECTIVO',
     comentario: '',

@@ -467,6 +467,7 @@
 <script setup>
 import { ref, computed, watch, getCurrentInstance } from 'vue'
 import { imprimirVenta } from '../../../addons/ventaPrint'
+import { formatBoliviaDateTime, nowBoliviaDateTimeInput } from '../../../addons/dateTime'
 
 const { proxy } = getCurrentInstance()
 
@@ -479,7 +480,7 @@ const tab     = ref('historial')
 const resumen = ref({ total_ventas: 0, total_pendientes: 0, total_anuladas: 0, cantidad: 0 })
 
 function money (v) { return Number(v || 0).toFixed(2) }
-function formatFecha (v) { return v ? v.replace('T', ' ').slice(0, 16) : '—' }
+function formatFecha (v) { return formatBoliviaDateTime(v) }
 
 function estadoColor (estado) {
   if (estado === 'ANULADO') return { bg: 'red-1', text: 'negative' }
@@ -651,7 +652,7 @@ function nuevaVentaVacia () {
     doctor_id: null,
     seguro_id: null,
     cliente: '',
-    fecha_hora: new Date().toISOString().slice(0, 16),
+    fecha_hora: nowBoliviaDateTimeInput(),
     tipo_pago: 'EFECTIVO',
     comentario: '',
     pago: null,

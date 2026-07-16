@@ -63,7 +63,7 @@ class VentaController extends Controller
             'tipo_pago' => 'nullable|string|max:50',
             'comentario' => 'nullable|string|max:500',
             'pago' => 'nullable|numeric|min:0',
-            'estado' => 'nullable|in:ACTIVO,PENDIENTE',
+//            'estado' => 'nullable|in:ACTIVO,PENDIENTE',
             'detalles' => 'required|array|min:1',
             'detalles.*.producto_id' => 'nullable|exists:productos,id',
             'detalles.*.nombre' => 'required_without:detalles.*.producto_id|nullable|string|max:255',

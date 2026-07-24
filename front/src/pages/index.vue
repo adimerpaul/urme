@@ -204,7 +204,9 @@ const menuSections = [
     title: 'Laboratorio',
     icon: 'biotech',
     links: [
-      { title: 'Productos', icon: 'science', link: '/laboratorio', can: 'Ver Productos' },
+      { title: 'Catálogo de pruebas', icon: 'science', link: '/laboratorio', can: 'Ver Productos' },
+      { title: 'Laboratorios creados', icon: 'assignment', link: '/solicitudes-laboratorio', can: 'Ver Solicitudes Laboratorio' },
+      { title: 'Crear laboratorio', icon: 'post_add', link: '/solicitudes-laboratorio/nueva', can: 'Crear Solicitudes Laboratorio' },
     ],
   },
 ]

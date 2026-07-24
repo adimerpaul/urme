@@ -10,6 +10,7 @@ use App\Http\Controllers\ProductoLaboratorioController;
 use App\Http\Controllers\ProductoVencimientoController;
 use App\Http\Controllers\ProveedorController;
 use App\Http\Controllers\SeguroController;
+use App\Http\Controllers\SolicitudeController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\VentaController;
 use Illuminate\Support\Facades\Route;
@@ -79,6 +80,16 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/productos/{producto}/laboratorio-formulas', [ProductoLaboratorioController::class, 'storeFormula']);
     Route::put('/producto-laboratorio-formulas/{formula}', [ProductoLaboratorioController::class, 'updateFormula']);
     Route::delete('/producto-laboratorio-formulas/{formula}', [ProductoLaboratorioController::class, 'destroyFormula']);
+
+    // Solicitudes de laboratorio
+    Route::get('/solicitudes-laboratorio/form-data', [SolicitudeController::class, 'formData']);
+    Route::get('/solicitudes-laboratorio/pacientes', [SolicitudeController::class, 'pacientes']);
+    Route::get('/solicitudes-laboratorio', [SolicitudeController::class, 'index']);
+    Route::post('/solicitudes-laboratorio', [SolicitudeController::class, 'store']);
+    Route::get('/solicitudes-laboratorio/{solicitude}/pdf', [SolicitudeController::class, 'pdf']);
+    Route::put('/solicitudes-laboratorio/{solicitude}', [SolicitudeController::class, 'update']);
+    Route::get('/solicitudes-laboratorio/{solicitude}', [SolicitudeController::class, 'show']);
+    Route::delete('/solicitudes-laboratorio/{solicitude}', [SolicitudeController::class, 'destroy']);
     Route::get('/productos', [ProductoController::class, 'index']);
     Route::post('/productos', [ProductoController::class, 'store']);
     Route::put('/productos/{id}', [ProductoController::class, 'update']);

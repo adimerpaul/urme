@@ -6,6 +6,7 @@ use App\Models\Producto;
 use App\Models\ProductoLaboratorioDato;
 use App\Models\ProductoLaboratorioFormula;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
@@ -16,7 +17,7 @@ class ProductoLaboratorioController extends Controller
         $this->authorizeAny($request, ['Ver Productos', 'Editar Productos']);
         $this->ensureLaboratorio($producto);
 
-        return response()->json($producto->load(['laboratorioDatos', 'laboratorioFormulas']));
+        return response()->json($producto->load(['laboratorioDatos.formula', 'laboratorioFormulas']));
     }
 
     public function storeDato(Request $request, Producto $producto)
@@ -25,6 +26,7 @@ class ProductoLaboratorioController extends Controller
         $this->ensureLaboratorio($producto);
         $data = $this->validateDato($request, $producto);
         $data['producto_id'] = $producto->id;
+        $data['orden'] = ((int) $producto->laboratorioDatos()->max('orden')) + 10;
 
         return response()->json(ProductoLaboratorioDato::create($data), 201);
     }
@@ -34,6 +36,12 @@ class ProductoLaboratorioController extends Controller
         $this->authorizeAny($request, 'Editar Productos');
         $this->ensureLaboratorio($dato->producto);
         $dato->update($this->validateDato($request, $dato->producto, $dato));
+        $dato->formula?->update([
+            'nombre' => $dato->nombre,
+            'nombre_variable' => $dato->nombre_variable,
+            'unidad' => $dato->unidad,
+            'visible' => $dato->visible,
+        ]);
 
         return response()->json($dato);
     }
@@ -53,9 +61,63 @@ class ProductoLaboratorioController extends Controller
             ], 422);
         }
 
+        $dato->formula?->delete();
         $dato->delete();
 
         return response()->json(['message' => 'Dato eliminado']);
+    }
+
+    public function storeDatoFormula(Request $request, ProductoLaboratorioDato $dato)
+    {
+        $this->authorizeAny($request, 'Editar Productos');
+        $this->ensureLaboratorio($dato->producto);
+        $data = $this->validateDatoFormula($request, $dato);
+
+        $formula = $dato->formula()->withTrashed()->first() ?? new ProductoLaboratorioFormula;
+        $formula->fill([
+            ...$data,
+            'producto_id' => $dato->producto_id,
+            'producto_laboratorio_dato_id' => $dato->id,
+            'nombre' => $dato->nombre,
+            'nombre_variable' => $dato->nombre_variable,
+            'unidad' => $dato->unidad,
+            'orden' => $dato->orden,
+            'visible' => $dato->visible,
+        ]);
+        $formula->deleted_at = null;
+        $formula->save();
+
+        return response()->json($formula, 201);
+    }
+
+    public function reorderDatos(Request $request, Producto $producto)
+    {
+        $this->authorizeAny($request, 'Editar Productos');
+        $this->ensureLaboratorio($producto);
+
+        $validated = $request->validate([
+            'ids' => ['required', 'array'],
+            'ids.*' => ['required', 'integer', 'distinct'],
+        ]);
+
+        $currentIds = $producto->laboratorioDatos()->pluck('id')->sort()->values();
+        $requestedIds = collect($validated['ids'])->sort()->values();
+
+        if ($currentIds->all() !== $requestedIds->all()) {
+            throw ValidationException::withMessages([
+                'ids' => 'La lista de datos no corresponde al laboratorio seleccionado.',
+            ]);
+        }
+
+        DB::transaction(function () use ($validated, $producto) {
+            foreach ($validated['ids'] as $index => $id) {
+                $producto->laboratorioDatos()->whereKey($id)->update([
+                    'orden' => ($index + 1) * 10,
+                ]);
+            }
+        });
+
+        return response()->json(['message' => 'Orden actualizado']);
     }
 
     public function storeFormula(Request $request, Producto $producto)
@@ -64,6 +126,7 @@ class ProductoLaboratorioController extends Controller
         $this->ensureLaboratorio($producto);
         $data = $this->validateFormula($request, $producto);
         $data['producto_id'] = $producto->id;
+        $data['orden'] = ((int) $producto->laboratorioFormulas()->max('orden')) + 10;
 
         return response()->json(ProductoLaboratorioFormula::create($data), 201);
     }
@@ -72,7 +135,11 @@ class ProductoLaboratorioController extends Controller
     {
         $this->authorizeAny($request, 'Editar Productos');
         $this->ensureLaboratorio($formula->producto);
-        $formula->update($this->validateFormula($request, $formula->producto, $formula));
+        if ($formula->dato) {
+            $formula->update($this->validateDatoFormula($request, $formula->dato));
+        } else {
+            $formula->update($this->validateFormula($request, $formula->producto, $formula));
+        }
 
         return response()->json($formula);
     }
@@ -105,7 +172,6 @@ class ProductoLaboratorioController extends Controller
             ],
             'unidad' => 'nullable|string|max:100',
             'rango_referencia' => 'nullable|string|max:2000',
-            'orden' => 'nullable|integer|min:0',
             'visible' => 'required|boolean',
         ]);
 
@@ -116,7 +182,10 @@ class ProductoLaboratorioController extends Controller
             ? mb_strtoupper(trim($data['rango_referencia']))
             : null;
 
-        if ($producto->laboratorioFormulas()->where('nombre_variable', $data['nombre_variable'])->exists()) {
+        if ($producto->laboratorioFormulas()
+            ->when($dato, fn ($query) => $query->where('producto_laboratorio_dato_id', '!=', $dato->id))
+            ->where('nombre_variable', $data['nombre_variable'])
+            ->exists()) {
             throw ValidationException::withMessages([
                 'nombre_variable' => 'La variable ya está utilizada como resultado de una fórmula.',
             ]);
@@ -144,7 +213,6 @@ class ProductoLaboratorioController extends Controller
             ],
             'formula' => ['required', 'string', 'max:2000', 'regex:/^[a-zA-Z0-9_+\-*\/().\s]+$/'],
             'unidad' => 'nullable|string|max:100',
-            'orden' => 'nullable|integer|min:0',
             'visible' => 'required|boolean',
         ]);
 
@@ -178,6 +246,34 @@ class ProductoLaboratorioController extends Controller
                 'nombre_variable' => 'La variable ya está utilizada por un dato del laboratorio.',
             ]);
         }
+
+        return $data;
+    }
+
+    private function validateDatoFormula(Request $request, ProductoLaboratorioDato $dato): array
+    {
+        $data = $request->validate([
+            'formula' => ['required', 'string', 'max:2000', 'regex:/^[a-zA-Z0-9_+\-*\/().\s]+$/'],
+        ]);
+
+        $variables = $dato->producto->laboratorioDatos()
+            ->whereKeyNot($dato->id)
+            ->pluck('nombre_variable');
+
+        preg_match_all('/\b[a-zA-Z][a-zA-Z0-9_]*\b/', $data['formula'], $matches);
+        $unknown = collect($matches[0])
+            ->map(fn ($value) => mb_strtolower($value))
+            ->diff($variables)
+            ->unique()
+            ->values();
+
+        if ($unknown->isNotEmpty()) {
+            throw ValidationException::withMessages([
+                'formula' => 'Variables desconocidas: '.$unknown->join(', '),
+            ]);
+        }
+
+        $data['formula'] = mb_strtolower(trim($data['formula']));
 
         return $data;
     }

@@ -31,4 +31,9 @@ class ProductoLaboratorioDato extends Model implements AuditableContract
     {
         return $this->belongsTo(Producto::class);
     }
+
+    public function formula()
+    {
+        return $this->hasOne(ProductoLaboratorioFormula::class);
+    }
 }

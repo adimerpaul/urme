@@ -159,57 +159,46 @@
               </div>
               <q-table flat bordered dense row-key="id" :rows="datos" :columns="datoColumns"
                        :loading="adminLoading" :rows-per-page-options="[0]">
-                <template #body-cell-nombre_variable="props">
-                  <q-td :props="props">
-                    <q-badge outline color="primary" class="text-mono">
-                      {{ props.row.nombre_variable }}
-                    </q-badge>
-                  </q-td>
-                </template>
-                <template #body-cell-visible="props">
-                  <q-td :props="props"><q-badge :color="props.row.visible ? 'positive' : 'grey'">{{ props.row.visible ? 'SÍ' : 'NO' }}</q-badge></q-td>
-                </template>
-                <template #body-cell-acciones="props">
-                  <q-td :props="props">
-                    <q-btn v-if="canEditar" flat round dense color="primary" icon="edit" @click="editarDato(props.row)" />
-                    <q-btn v-if="canEditar" flat round dense color="negative" icon="delete" @click="eliminarDato(props.row)" />
-                  </q-td>
-                </template>
-              </q-table>
-            </q-card-section>
-          </q-card>
-
-          <q-card flat bordered>
-            <q-card-section class="q-pa-sm">
-              <div class="row items-center q-mb-sm">
-                <div>
-                  <div class="row items-center q-gutter-sm">
-                    <q-icon name="functions" color="deep-purple" size="22px" />
-                    <div class="text-subtitle1 text-weight-bold">Fórmulas derivadas</div>
-                    <q-badge color="deep-purple">{{ formulas.length }}</q-badge>
-                  </div>
-                  <div class="text-caption text-grey-7">Use las variables de los datos para calcular resultados derivados.</div>
-                </div>
-                <q-space />
-                <q-btn v-if="canEditar" color="deep-purple" icon="add" label="Nueva fórmula" no-caps
-                       :disable="!datos.length" @click="nuevaFormula" />
-              </div>
-              <q-table flat bordered dense row-key="id" :rows="formulas" :columns="formulaColumns"
-                       :loading="adminLoading" :rows-per-page-options="[0]">
-                <template #body-cell-variable="props">
-                  <q-td :props="props"><code>{{ props.row.nombre_variable }}</code></q-td>
-                </template>
-                <template #body-cell-formula="props">
-                  <q-td :props="props"><code class="text-deep-purple">{{ props.row.formula }}</code></q-td>
-                </template>
-                <template #body-cell-visible="props">
-                  <q-td :props="props"><q-badge :color="props.row.visible ? 'positive' : 'grey'">{{ props.row.visible ? 'SÍ' : 'NO' }}</q-badge></q-td>
-                </template>
-                <template #body-cell-acciones="props">
-                  <q-td :props="props">
-                    <q-btn v-if="canEditar" flat round dense color="primary" icon="edit" @click="editarFormula(props.row)" />
-                    <q-btn v-if="canEditar" flat round dense color="negative" icon="delete" @click="eliminarFormula(props.row)" />
-                  </q-td>
+                <template #body="props">
+                  <q-tr :props="props"
+                        :draggable="canEditar"
+                        :class="{ 'laboratorio-row--dragging': draggedDatoId === props.row.id }"
+                        @dragstart="iniciarArrastreDato($event, props.row)"
+                        @dragover.prevent
+                        @drop.prevent="soltarDato(props.row)"
+                        @dragend="finalizarArrastreDato">
+                    <q-td key="arrastrar" :props="props">
+                      <q-icon v-if="canEditar" name="drag_indicator" color="grey-7" size="22px"
+                              class="cursor-grab">
+                        <q-tooltip>Arrastre para cambiar el orden</q-tooltip>
+                      </q-icon>
+                    </q-td>
+                    <q-td key="acciones" :props="props">
+                      <q-btn v-if="canEditar" flat round dense color="primary" icon="edit" @click="editarDato(props.row)" />
+                      <q-btn v-if="canEditar" flat round dense color="deep-purple" icon="functions"
+                             @click="administrarFormulaDato(props.row)">
+                        <q-tooltip>{{ props.row.formula ? 'Modificar fórmula' : 'Agregar fórmula' }}</q-tooltip>
+                      </q-btn>
+                      <q-btn v-if="canEditar && props.row.formula" flat round dense color="orange-9"
+                             icon="settings_power" @click="eliminarFormula(props.row.formula)">
+                        <q-tooltip>Quitar fórmula del dato</q-tooltip>
+                      </q-btn>
+                      <q-btn v-if="canEditar" flat round dense color="negative" icon="delete" @click="eliminarDato(props.row)" />
+                    </q-td>
+                    <q-td key="nombre" :props="props">{{ props.row.nombre }}</q-td>
+                    <q-td key="nombre_variable" :props="props">
+                      <q-badge outline color="primary" class="text-mono">{{ props.row.nombre_variable }}</q-badge>
+                    </q-td>
+                    <q-td key="unidad" :props="props">{{ props.row.unidad || '—' }}</q-td>
+                    <q-td key="rango_referencia" :props="props">{{ props.row.rango_referencia || '—' }}</q-td>
+                    <q-td key="formula" :props="props">
+                      <code v-if="props.row.formula" class="text-deep-purple">{{ props.row.formula.formula }}</code>
+                      <span v-else class="text-grey-6">INGRESO MANUAL</span>
+                    </q-td>
+                    <q-td key="visible" :props="props">
+                      <q-badge :color="props.row.visible ? 'positive' : 'grey'">{{ props.row.visible ? 'SÍ' : 'NO' }}</q-badge>
+                    </q-td>
+                  </q-tr>
                 </template>
               </q-table>
             </q-card-section>
@@ -237,9 +226,6 @@
             </div>
             <div class="col-12 col-sm-4">
               <q-input v-model="datoForm.unidad" dense outlined label="Unidad" hint="mg/dL, %, U/L..." />
-            </div>
-            <div class="col-12 col-sm-4">
-              <q-input v-model.number="datoForm.orden" dense outlined type="number" min="0" label="Orden" />
             </div>
             <div class="col-12 col-sm-4"><q-toggle v-model="datoForm.visible" label="Visible" /></div>
             <div class="col-12">
@@ -270,13 +256,11 @@
         </q-card-section>
         <q-form @submit.prevent="guardarFormula">
           <q-card-section class="row q-col-gutter-sm">
-            <div class="col-12 col-sm-7">
-              <q-input v-model="formulaForm.nombre" v-uppercase dense outlined label="Nombre del resultado"
-                       @update:model-value="actualizarVariableFormula" />
-            </div>
-            <div class="col-12 col-sm-5">
-              <q-input v-model="formulaForm.nombre_variable" dense outlined label="Variable resultado *"
-                       :rules="[required, validVariable]" />
+            <div class="col-12">
+              <q-banner dense rounded class="bg-blue-1 text-blue-10">
+                Resultado: <strong>{{ formulaDato?.nombre }}</strong>
+                (<code>{{ formulaDato?.nombre_variable }}</code>)
+              </q-banner>
             </div>
             <div class="col-12">
               <q-input v-model="formulaForm.formula" dense outlined label="Fórmula *"
@@ -298,9 +282,6 @@
                 Haga clic en las variables disponibles para agregarlas.
               </q-banner>
             </div>
-            <div class="col-12 col-sm-4"><q-input v-model="formulaForm.unidad" dense outlined label="Unidad del resultado" /></div>
-            <div class="col-12 col-sm-4"><q-input v-model.number="formulaForm.orden" dense outlined type="number" min="0" label="Orden" /></div>
-            <div class="col-12 col-sm-4"><q-toggle v-model="formulaForm.visible" label="Visible" /></div>
           </q-card-section>
           <q-card-actions align="right">
             <q-btn flat label="Cancelar" no-caps v-close-popup />
@@ -333,7 +314,9 @@ const datoDialog = ref(false)
 const datoForm = ref({})
 const formulaDialog = ref(false)
 const formulaForm = ref({})
+const formulaDato = ref(null)
 const formulaError = ref('')
+const draggedDatoId = ref(null)
 const pagination = ref({ page: 1, rowsPerPage: 20, rowsNumber: 0 })
 
 const columns = [
@@ -344,30 +327,21 @@ const columns = [
   { name: 'precio', label: 'Precio', field: 'precio', align: 'right', sortable: true },
 ]
 const datoColumns = [
+  { name: 'arrastrar', label: '', field: 'id', align: 'center' },
   { name: 'acciones', label: 'Opciones', field: 'id', align: 'center' },
-  { name: 'orden', label: 'Orden', field: 'orden', align: 'right' },
   { name: 'nombre', label: 'Nombre', field: 'nombre', align: 'left' },
   { name: 'nombre_variable', label: 'Variable', field: 'nombre_variable', align: 'left' },
   { name: 'unidad', label: 'Unidad', field: row => row.unidad || '—', align: 'left' },
   { name: 'rango_referencia', label: 'Rangos de referencia', field: row => row.rango_referencia || '—', align: 'left' },
-  { name: 'visible', label: 'Visible', field: 'visible', align: 'center' },
-]
-const formulaColumns = [
-  { name: 'acciones', label: 'Opciones', field: 'id', align: 'center' },
-  { name: 'orden', label: 'Orden', field: 'orden', align: 'right' },
-  { name: 'nombre', label: 'Nombre', field: row => row.nombre || '—', align: 'left' },
-  { name: 'variable', label: 'Variable resultado', field: 'nombre_variable', align: 'left' },
-  { name: 'formula', label: 'Fórmula', field: 'formula', align: 'left' },
-  { name: 'unidad', label: 'Unidad', field: row => row.unidad || '—', align: 'left' },
+  { name: 'formula', label: 'Fórmula aplicada', field: row => row.formula?.formula || '', align: 'left' },
   { name: 'visible', label: 'Visible', field: 'visible', align: 'center' },
 ]
 
 const canVer = computed(() => proxy.$store.hasPermission('Ver Productos'))
 const canEditar = computed(() => proxy.$store.hasPermission('Editar Productos'))
 const variablesDisponibles = computed(() => [
-  ...datos.value.map(item => item.nombre_variable),
-  ...formulas.value
-    .filter(item => item.id !== formulaForm.value.id)
+  ...datos.value
+    .filter(item => item.id !== formulaDato.value?.id)
     .map(item => item.nombre_variable),
 ])
 
@@ -458,7 +432,7 @@ async function cargarConfiguracion () {
 }
 
 function nuevoDato () {
-  datoForm.value = { nombre: '', nombre_variable: '', unidad: '', rango_referencia: '', orden: (datos.value.length + 1) * 10, visible: true }
+  datoForm.value = { nombre: '', nombre_variable: '', unidad: '', rango_referencia: '', visible: true }
   datoDialog.value = true
 }
 function editarDato (dato) {
@@ -497,18 +471,42 @@ function eliminarDato (dato) {
   })
 }
 
-function nuevaFormula () {
-  formulaForm.value = { nombre: '', nombre_variable: '', formula: '', unidad: '', orden: (formulas.value.length + 1) * 10, visible: true }
+function iniciarArrastreDato (event, dato) {
+  draggedDatoId.value = dato.id
+  event.dataTransfer.effectAllowed = 'move'
+  event.dataTransfer.setData('text/plain', String(dato.id))
+}
+async function soltarDato (destino) {
+  const origenIndex = datos.value.findIndex(item => item.id === draggedDatoId.value)
+  const destinoIndex = datos.value.findIndex(item => item.id === destino.id)
+  if (origenIndex < 0 || destinoIndex < 0 || origenIndex === destinoIndex) return
+
+  const ordenAnterior = [...datos.value]
+  const nuevosDatos = [...datos.value]
+  const [movido] = nuevosDatos.splice(origenIndex, 1)
+  nuevosDatos.splice(destinoIndex, 0, movido)
+  datos.value = nuevosDatos
+
+  try {
+    await proxy.$axios.put(`productos/${productoAdmin.value.id}/laboratorio-datos/orden`, {
+      ids: nuevosDatos.map(item => item.id),
+    })
+  } catch (error) {
+    datos.value = ordenAnterior
+    proxy.$alert.error(error.response?.data?.message || 'No se pudo actualizar el orden')
+  } finally {
+    draggedDatoId.value = null
+  }
+}
+function finalizarArrastreDato () {
+  draggedDatoId.value = null
+}
+
+function administrarFormulaDato (dato) {
+  formulaDato.value = dato
+  formulaForm.value = dato.formula ? { ...dato.formula } : { formula: '' }
   formulaError.value = ''
   formulaDialog.value = true
-}
-function editarFormula (formula) {
-  formulaForm.value = { ...formula }
-  formulaError.value = ''
-  formulaDialog.value = true
-}
-function actualizarVariableFormula () {
-  if (!formulaForm.value.id) formulaForm.value.nombre_variable = toVariable(formulaForm.value.nombre)
 }
 function insertarVariable (variable) {
   formulaForm.value.formula = `${formulaForm.value.formula || ''} ${variable}`.trim()
@@ -528,9 +526,13 @@ async function guardarFormula () {
   saving.value = true
   try {
     if (formulaForm.value.id) {
-      await proxy.$axios.put(`producto-laboratorio-formulas/${formulaForm.value.id}`, formulaForm.value)
+      await proxy.$axios.put(`producto-laboratorio-formulas/${formulaForm.value.id}`, {
+        formula: formulaForm.value.formula,
+      })
     } else {
-      await proxy.$axios.post(`productos/${productoAdmin.value.id}/laboratorio-formulas`, formulaForm.value)
+      await proxy.$axios.post(`producto-laboratorio-datos/${formulaDato.value.id}/formula`, {
+        formula: formulaForm.value.formula,
+      })
     }
     formulaDialog.value = false
     proxy.$alert.success('Fórmula guardada')
@@ -557,3 +559,13 @@ function firstValidationError (error) {
   return errors ? Object.values(errors).flat()[0] : null
 }
 </script>
+
+<style scoped>
+.laboratorio-row--dragging {
+  opacity: 0.45;
+}
+
+.cursor-grab {
+  cursor: grab;
+}
+</style>

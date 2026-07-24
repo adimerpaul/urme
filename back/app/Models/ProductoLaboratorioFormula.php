@@ -15,6 +15,7 @@ class ProductoLaboratorioFormula extends Model implements AuditableContract
 
     protected $fillable = [
         'producto_id',
+        'producto_laboratorio_dato_id',
         'nombre',
         'nombre_variable',
         'formula',
@@ -30,5 +31,10 @@ class ProductoLaboratorioFormula extends Model implements AuditableContract
     public function producto()
     {
         return $this->belongsTo(Producto::class);
+    }
+
+    public function dato()
+    {
+        return $this->belongsTo(ProductoLaboratorioDato::class, 'producto_laboratorio_dato_id');
     }
 }

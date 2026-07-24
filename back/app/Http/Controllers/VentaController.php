@@ -2,8 +2,8 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Producto;
 use App\Models\CompraDetalle;
+use App\Models\Producto;
 use App\Models\Venta;
 use App\Models\VentaDetalle;
 use Illuminate\Http\Request;
@@ -22,7 +22,13 @@ class VentaController extends Controller
         $estado = $request->input('estado', '');
         $perPage = (int) $request->input('per_page', 15);
 
-        $query = Venta::with(['paciente:id,nombre_completo,ci', 'doctor:id,nombre', 'seguro:id,nombre', 'user:id,name'])
+        $query = Venta::with([
+            'paciente:id,nombre_completo,ci',
+            'doctor:id,nombre',
+            'seguro:id,nombre',
+            'user:id,name',
+            'detalles:id,venta_id,nombre,lote,precio,cantidad,total',
+        ])
             ->withCount('detalles')
             ->orderByDesc('fecha_hora');
 
@@ -64,7 +70,7 @@ class VentaController extends Controller
             'tipo_pago' => 'nullable|string|max:50',
             'comentario' => 'nullable|string|max:500',
             'pago' => 'nullable|numeric|min:0',
-//            'estado' => 'nullable|in:ACTIVO,PENDIENTE',
+            //            'estado' => 'nullable|in:ACTIVO,PENDIENTE',
             'detalles' => 'required|array|min:1',
             'detalles.*.producto_id' => 'nullable|exists:productos,id',
             'detalles.*.compra_detalle_id' => 'nullable|exists:compra_detalles,id',

@@ -59,10 +59,14 @@
         <template v-slot:body-cell-actions="props">
           <q-td :props="props" @click.stop>
             <q-btn-dropdown
-              v-if="canEditar || canEliminar"
+              v-if="canVer || canEditar || canEliminar"
               label="Opciones" no-caps size="10px" dense color="primary"
             >
               <q-list>
+                <q-item v-if="canVer" clickable v-close-popup @click="abrirHistorial(props.row)">
+                  <q-item-section avatar><q-icon name="history" color="primary" /></q-item-section>
+                  <q-item-section><q-item-label>Historial de pacientes</q-item-label></q-item-section>
+                </q-item>
                 <q-item v-if="canEditar" clickable v-close-popup @click="docEdit(props.row)">
                   <q-item-section avatar><q-icon name="edit" /></q-item-section>
                   <q-item-section><q-item-label>Editar</q-item-label></q-item-section>
@@ -126,6 +130,58 @@
         </q-card>
       </q-dialog>
 
+      <!-- Historial de pacientes atendidos -->
+      <q-dialog v-model="dialogHistorial" :maximized="$q.screen.lt.md">
+        <q-card style="width:min(96vw,950px);max-width:950px">
+          <q-card-section class="row items-center bg-primary text-white q-py-sm">
+            <q-icon name="history" size="20px" class="q-mr-sm" />
+            <div>
+              <div class="text-subtitle1 text-weight-bold">Historial de pacientes</div>
+              <div class="text-caption">{{ doctorHistorial?.nombre }}</div>
+            </div>
+            <q-space />
+            <q-badge color="white" text-color="primary" class="q-mr-sm">
+              {{ pacientesUnicos }} pacientes
+            </q-badge>
+            <q-btn icon="close" flat round dense color="white" @click="dialogHistorial = false" />
+          </q-card-section>
+          <q-card-section class="q-pa-sm">
+            <q-input v-model="filtroHistorial" dense outlined clearable debounce="400"
+                     placeholder="Buscar paciente o CI" class="q-mb-sm"
+                     @update:model-value="buscarHistorial">
+              <template #prepend><q-icon name="search" /></template>
+            </q-input>
+            <q-table
+              flat dense bordered row-key="id"
+              :rows="atenciones"
+              :columns="columnasHistorial"
+              :loading="loadingHistorial"
+              v-model:pagination="paginacionHistorial"
+              :rows-per-page-options="[10, 20, 50]"
+              no-data-label="Este doctor no tiene pacientes registrados"
+              @request="solicitarHistorial"
+            >
+              <template #body-cell-paciente="props">
+                <q-td :props="props">
+                  <div class="text-weight-bold">{{ props.row.paciente?.nombre_completo }}</div>
+                  <div class="text-caption text-grey-7">
+                    CI: {{ props.row.paciente?.ci || 'S/CI' }}
+                    <span v-if="props.row.paciente?.telefono"> · {{ props.row.paciente.telefono }}</span>
+                  </div>
+                </q-td>
+              </template>
+              <template #body-cell-estado="props">
+                <q-td :props="props">
+                  <q-badge :color="props.row.estado === 'ANULADO' ? 'negative' : props.row.estado === 'PENDIENTE' ? 'warning' : 'positive'">
+                    {{ props.row.estado }}
+                  </q-badge>
+                </q-td>
+              </template>
+            </q-table>
+          </q-card-section>
+        </q-card>
+      </q-dialog>
+
       <!-- Quick especialidad -->
       <q-dialog v-model="espQuick" persistent>
         <q-card style="width:min(96vw,380px)">
@@ -165,6 +221,22 @@ const estado   = ref(null)
 const especialidades = ref([])
 
 const pagination = ref({ page: 1, rowsPerPage: 10, rowsNumber: 0 })
+
+const dialogHistorial = ref(false)
+const doctorHistorial = ref(null)
+const atenciones = ref([])
+const pacientesUnicos = ref(0)
+const filtroHistorial = ref('')
+const loadingHistorial = ref(false)
+const paginacionHistorial = ref({ page: 1, rowsPerPage: 10, rowsNumber: 0 })
+const columnasHistorial = [
+  { name: 'fecha', label: 'Fecha', field: 'fecha_hora', align: 'left', format: value => proxy.$filters.dateDmYHis(value) },
+  { name: 'paciente', label: 'Paciente', field: row => row.paciente?.nombre_completo, align: 'left' },
+  { name: 'seguro', label: 'Seguro', field: row => row.seguro?.nombre || 'PARTICULAR', align: 'left' },
+  { name: 'detalles', label: 'Ítems', field: 'detalles_count', align: 'center' },
+  { name: 'total', label: 'Total', field: 'total', align: 'right', format: value => `${Number(value || 0).toFixed(2)} Bs` },
+  { name: 'estado', label: 'Estado', field: 'estado', align: 'center' },
+]
 
 const columns = [
   { name: 'actions',        label: 'Acciones',       align: 'center' },
@@ -209,6 +281,46 @@ function fetchEspecialidades () {
   proxy.$axios.get('especialidades').then(res => {
     especialidades.value = res.data || []
   }).catch(() => { /* silent */ })
+}
+
+function abrirHistorial (doctor) {
+  doctorHistorial.value = doctor
+  filtroHistorial.value = ''
+  paginacionHistorial.value.page = 1
+  dialogHistorial.value = true
+  fetchHistorial()
+}
+
+function buscarHistorial () {
+  paginacionHistorial.value.page = 1
+  fetchHistorial()
+}
+
+function solicitarHistorial (request) {
+  paginacionHistorial.value = request.pagination
+  fetchHistorial()
+}
+
+async function fetchHistorial () {
+  if (!doctorHistorial.value?.id) return
+  loadingHistorial.value = true
+  try {
+    const { data } = await proxy.$axios.get(`doctores/${doctorHistorial.value.id}/pacientes`, {
+      params: {
+        q: filtroHistorial.value || undefined,
+        page: paginacionHistorial.value.page,
+        per_page: paginacionHistorial.value.rowsPerPage,
+      },
+    })
+    atenciones.value = data.atenciones?.data || []
+    pacientesUnicos.value = data.pacientes_unicos || 0
+    paginacionHistorial.value.rowsNumber = data.atenciones?.total || 0
+    paginacionHistorial.value.page = data.atenciones?.current_page || 1
+  } catch (error) {
+    proxy.$alert.error(error.response?.data?.message || 'No se pudo cargar el historial')
+  } finally {
+    loadingHistorial.value = false
+  }
 }
 
 let fetched = false

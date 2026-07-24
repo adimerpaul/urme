@@ -9,7 +9,7 @@ use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
 
 class Producto extends Model implements AuditableContract
 {
-    use SoftDeletes, AuditableTrait;
+    use AuditableTrait, SoftDeletes;
 
     protected $table = 'productos';
 
@@ -53,5 +53,15 @@ class Producto extends Model implements AuditableContract
     public function ventaDetalles()
     {
         return $this->hasMany(VentaDetalle::class);
+    }
+
+    public function laboratorioDatos()
+    {
+        return $this->hasMany(ProductoLaboratorioDato::class)->orderBy('orden')->orderBy('id');
+    }
+
+    public function laboratorioFormulas()
+    {
+        return $this->hasMany(ProductoLaboratorioFormula::class)->orderBy('orden')->orderBy('id');
     }
 }

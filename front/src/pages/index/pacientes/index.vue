@@ -70,13 +70,17 @@
         <template v-slot:body-cell-actions="props">
           <q-td :props="props" @click.stop>
             <q-btn-dropdown
-              v-if="canEditar || canEliminar"
+              v-if="canVerVentas || canEditar || canEliminar"
               label="Opciones" no-caps size="10px" dense color="primary"
             >
               <q-list>
                 <q-item clickable v-close-popup @click="proxy.$router.push('/pacientes/' + props.row.id)">
                   <q-item-section avatar><q-icon name="visibility" /></q-item-section>
                   <q-item-section><q-item-label>Ver detalle</q-item-label></q-item-section>
+                </q-item>
+                <q-item v-if="canVerVentas" clickable v-close-popup @click="verVentas(props.row)">
+                  <q-item-section avatar><q-icon name="receipt_long" color="teal" /></q-item-section>
+                  <q-item-section><q-item-label>Ver ventas</q-item-label></q-item-section>
                 </q-item>
                 <q-item v-if="canEditar" clickable v-close-popup @click="pacEdit(props.row)">
                   <q-item-section avatar><q-icon name="edit" /></q-item-section>
@@ -127,6 +131,100 @@
           </q-card-section>
         </q-card>
       </q-dialog>
+
+      <!-- HISTORIAL DE VENTAS DEL PACIENTE -->
+      <q-dialog v-model="dialogVentas">
+        <q-card style="width:min(96vw,1200px);max-width:1200px">
+          <q-card-section class="row items-center bg-teal text-white q-py-sm">
+            <q-icon name="receipt_long" size="22px" class="q-mr-sm" />
+            <div>
+              <div class="text-subtitle1 text-weight-bold">Ventas del paciente</div>
+              <div class="text-caption">{{ pacienteVentas.nombre_completo }}</div>
+            </div>
+            <q-space />
+            <q-btn icon="close" flat round dense color="white" v-close-popup />
+          </q-card-section>
+
+          <q-card-section class="q-pa-md">
+            <div class="row q-col-gutter-sm q-mb-md">
+              <div class="col-12 col-sm-4">
+                <q-card flat bordered class="q-pa-sm">
+                  <div class="text-caption text-grey-7">Cantidad de ventas</div>
+                  <div class="text-h6">{{ resumenVentas.cantidad || 0 }}</div>
+                </q-card>
+              </div>
+              <div class="col-12 col-sm-4">
+                <q-card flat bordered class="q-pa-sm">
+                  <div class="text-caption text-grey-7">Total vendido</div>
+                  <div class="text-h6 text-positive">Bs {{ money(resumenVentas.total_ventas) }}</div>
+                </q-card>
+              </div>
+              <div class="col-12 col-sm-4">
+                <q-card flat bordered class="q-pa-sm">
+                  <div class="text-caption text-grey-7">Total pendiente</div>
+                  <div class="text-h6 text-orange">Bs {{ money(resumenVentas.total_pendientes) }}</div>
+                </q-card>
+              </div>
+            </div>
+
+            <q-table
+              :rows="ventasPaciente"
+              :columns="columnsVentas"
+              row-key="id"
+              dense
+              flat
+              bordered
+              v-model:pagination="paginationVentas"
+              :rows-per-page-options="[10, 20, 50]"
+              :loading="loadingVentas"
+              no-data-label="El paciente no tiene ventas registradas"
+              @request="onVentasRequest"
+            >
+              <template v-slot:body-cell-doctor="props">
+                <q-td :props="props">
+                  {{ props.row.doctor?.nombre || 'Sin médico asignado' }}
+                </q-td>
+              </template>
+              <template v-slot:body-cell-items="props">
+                <q-td :props="props" style="min-width:300px;white-space:normal">
+                  <q-list v-if="props.row.detalles?.length" dense separator>
+                    <q-item
+                      v-for="item in props.row.detalles"
+                      :key="item.id"
+                      class="q-px-none"
+                    >
+                      <q-item-section>
+                        <q-item-label class="text-weight-medium">{{ item.nombre }}</q-item-label>
+                        <q-item-label caption>
+                          Cantidad: {{ quantity(item.cantidad) }}
+                          <span v-if="item.lote"> · Lote: {{ item.lote }}</span>
+                        </q-item-label>
+                      </q-item-section>
+                      <q-item-section side class="text-right">
+                        <q-item-label>Bs {{ money(item.total) }}</q-item-label>
+                        <q-item-label caption>Bs {{ money(item.precio) }} c/u</q-item-label>
+                      </q-item-section>
+                    </q-item>
+                  </q-list>
+                  <span v-else class="text-grey-6">Sin ítems registrados</span>
+                </q-td>
+              </template>
+              <template v-slot:body-cell-total="props">
+                <q-td :props="props" class="text-weight-bold">
+                  Bs {{ money(props.row.total) }}
+                </q-td>
+              </template>
+              <template v-slot:body-cell-estado="props">
+                <q-td :props="props">
+                  <q-badge :color="ventaEstadoColor(props.row.estado)">
+                    {{ props.row.estado }}
+                  </q-badge>
+                </q-td>
+              </template>
+            </q-table>
+          </q-card-section>
+        </q-card>
+      </q-dialog>
     </template>
   </q-page>
 </template>
@@ -140,6 +238,7 @@ const canVer      = computed(() => proxy.$store.hasPermission('Ver Pacientes'))
 const canCrear    = computed(() => proxy.$store.hasPermission('Crear Pacientes'))
 const canEditar   = computed(() => proxy.$store.hasPermission('Editar Pacientes'))
 const canEliminar = computed(() => proxy.$store.hasPermission('Eliminar Pacientes'))
+const canVerVentas = computed(() => proxy.$store.hasPermission('Ver Ventas'))
 
 const pacientes = ref([])
 const loading   = ref(false)
@@ -149,6 +248,12 @@ const altaDesde = ref('')
 const altaHasta = ref('')
 
 const pagination = ref({ page: 1, rowsPerPage: 10, rowsNumber: 0 })
+const dialogVentas = ref(false)
+const loadingVentas = ref(false)
+const pacienteVentas = ref({})
+const ventasPaciente = ref([])
+const resumenVentas = ref({})
+const paginationVentas = ref({ page: 1, rowsPerPage: 10, rowsNumber: 0 })
 
 const columns = [
   { name: 'actions',            label: 'Acciones',          align: 'center' },
@@ -159,6 +264,16 @@ const columns = [
   { name: 'sexo',               label: 'Sexo',              align: 'left', field: 'sexo' },
   { name: 'telefono',           label: 'Teléfono',          align: 'left', field: 'telefono' },
   { name: 'fecha_alta',         label: 'Fecha alta',        align: 'left' },
+]
+
+const columnsVentas = [
+  { name: 'id', label: 'N.º venta', align: 'left', field: 'id' },
+  { name: 'fecha_hora', label: 'Fecha y hora', align: 'left', field: 'fecha_hora', format: val => val ? new Date(val).toLocaleString('es-BO') : '—' },
+  { name: 'doctor', label: 'Doctor / Médico', align: 'left' },
+  { name: 'items', label: 'Ítems entregados', align: 'left' },
+  { name: 'tipo_pago', label: 'Forma de pago', align: 'left', field: 'tipo_pago' },
+  { name: 'total', label: 'Total', align: 'right', field: 'total' },
+  { name: 'estado', label: 'Estado', align: 'center', field: 'estado' },
 ]
 
 function estadoLabel (estado) {
@@ -175,6 +290,18 @@ function onFilterChange () {
 }
 
 function onRefresh () { fetchPacientes() }
+
+function money (value) {
+  return Number(value || 0).toFixed(2)
+}
+
+function quantity (value) {
+  return Number(value || 0).toLocaleString('es-BO', { maximumFractionDigits: 4 })
+}
+
+function ventaEstadoColor (estado) {
+  return { ACTIVO: 'positive', PENDIENTE: 'orange', ANULADO: 'negative' }[estado] || 'grey-6'
+}
 
 function onRequest (props) {
   pagination.value.page        = props.pagination.page
@@ -203,6 +330,40 @@ function fetchPacientes () {
   }).catch(err => {
     proxy.$alert.error(err.response?.data?.message || 'Error al cargar')
   }).finally(() => { loading.value = false })
+}
+
+function verVentas (row) {
+  pacienteVentas.value = { ...row }
+  ventasPaciente.value = []
+  resumenVentas.value = {}
+  paginationVentas.value = { page: 1, rowsPerPage: 10, rowsNumber: 0 }
+  dialogVentas.value = true
+  fetchVentasPaciente()
+}
+
+function onVentasRequest (props) {
+  paginationVentas.value.page = props.pagination.page
+  paginationVentas.value.rowsPerPage = props.pagination.rowsPerPage
+  fetchVentasPaciente()
+}
+
+function fetchVentasPaciente () {
+  loadingVentas.value = true
+  proxy.$axios.get('ventas', {
+    params: {
+      paciente_id: pacienteVentas.value.id,
+      page: paginationVentas.value.page,
+      per_page: paginationVentas.value.rowsPerPage,
+    },
+  }).then(res => {
+    ventasPaciente.value = res.data.ventas.data
+    resumenVentas.value = res.data.resumen
+    paginationVentas.value.rowsNumber = res.data.ventas.total
+  }).catch(err => {
+    proxy.$alert.error(err.response?.data?.message || 'Error al cargar las ventas del paciente')
+  }).finally(() => {
+    loadingVentas.value = false
+  })
 }
 
 let fetched = false

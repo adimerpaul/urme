@@ -1,0 +1,1 @@
+import{M as e,u as t}from"./QIcon-CQkB94oh.js";var n=t({name:`QSpace`,setup(){let t=e(`div`,{class:`q-space`});return()=>t}});export{n as t};

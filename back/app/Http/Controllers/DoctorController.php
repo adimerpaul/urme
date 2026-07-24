@@ -100,6 +100,36 @@ class DoctorController extends Controller
         return response()->json(['message' => 'Doctor eliminado']);
     }
 
+    public function pacientes(Request $request, $id)
+    {
+        $this->req($request, 'Ver Doctores');
+
+        $doctor = Doctor::findOrFail($id);
+        $perPage = (int) $request->input('per_page', 10);
+        $q = trim((string) $request->input('q', ''));
+
+        $query = $doctor->ventas()
+            ->with(['paciente:id,nombre_completo,ci,telefono', 'seguro:id,nombre'])
+            ->withCount('detalles')
+            ->whereNotNull('paciente_id')
+            ->when($q, function ($venta) use ($q) {
+                $venta->whereHas('paciente', function ($paciente) use ($q) {
+                    $paciente->where('nombre_completo', 'like', "%{$q}%")
+                        ->orWhere('ci', 'like', "%{$q}%");
+                });
+            })
+            ->orderByDesc('fecha_hora');
+
+        return response()->json([
+            'doctor' => $doctor->only(['id', 'nombre']),
+            'atenciones' => $query->paginate($perPage),
+            'pacientes_unicos' => $doctor->ventas()
+                ->whereNotNull('paciente_id')
+                ->distinct()
+                ->count('paciente_id'),
+        ]);
+    }
+
     // ── Especialidades ────────────────────────────────────────────
 
     public function especialidades(Request $request)

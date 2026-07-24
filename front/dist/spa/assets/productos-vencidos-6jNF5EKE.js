@@ -1,1 +1,0 @@
-import{G as e,S as t}from"./QIcon-CQkB94oh.js";import{t as n}from"./ProductosVencimiento-gDdOGKDO.js";var r={__name:`index`,setup(r){return(r,i)=>(e(),t(n,{tipo:`vencidos`}))}};export{r as default};

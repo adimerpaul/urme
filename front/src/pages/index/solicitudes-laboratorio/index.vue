@@ -60,6 +60,13 @@
                 <q-item-section avatar><q-icon name="print" color="indigo" /></q-item-section>
                 <q-item-section>Imprimir / reimprimir</q-item-section>
               </q-item>
+              <q-item clickable v-close-popup @click="enviarWhatsApp(props.row)">
+                <q-item-section avatar><q-icon name="chat" color="positive" /></q-item-section>
+                <q-item-section>
+                  <q-item-label>Enviar por WhatsApp</q-item-label>
+                  <q-item-label caption>{{ props.row.paciente?.telefono || 'PACIENTE SIN TELÉFONO' }}</q-item-label>
+                </q-item-section>
+              </q-item>
               <q-item v-if="canEditar && props.row.estado === 'CREADO'" clickable v-close-popup
                       @click="editar(props.row)">
                 <q-item-section avatar><q-icon name="edit" color="primary" /></q-item-section>
@@ -189,6 +196,48 @@ async function imprimir (row) {
     ventana?.close()
     proxy.$alert.error(error.response?.data?.message || 'No se pudo generar el PDF')
   }
+}
+async function enviarWhatsApp (row) {
+  const telefono = normalizarTelefono(row.paciente?.telefono)
+  if (!telefono) {
+    proxy.$alert.error('El paciente no tiene un número de teléfono válido')
+    return
+  }
+
+  const ventanaWhatsApp = window.open('', '_blank')
+  try {
+    const response = await proxy.$axios.get(`solicitudes-laboratorio/${row.id}/pdf`, { responseType: 'blob' })
+    const archivo = new Blob([response.data], { type: 'application/pdf' })
+    const urlArchivo = URL.createObjectURL(archivo)
+    const enlace = document.createElement('a')
+    enlace.href = urlArchivo
+    enlace.download = `laboratorio_${row.codigo_solicitud}.pdf`
+    enlace.click()
+
+    const mensaje = [
+      `Clínica URME - Laboratorio Clínico`,
+      `Paciente: ${row.paciente?.nombre_completo || ''}`,
+      `Informe: ${row.codigo_solicitud}`,
+      `Adjuntamos su informe de laboratorio en formato PDF.`,
+    ].join('\n')
+    const whatsappUrl = `https://wa.me/${telefono}?text=${encodeURIComponent(mensaje)}`
+    if (ventanaWhatsApp) ventanaWhatsApp.location.href = whatsappUrl
+    else window.open(whatsappUrl, '_blank')
+
+    setTimeout(() => URL.revokeObjectURL(urlArchivo), 60000)
+    proxy.$alert.success('PDF descargado y chat de WhatsApp abierto')
+  } catch (error) {
+    ventanaWhatsApp?.close()
+    proxy.$alert.error(error.response?.data?.message || 'No se pudo preparar el envío por WhatsApp')
+  }
+}
+function normalizarTelefono (value) {
+  let numero = String(value || '').replace(/\D/g, '')
+  if (!numero || numero === '0') return null
+  if (numero.startsWith('00')) numero = numero.slice(2)
+  if (numero.length === 8) numero = `591${numero}`
+  if (numero.startsWith('0') && numero.length === 9) numero = `591${numero.slice(1)}`
+  return numero.length >= 11 && numero.length <= 15 ? numero : null
 }
 function eliminar (row) {
   proxy.$alert.dialog(`¿Eliminar la solicitud ${row.codigo_solicitud}?`).onOk(async () => {

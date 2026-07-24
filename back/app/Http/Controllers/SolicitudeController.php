@@ -16,7 +16,7 @@ class SolicitudeController extends Controller
     {
         $this->authorizeAny($request, 'Ver Solicitudes Laboratorio');
         $query = Solicitude::with([
-            'paciente:id,nombre_completo,ci',
+            'paciente:id,nombre_completo,ci,telefono',
             'doctor:id,nombre',
             'user:id,name',
             'laboratorioItems:id,solicitude_id,producto_nombre,precio',

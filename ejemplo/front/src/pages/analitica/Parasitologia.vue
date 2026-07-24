@@ -111,18 +111,18 @@
                     MACROSCOPÍA
                   </div>
 
-                  <q-select v-model="form.olor" dense outlined label="Olor"
+                  <q-select clearable v-model="form.olor" dense outlined label="Olor"
                             :options="['CARACTERÍSTICO','FÉTIDO','ÁCIDO','OTRO']" class="q-mb-sm" />
-                  <q-select v-model="form.color" dense outlined label="Color"
+                  <q-select clearable v-model="form.color" dense outlined label="Color"
                             :options="['MARRÓN','AMARILLO','VERDOSO','NEGRUZCO','OTRO']" class="q-mb-sm" />
-                  <q-select v-model="form.consistencia" dense outlined label="Consistencia"
+                  <q-select clearable v-model="form.consistencia" dense outlined label="Consistencia"
                             :options="['SÓLIDA','LÍQUIDA','PASTOSA','DIARREICA','DIARREICA CON MOCO','OTROS']" class="q-mb-sm" />
 <!--                            CONSISTENCIA: SOLIDA, LIQUIDA, PASTOSA, DIARREICA, DIARREICA CON MOCO, OTROS-->
 <!--                            :options="['SOLIDA','LIQUIDA','PASTOSA','DIARREICA','DIARREICA CON MOCO','OTROS']" class="q-mb-sm" />-->
 
 
                   <q-input v-model="form.otros" dense outlined type="textarea" autogrow label="Otros (Opcional)" class="q-mb-sm" />
-                  <q-select v-model="form.bacterias" dense outlined label="Bacterias"
+                  <q-select clearable v-model="form.bacterias" dense outlined label="Bacterias"
                             :options="['ESCASAS','MODERADAS','ABUNDANTE','NO SE OBSERVA']" />
                 </q-card-section>
               </q-card>
@@ -142,7 +142,7 @@
                     <div class="col-auto">
 <!--                      <div class="row q-col-gutter-sm q-mb-sm">-->
 <!--                        <div class="col-12 col-md-3">-->
-                          <q-select
+                          <q-select clearable
                             v-model="form.tipo"
                             :options="['SIMPLE', 'SERIADO']"
                             dense
@@ -179,18 +179,18 @@
 
                   <div class="row q-col-gutter-sm">
                     <div class="col-12 col-md-3">
-                      <q-select v-model="form.sangre_oculta" outlined label="Sangre oculta"
+                      <q-select clearable v-model="form.sangre_oculta" outlined label="Sangre oculta"
                                 :options="['NEGATIVO','POSITIVO']" dense/>
                     </div>
 
                     <div class="col-12 col-md-3">
-                      <q-select v-model="form.prueba_rapida_rotavirus" outlined label="Prueba rápida Rotavirus"
+                      <q-select clearable v-model="form.prueba_rapida_rotavirus" outlined label="Prueba rápida Rotavirus"
                                 :options="['NEGATIVO','POSITIVO']" dense />
                     </div>
 
                     <div class="col-12 col-md-3">
 <!--                      <q-input v-model="form.moco_fecal_positivo" outlined label="Moco fecal" />-->
-                      <q-select v-model="form.moco_fecal_positivo" outlined label="Moco fecal"
+                      <q-select clearable v-model="form.moco_fecal_positivo" outlined label="Moco fecal"
                                 :options="['NEGATIVO','POSITIVO']" dense/>
                     </div>
                     <div class="col-12 col-md-3">
@@ -198,7 +198,7 @@
                     </div>
 
                     <div class="col-12 col-md-4">
-                      <q-select v-model="form.test_benedict" outlined label="Test de Benedict"
+                      <q-select clearable v-model="form.test_benedict" outlined label="Test de Benedict"
                                                       :options="['NEGATIVO','POSITIVO']" dense/>
                       <!--                                :options="['pH 5.0 ácido','pH 5.5 ácido','pH 6.0 ácido','pH 6.5 ácido','pH 7.0 neutro','pH 7.5 alcalino','pH 8.0 alcalino','pH 9.0 alcalino']" />-->
                       <!--                      para TEST DE BENEDICT poner las siguientes reacciones:                              pH 	5.0 ácido-->
@@ -212,7 +212,7 @@
                     </div>
 
                     <div class="col-12 col-md-4">
-                      <q-select v-model="form.reaccion" outlined label="Reacción"
+                      <q-select clearable v-model="form.reaccion" outlined label="Reacción"
                                 :options="['pH 5.0 ácido','pH 5.5 ácido','pH 6.0 ácido','pH 6.5 ácido','pH 7.0 neutro','pH 7.5 alcalino','pH 8.0 alcalino','pH 9.0 alcalino']"
                         dense
                       />
@@ -222,7 +222,7 @@
                   <q-separator spaced />
                   <div class="row q-col-gutter-sm">
                     <div class="col-12 col-md-12">
-                      <q-select v-model="form.otros_examenes" dense outlined label="Otros exámenes"
+                      <q-select clearable v-model="form.otros_examenes" dense outlined label="Otros exámenes"
                                 :options="['AMEBAS EN FRESCO','EXAMEN DIRECTO PARA LEISHMANIA','GOTA GRUESA PARA MALARIA','MICROMÉTODO PARA CHAGAS','TÉCNICA DE GRAHAM','OTROS']" />
 <!--                      <template v-if="form.otros_examenes === 'OTROS'">-->
 <!--                        <br>-->

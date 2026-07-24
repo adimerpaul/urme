@@ -25,6 +25,9 @@ class AreaRango extends Model implements AuditableContract
         'rango_3_descripcion', 'rango_3_minimo', 'rango_3_maximo',
         'rango_4_descripcion', 'rango_4_minimo', 'rango_4_maximo',
         'rango_5_descripcion', 'rango_5_minimo', 'rango_5_maximo',
+        'rango_6_descripcion', 'rango_6_minimo', 'rango_6_maximo',
+        'rango_7_descripcion', 'rango_7_minimo', 'rango_7_maximo',
+        'rango_8_descripcion', 'rango_8_minimo', 'rango_8_maximo',
         'unidad',
         'interpretacion',
         'muestra',
@@ -50,6 +53,6 @@ class AreaRango extends Model implements AuditableContract
             'servicio_rangos',
             'area_rango_id',
             'servicio_id'
-        )->withPivot('nombre_variable', 'orden')->withTimestamps();
+        )->withPivot('nombre_variable', 'orden', 'visible')->withTimestamps();
     }
 }

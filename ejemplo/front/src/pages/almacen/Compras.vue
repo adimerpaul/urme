@@ -7,6 +7,16 @@
         <div class="text-caption text-grey-7">Listado de entradas registradas en almacén</div>
       </div>
       <q-space />
+      <q-btn
+        outline
+        color="green-8"
+        icon="table_view"
+        label="Exportar Excel"
+        no-caps
+        class="q-mr-sm"
+        :loading="exporting"
+        @click="exportExcel"
+      />
       <q-btn unelevated color="primary" icon="add_circle" label="Compra nueva" no-caps to="/almacen/compras/nueva" />
     </div>
 
@@ -212,6 +222,13 @@
                     <q-icon v-else name="print" color="teal" />
                   </q-item-section>
                   <q-item-section>Imprimir</q-item-section>
+                </q-item>
+                <q-item clickable v-close-popup :disable="excelId === props.row.id" @click="exportExcelCompra(props.row)">
+                  <q-item-section avatar>
+                    <q-spinner v-if="excelId === props.row.id" color="green-8" size="20px" />
+                    <q-icon v-else name="table_view" color="green-8" />
+                  </q-item-section>
+                  <q-item-section>Exportar Excel</q-item-section>
                 </q-item>
                 <q-item
                   clickable
@@ -424,6 +441,8 @@ export default {
   data () {
     return {
       loading: false,
+      exporting: false,
+      excelId: null,
       printingId: null,
       rows: [],
       summary: { total_compras: 0, total_anuladas: 0, cantidad: 0 },
@@ -518,6 +537,31 @@ export default {
       this.pagination = props.pagination
       this.fetchRows()
     },
+    async exportExcel () {
+      this.exporting = true
+      try {
+        const res = await this.$axios.get('compras/export/excel', {
+          params: { ...this.filters },
+          responseType: 'blob',
+        })
+        const blob = new Blob([res.data], {
+          type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        })
+        const url = window.URL.createObjectURL(blob)
+        const link = document.createElement('a')
+        link.href = url
+        link.download = `compras_${moment().format('YYYYMMDD_HHmmss')}.xlsx`
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+        window.setTimeout(() => window.URL.revokeObjectURL(url), 60000)
+        this.$alert.success('Excel generado')
+      } catch (e) {
+        this.$alert.error(e.response?.data?.message || 'No se pudo generar el Excel')
+      } finally {
+        this.exporting = false
+      }
+    },
     async openDetail (row) {
       const res = await this.$axios.get(`compras/${row.id}`)
       this.selected = res.data
@@ -540,6 +584,29 @@ export default {
         this.$alert.error(e.response?.data?.message || 'No se pudo generar el PDF')
       } finally {
         this.printingId = null
+      }
+    },
+    async exportExcelCompra (row) {
+      if (!row?.id) return
+      this.excelId = row.id
+      try {
+        const res = await this.$axios.get(`compras/${row.id}/excel`, { responseType: 'blob' })
+        const blob = new Blob([res.data], {
+          type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        })
+        const url = window.URL.createObjectURL(blob)
+        const link = document.createElement('a')
+        link.href = url
+        link.download = `compra_${row.id}_${moment().format('YYYYMMDD_HHmmss')}.xlsx`
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+        window.setTimeout(() => window.URL.revokeObjectURL(url), 60000)
+        this.$alert.success('Excel generado')
+      } catch (e) {
+        this.$alert.error(e.response?.data?.message || 'No se pudo generar el Excel')
+      } finally {
+        this.excelId = null
       }
     },
     anular (row) {

@@ -244,10 +244,16 @@ class QuimicaSanguineaController extends Controller
                 ->get();
         }
 
+        // configuración de variables visibles por prestación (datos_quimica_sanguinea)
+        $datos = \App\Models\DatoQuimicaSanguinea::with('prestaciones:id,nombre')
+            ->orderBy('orden')
+            ->get();
+
         return response()->json([
             'solicitud' => $solicitud,
             'quimica'   => $quimica,
             'rangos'    => $rangos,
+            'datos'     => $datos,
         ]);
     }
 

@@ -248,7 +248,7 @@
         @forelse ($pedido->detalles as $idx => $det)
             <tr>
                 <td class="right">{{ $idx + 1 }}</td>
-                <td class="right">{{ $det->cantidad }}</td>
+                <td class="right">{{ (float) $det->cantidad == (int) $det->cantidad ? (int) $det->cantidad : rtrim(rtrim(number_format((float) $det->cantidad, 4, '.', ''), '0'), '.') }}</td>
                 <td class="uppercase">{{ optional($det->producto)->unidad_medida ?: 'UND' }}</td>
                 <td class="uppercase">{{ optional($det->producto)->nombre ?? '-' }}</td>
                 <td class="right">{{ number_format((float) $det->precio_unitario, 2, ',', '.') }}</td>

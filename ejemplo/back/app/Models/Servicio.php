@@ -71,6 +71,6 @@ class Servicio extends Model implements AuditableContract
             'servicio_rangos',
             'servicio_id',
             'area_rango_id'
-        )->withPivot('nombre_variable', 'orden')->withTimestamps()->orderByPivot('orden');
+        )->withPivot('nombre_variable', 'orden', 'visible')->withTimestamps()->orderByPivot('orden');
     }
 }

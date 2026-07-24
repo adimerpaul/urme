@@ -146,6 +146,14 @@
     $proveedor = optional($compra->proveedor)->nombre ?? $compra->nombre ?? 'SIN PROVEEDOR';
     $carnetNit = optional($compra->proveedor)->carnet ?? $compra->carnet ?? '-';
     $fechaCompra = $compra->fecha_hora ? \Carbon\Carbon::parse($compra->fecha_hora) : null;
+    $metodoOrden = $compra->metodo_orden ?: 'ORDEN DE COMPRA';
+    $fechaOrdenLabels = [
+        'ORDEN DE COMPRA' => 'Fecha Ord.Comp.',
+        'ORDEN DE SERVICIO' => 'Fecha Ord.Serv.',
+        'CONTRATO' => 'Fecha Cto.',
+    ];
+    $fechaOrdenLabel = $fechaOrdenLabels[$metodoOrden] ?? 'Fecha Ord.Comp.';
+    $fechaOrden = $compra->fecha_orden ? \Carbon\Carbon::parse($compra->fecha_orden) : null;
     $compraUser = $compra->user;
     $firmaCompraPath = $compraUser && $compraUser->mostrar_firma && $compraUser->firma ? public_path('images/'.$compraUser->firma) : null;
     $selloCompraPath = $compraUser && $compraUser->mostrar_sello && $compraUser->sello ? public_path('images/'.$compraUser->sello) : null;
@@ -190,16 +198,16 @@
         <td class="cell">{{ $fechaCompra ? $fechaCompra->format('d/m/Y') : '-' }}</td>
     </tr>
     <tr>
-        <td class="cell label">Categoria</td>
+        <td class="cell label">CAT. PRG.</td>
         <td class="cell">{{ strtoupper($compra->categoria_programatica ?: 'NINGUNO') }}</td>
         <td class="cell label">Proveedor</td>
         <td class="cell uppercase">{{ $proveedor }}</td>
     </tr>
     <tr>
-        <td class="cell label">Orden compra</td>
-        <td class="cell">{{ $compra->numero ?: $compra->id }}</td>
-        <td class="cell label">Fecha O.C.</td>
-        <td class="cell">{{ $fechaCompra ? $fechaCompra->format('d-m-y') : '-' }}</td>
+        <td class="cell label">{{ $metodoOrden }}</td>
+        <td class="cell">{{ $compra->orden_de_compra ?: '-' }}</td>
+        <td class="cell label">{{ $fechaOrdenLabel }}</td>
+        <td class="cell">{{ $fechaOrden ? $fechaOrden->format('d-m-y') : '-' }}</td>
     </tr>
 {{--    <tr>--}}
 {{--        <td class="cell label">Unidad solicitante</td>--}}
@@ -207,21 +215,15 @@
 {{--    </tr>--}}
     <tr>
         <td class="cell label">Unidad solicitante</td>
-        <td class="cell uppercase" colspan="3">{{ optional($compra->unidad)->nombre ?: '-' }}</td>
+        <td class="cell uppercase">{{ optional($compra->unidad)->nombre ?: '-' }}</td>
+        <td class="cell label">C&oacute;d. Interno</td>
+        <td class="cell">{{ $compra->codigo_interno ?: '-' }}</td>
     </tr>
     <tr>
         <td class="cell label">Carnet / NIT</td>
         <td class="cell">{{ $carnetNit }}</td>
-        <td class="cell label">Registrado por</td>
-        <td class="cell">
-{{--            {{ optional($compra->user)->name ?: '-' }}--}}
-        </td>
-    </tr>
-    <tr>
-        <td class="cell label">Estado</td>
-        <td class="cell">{{ $compra->estado }}</td>
         <td class="cell label">Tipo registro</td>
-        <td class="cell">{{ $compra->tipo_registro }}</td>
+        <td class="cell">INGRESO</td>
     </tr>
 </table>
 
@@ -236,8 +238,8 @@
             <th style="width:35%;">Descripcion</th>
             <th style="width:9%;">Precio unit.</th>
             <th style="width:9%;">Total Bs.</th>
-            <th style="width:6%;">Lote</th>
-            <th style="width:6%;">Vence</th>
+{{--            <th style="width:6%;">Lote</th>--}}
+{{--            <th style="width:6%;">Vence</th>--}}
         </tr>
     </thead>
     <tbody>
@@ -253,8 +255,8 @@
                 </td>
                 <td class="right">{{ number_format((float) $det->precio, 2, ',', '.') }}</td>
                 <td class="right">{{ number_format((float) $det->total, 2, ',', '.') }}</td>
-                <td class="center small">{{ $det->lote ?: '-' }}</td>
-                <td class="center small">{{ $det->fecha_vencimiento ? \Carbon\Carbon::parse($det->fecha_vencimiento)->format('d/m/y') : '-' }}</td>
+{{--                <td class="center small">{{ $det->lote ?: '-' }}</td>--}}
+{{--                <td class="center small">{{ $det->fecha_vencimiento ? \Carbon\Carbon::parse($det->fecha_vencimiento)->format('d/m/y') : '-' }}</td>--}}
             </tr>
         @empty
             <tr>

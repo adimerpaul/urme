@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Exports\ComprasExport;
+use App\Exports\CompraDetalleExport;
 use App\Models\Compra;
 use App\Models\CompraDetalle;
 use App\Models\Producto;
@@ -152,6 +153,22 @@ class CompraController extends Controller
         $filters = $request->only(['fecha_inicio', 'fecha_fin', 'proveedor_id', 'user_id', 'estado']);
 
         return Excel::download(new ComprasExport($filters), 'compras_'.now()->format('Ymd_His').'.xlsx');
+    }
+
+    public function exportDetalleExcel(Request $request, $id)
+    {
+        $this->req($request, 'Ver Compras');
+
+        $compra = Compra::with([
+            'proveedor:id,nombre',
+            'user:id,name',
+            'detalles.producto:id,codigo,nombre',
+        ])->findOrFail($id);
+
+        return Excel::download(
+            new CompraDetalleExport($compra),
+            'compra_'.$compra->id.'_'.now()->format('Ymd_His').'.xlsx'
+        );
     }
 
     // ── Helpers ───────────────────────────────────────────────────

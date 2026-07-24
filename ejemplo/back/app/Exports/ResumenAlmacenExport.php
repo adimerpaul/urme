@@ -23,21 +23,21 @@ use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 // Row 7…N : Data rows
 // Row N+1 : Totals row
 
-class ResumenAlmacenExport implements FromArray, WithTitle, WithColumnWidths, WithStyles, WithEvents
+class ResumenAlmacenExport implements FromArray, WithColumnWidths, WithEvents, WithStyles, WithTitle
 {
     private const DATA_START = 7;
 
     public function __construct(
-        private array  $rows,
+        private array $rows,
         private ?array $total,
-        private array  $meta,
+        private array $meta,
     ) {}
 
     public function array(): array
     {
         $periodo = $this->meta['periodo'] ?: 'DEL 01 DE ENERO AL 31 DE DICIEMBRE';
-        $dFmt    = isset($this->meta['desde']) ? \Carbon\Carbon::parse($this->meta['desde'])->format('d/m/Y') : '01/01';
-        $hFmt    = isset($this->meta['hasta']) ? \Carbon\Carbon::parse($this->meta['hasta'])->format('d/m/Y') : '31/12';
+        $dFmt = isset($this->meta['desde']) ? \Carbon\Carbon::parse($this->meta['desde'])->format('d/m/Y') : '01/01';
+        $hFmt = isset($this->meta['hasta']) ? \Carbon\Carbon::parse($this->meta['hasta'])->format('d/m/Y') : '31/12';
 
         $data = [
             // Row 1
@@ -51,18 +51,18 @@ class ResumenAlmacenExport implements FromArray, WithTitle, WithColumnWidths, Wi
             // Row 5
             ['(Expresado en Bolivianos)'],
             // Row 6 — column headers
-            ['Nº', 'DETALLE', 'Partida',
-             "Cantidad Inicial al {$dFmt}",
-             "Saldo Inicial al {$dFmt} (Bs)",
-             "Cantidad Final al {$hFmt}",
-             "Saldo Final al {$hFmt} (Bs)"],
+            ['Nº', 'DETALLE', 'Subpartida',
+                "Cantidad Inicial al {$dFmt}",
+                "Saldo Inicial al {$dFmt} (Bs)",
+                "Cantidad Final al {$hFmt}",
+                "Saldo Final al {$hFmt} (Bs)"],
         ];
 
         foreach ($this->rows as $row) {
             $data[] = [
                 $row['nro'],
                 $row['detalle'],
-                $row['partida'],
+                $row['subpartida'],
                 $row['cant_ini'],
                 $row['saldo_ini'],
                 $row['cant_final'],
@@ -83,7 +83,10 @@ class ResumenAlmacenExport implements FromArray, WithTitle, WithColumnWidths, Wi
         return $data;
     }
 
-    public function title(): string { return 'DGCF-R1.05 Resumen'; }
+    public function title(): string
+    {
+        return 'DGCF-R1.05 Resumen';
+    }
 
     public function columnWidths(): array
     {
@@ -95,19 +98,19 @@ class ResumenAlmacenExport implements FromArray, WithTitle, WithColumnWidths, Wi
         return [
             1 => ['font' => ['size' => 9]],
             2 => ['font' => ['bold' => true, 'size' => 11],
-                  'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER]],
+                'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER]],
             3 => ['font' => ['bold' => true, 'size' => 10],
-                  'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER]],
+                'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER]],
             4 => ['alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER]],
             5 => ['alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER]],
             6 => [
-                'font'      => ['bold' => true, 'color' => ['rgb' => 'FFFFFF'], 'size' => 9],
-                'fill'      => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => '0F5EA8']],
+                'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF'], 'size' => 9],
+                'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => '0F5EA8']],
                 'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER,
-                                'vertical'   => Alignment::VERTICAL_CENTER,
-                                'wrapText'   => true],
-                'borders'   => ['allBorders' => ['borderStyle' => Border::BORDER_THIN,
-                                                  'color'       => ['rgb' => '0A4A8A']]],
+                    'vertical' => Alignment::VERTICAL_CENTER,
+                    'wrapText' => true],
+                'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN,
+                    'color' => ['rgb' => '0A4A8A']]],
             ],
         ];
     }
@@ -125,14 +128,14 @@ class ResumenAlmacenExport implements FromArray, WithTitle, WithColumnWidths, Wi
                 $sheet->getRowDimension(6)->setRowHeight(36);
 
                 $dataStart = self::DATA_START;
-                $dataEnd   = $dataStart + count($this->rows) - 1;
-                $totalRow  = $this->total ? $dataEnd + 1 : null;
+                $dataEnd = $dataStart + count($this->rows) - 1;
+                $totalRow = $this->total ? $dataEnd + 1 : null;
 
                 if ($dataEnd >= $dataStart) {
                     $sheet->getStyle("A{$dataStart}:G{$dataEnd}")->applyFromArray([
                         'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN,
-                                                        'color'       => ['rgb' => 'B8D0EA']]],
-                        'font'    => ['size' => 9],
+                            'color' => ['rgb' => 'B8D0EA']]],
+                        'font' => ['size' => 9],
                     ]);
                     for ($r = $dataStart; $r <= $dataEnd; $r++) {
                         if ($r % 2 === 0) {
@@ -141,33 +144,33 @@ class ResumenAlmacenExport implements FromArray, WithTitle, WithColumnWidths, Wi
                         }
                     }
                     $sheet->getStyle("D{$dataStart}:G{$dataEnd}")->getNumberFormat()
-                          ->setFormatCode('#,##0.00');
+                        ->setFormatCode('#,##0.00');
                 }
 
                 if ($totalRow) {
                     $sheet->getStyle("A{$totalRow}:C{$totalRow}")->applyFromArray([
-                        'font'      => ['bold' => true, 'size' => 10],
+                        'font' => ['bold' => true, 'size' => 10],
                         'alignment' => ['horizontal' => Alignment::HORIZONTAL_RIGHT],
-                        'borders'   => ['allBorders' => ['borderStyle' => Border::BORDER_THIN,
-                                                          'color'       => ['rgb' => '0A4A8A']]],
+                        'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN,
+                            'color' => ['rgb' => '0A4A8A']]],
                     ]);
                     foreach (['D', 'F'] as $col) {
                         $sheet->getStyle("{$col}{$totalRow}")->applyFromArray([
-                            'font'      => ['bold' => true, 'color' => ['rgb' => 'FFFFFF'], 'size' => 10],
-                            'fill'      => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => '0F5EA8']],
+                            'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF'], 'size' => 10],
+                            'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => '0F5EA8']],
                             'alignment' => ['horizontal' => Alignment::HORIZONTAL_RIGHT],
-                            'borders'   => ['allBorders' => ['borderStyle' => Border::BORDER_THIN,
-                                                              'color'       => ['rgb' => '0A4A8A']]],
+                            'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN,
+                                'color' => ['rgb' => '0A4A8A']]],
                         ]);
                         $sheet->getStyle("{$col}{$totalRow}")->getNumberFormat()->setFormatCode('#,##0.00');
                     }
                     foreach (['E', 'G'] as $col) {
                         $sheet->getStyle("{$col}{$totalRow}")->applyFromArray([
-                            'font'      => ['bold' => true, 'color' => ['rgb' => '000000'], 'size' => 11],
-                            'fill'      => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => 'FFD700']],
+                            'font' => ['bold' => true, 'color' => ['rgb' => '000000'], 'size' => 11],
+                            'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => 'FFD700']],
                             'alignment' => ['horizontal' => Alignment::HORIZONTAL_RIGHT],
-                            'borders'   => ['allBorders' => ['borderStyle' => Border::BORDER_MEDIUM,
-                                                              'color'       => ['rgb' => 'B8860B']]],
+                            'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_MEDIUM,
+                                'color' => ['rgb' => 'B8860B']]],
                         ]);
                         $sheet->getStyle("{$col}{$totalRow}")->getNumberFormat()->setFormatCode('#,##0.00');
                     }

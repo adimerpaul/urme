@@ -78,6 +78,7 @@ class InmunologiaAnaliticaController extends Controller
                     'perfil'               => $rango->perfil,
                     'nombre_variable'      => $rango->pivot->nombre_variable,
                     'orden'                => $rango->pivot->orden,
+                    'visible'              => (bool) $rango->pivot->visible,
                     'resultado'            => $resultado ? [
                         'id'          => $resultado->id,
                         'valor_final' => $resultado->valor_final,
@@ -203,7 +204,10 @@ class InmunologiaAnaliticaController extends Controller
 
         $prestacionesData = $prestaciones->map(function ($servicio) use ($resultados, $serviciosSolicitud) {
             $ss = $serviciosSolicitud->get($servicio->id);
-            $rangos = $servicio->rangos->map(function ($rango) use ($resultados) {
+            $rangos = $servicio->rangos
+                ->filter(fn ($rango) => (bool) $rango->pivot->visible)
+                ->values()
+                ->map(function ($rango) use ($resultados) {
                 $resultado = $resultados->get($rango->id);
                 return (object)[
                     'id'             => $rango->id,

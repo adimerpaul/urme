@@ -37,10 +37,11 @@
         }
         .tbl td { font-size: 9px; }
 
-        .w-analito { width: 40%; }
-        .w-res     { width: 16%; }
-        .w-unid    { width: 14%; }
-        .w-rango   { width: 30%; }
+        .w-analito { width: 34%; }
+        .w-res     { width: 14%; }
+        .w-unid    { width: 12%; }
+        .w-rango   { width: 26%; }
+        .w-met     { width: 14%; }
         .out-range { color: #c10015; font-weight: 700; }
 
         .section-title {
@@ -101,6 +102,7 @@
                             <th class="w-res center">Resultado</th>
                             <th class="w-unid center">Unidad</th>
                             <th class="w-rango">Rango de referencia</th>
+                            <th class="w-met center">Método</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -111,6 +113,7 @@
                                 <td class="center {{ $outRange ? 'out-range' : '' }}">{{ $rango->valor_final ?? '' }}</td>
                                 <td class="center">{{ $rango->unidad ?? '' }}</td>
                                 <td>{{ inmuno_rango_texto($rango) }}</td>
+                                <td class="center">{{ $rango->metodo ?? $prest->metodo ?? '' }}</td>
                             </tr>
                         @endforeach
                     </tbody>

@@ -6,9 +6,11 @@ use App\Exports\FabricantesExport;
 use App\Exports\ProductosExport;
 use App\Exports\UnidadesExport;
 use App\Models\Fabricante;
+use App\Models\CompraDetalle;
 use App\Models\Producto;
 use App\Models\TipoProducto;
 use App\Models\Unidad;
+use App\Models\VentaDetalle;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Maatwebsite\Excel\Facades\Excel;
@@ -96,6 +98,109 @@ class ProductoController extends Controller
             'unidades' => Unidad::count(),
             'tipos' => TipoProducto::count(),
         ]);
+    }
+
+    public function historial(Request $request, $id)
+    {
+        $this->req($request, 'Ver Productos');
+
+        $producto = Producto::findOrFail($id);
+
+        $detallesCompra = CompraDetalle::with(['compra.proveedor:id,nombre'])
+            ->where('producto_id', $producto->id)
+            ->get();
+
+        $vendidoPorCompraDetalle = VentaDetalle::query()
+            ->whereIn('compra_detalle_id', $detallesCompra->pluck('id'))
+            ->whereHas('venta', fn ($query) => $query->where('estado', 'ACTIVO'))
+            ->selectRaw('compra_detalle_id, SUM(cantidad) as cantidad_vendida')
+            ->groupBy('compra_detalle_id')
+            ->pluck('cantidad_vendida', 'compra_detalle_id');
+
+        $compras = $detallesCompra->map(function ($detalle) use ($vendidoPorCompraDetalle) {
+            $cantidadVendida = (float) ($vendidoPorCompraDetalle[$detalle->id] ?? 0);
+            $saldo = $detalle->compra?->estado === 'ACTIVO'
+                ? max(0, (float) $detalle->cantidad - $cantidadVendida)
+                : 0;
+
+            return [
+                'tipo' => 'COMPRA',
+                'id' => $detalle->compra_id,
+                'compra_detalle_id' => $detalle->id,
+                'fecha_hora' => $detalle->compra?->fecha_hora,
+                'documento' => $detalle->compra?->nro_factura ?: 'Compra #'.$detalle->compra_id,
+                'tercero' => $detalle->compra?->proveedor?->nombre ?: 'SIN PROVEEDOR',
+                'cantidad' => $detalle->cantidad,
+                'cantidad_vendida' => $cantidadVendida,
+                'saldo' => $saldo,
+                'lote' => $detalle->lote,
+                'fecha_vencimiento' => $detalle->fecha_vencimiento?->format('Y-m-d'),
+                'precio' => $detalle->precio,
+                'total' => $detalle->total,
+                'estado' => $detalle->compra?->estado,
+            ];
+        });
+
+        $ventas = VentaDetalle::with(['venta.paciente:id,nombre_completo'])
+            ->where('producto_id', $producto->id)
+            ->get()
+            ->map(fn ($detalle) => [
+                'tipo' => 'VENTA',
+                'id' => $detalle->venta_id,
+                'fecha_hora' => $detalle->venta?->fecha_hora,
+                'documento' => 'Venta #'.$detalle->venta_id,
+                'tercero' => $detalle->venta?->paciente?->nombre_completo
+                    ?: ($detalle->venta?->cliente ?: 'SIN CLIENTE'),
+                'cantidad' => $detalle->cantidad,
+                'lote' => $detalle->lote,
+                'fecha_vencimiento' => $detalle->fecha_vencimiento?->format('Y-m-d'),
+                'precio' => $detalle->precio,
+                'total' => $detalle->total,
+                'estado' => $detalle->venta?->estado,
+            ]);
+
+        return response()->json([
+            'producto' => $producto->only(['id', 'codigo', 'nombre']),
+            'movimientos' => $compras->concat($ventas)
+                ->sortByDesc('fecha_hora')
+                ->values(),
+        ]);
+    }
+
+    public function lotesDisponibles(Request $request, $id)
+    {
+        $this->req($request, ['Ver Ventas', 'Crear Ventas', 'Ver Productos']);
+        $producto = Producto::findOrFail($id);
+
+        $lotes = CompraDetalle::with('compra:id,fecha_hora,estado')
+            ->where('producto_id', $producto->id)
+            ->whereNotNull('lote')
+            ->where('lote', '<>', '')
+            ->whereHas('compra', fn ($query) => $query->where('estado', 'ACTIVO'))
+            ->orderByRaw('fecha_vencimiento IS NULL, fecha_vencimiento')
+            ->orderBy('id')
+            ->get();
+
+        $vendidoPorDetalle = VentaDetalle::query()
+            ->whereIn('compra_detalle_id', $lotes->pluck('id'))
+            ->whereHas('venta', fn ($query) => $query->where('estado', '<>', 'ANULADO'))
+            ->selectRaw('compra_detalle_id, SUM(cantidad) as cantidad_vendida')
+            ->groupBy('compra_detalle_id')
+            ->pluck('cantidad_vendida', 'compra_detalle_id');
+
+        return response()->json($lotes->map(function ($detalle) use ($vendidoPorDetalle) {
+            $disponible = max(0, (float) $detalle->cantidad - (float) ($vendidoPorDetalle[$detalle->id] ?? 0));
+
+            return [
+                'compra_detalle_id' => $detalle->id,
+                'compra_id' => $detalle->compra_id,
+                'lote' => $detalle->lote,
+                'fecha_vencimiento' => $detalle->fecha_vencimiento?->format('Y-m-d'),
+                'cantidad_comprada' => (float) $detalle->cantidad,
+                'cantidad_disponible' => $disponible,
+                'fecha_compra' => $detalle->compra?->fecha_hora,
+            ];
+        })->filter(fn ($lote) => $lote['cantidad_disponible'] > 0)->values());
     }
 
     // ── Catálogos ─────────────────────────────────────────────────
@@ -279,6 +384,15 @@ class ProductoController extends Controller
         $perPage = (int) $request->input('per_page', 20);
 
         $query = Producto::with(['fabricante:id,nombre', 'unidad:id,nombre,abreviatura', 'tipoProducto:id,nombre,color'])
+            ->withSum(['compraDetalles as cantidad_con_lote' => function ($detalle) {
+                $detalle->whereNotNull('lote')
+                    ->where('lote', '<>', '')
+                    ->whereHas('compra', fn ($compra) => $compra->where('estado', 'ACTIVO'));
+            }], 'cantidad')
+            ->withSum(['ventaDetalles as cantidad_vendida_lote' => function ($detalle) {
+                $detalle->whereNotNull('compra_detalle_id')
+                    ->whereHas('venta', fn ($venta) => $venta->where('estado', '<>', 'ANULADO'));
+            }], 'cantidad')
             ->orderBy('nombre');
 
         if ($q) {

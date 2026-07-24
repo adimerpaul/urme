@@ -28,14 +28,15 @@
           <q-badge v-if="lista.length" color="deep-purple" :label="lista.length" class="q-ml-xs" />
         </div>
 
-        <q-select
+        <div class="row items-center no-wrap q-mb-sm">
+          <q-select
           v-model="rangoParaAgregar"
           :options="opcionesFiltradas"
           option-value="id"
           :option-label="opt => (opt.rango_nombre || opt.analito || '') + (opt.perfil ? ` · ${opt.perfil}` : '')"
           label="Buscar y agregar rango..."
           dense outlined use-input input-debounce="150" clearable
-          class="q-mb-sm"
+          class="col"
           style="max-width: 520px"
           @filter="onFiltrar"
           @update:model-value="onAgregar"
@@ -59,13 +60,23 @@
               <q-item-section class="text-grey text-caption">Sin resultados o ya agregados</q-item-section>
             </q-item>
           </template>
-        </q-select>
+          </q-select>
+          <q-btn
+            round dense color="deep-purple" icon="add" size="sm" class="q-ml-sm"
+            @click="abrirNuevoRango"
+          >
+            <q-tooltip>Crear nuevo rango y vincularlo</q-tooltip>
+          </q-btn>
+        </div>
 
         <table v-if="lista.length" class="vr-table q-mb-md">
           <thead>
             <tr>
               <th style="width:24px"></th>
               <th style="width:24px">#</th>
+              <th style="width:36px" class="tc" title="Visible en impresión">
+                <q-icon name="print" size="14px" />
+              </th>
               <th>Perfil</th>
               <th>Rango / Analito</th>
               <th>Método</th>
@@ -88,6 +99,11 @@
             >
               <td class="tc"><q-icon name="drag_indicator" color="grey-5" size="14px" style="cursor:grab" /></td>
               <td class="tc text-grey-6">{{ idx + 1 }}</td>
+              <td class="tc">
+                <q-checkbox v-model="item.visible" dense size="xs" color="deep-purple" @click.stop>
+                  <q-tooltip>{{ item.visible ? 'Visible en impresión' : 'Oculto en impresión' }}</q-tooltip>
+                </q-checkbox>
+              </td>
               <td class="text-purple-7">{{ item.perfil || '—' }}</td>
               <td class="text-weight-medium">{{ item.rango_nombre }}</td>
               <td class="text-grey-7">{{ item.metodo || '—' }}</td>
@@ -254,6 +270,57 @@
           @click="$emit('update:modelValue', false)" />
         <q-btn color="deep-purple" icon="save" no-caps label="Guardar" :loading="loading" @click="guardar" />
       </q-card-section>
+
+      <!-- DIALOG CREAR RANGO RÁPIDO -->
+      <q-dialog v-model="dialogNuevoRango">
+        <q-card style="min-width: 420px; max-width: 560px">
+          <q-card-section class="row items-center q-pa-sm bg-deep-purple text-white">
+            <q-icon name="add_circle" class="q-mr-sm" />
+            <div class="text-subtitle2">Nuevo rango de referencia</div>
+            <q-space />
+            <q-btn icon="close" flat round dense color="white" v-close-popup />
+          </q-card-section>
+
+          <q-card-section class="q-pa-sm">
+            <q-input v-model="nuevoRangoForm.rango_nombre" label="Nombre del rango *" dense outlined class="q-mb-sm" autofocus />
+            <div class="row q-col-gutter-sm q-mb-sm">
+              <div class="col-6">
+                <q-input v-model="nuevoRangoForm.perfil" label="Perfil" dense outlined />
+              </div>
+              <div class="col-6">
+                <q-input v-model="nuevoRangoForm.metodo" label="Método" dense outlined />
+              </div>
+            </div>
+            <div class="row q-col-gutter-sm q-mb-sm">
+              <div class="col-4">
+                <q-input v-model="nuevoRangoForm.unidad" label="Unidad" dense outlined />
+              </div>
+              <div class="col-4">
+                <q-input v-model.number="nuevoRangoForm.rango_minimo" label="Mínimo" type="number" dense outlined />
+              </div>
+              <div class="col-4">
+                <q-input v-model.number="nuevoRangoForm.rango_maximo" label="Máximo" type="number" dense outlined />
+              </div>
+            </div>
+            <q-input
+              v-model="nuevoRangoForm.interpretacion"
+              label="Referencia / interpretación"
+              dense outlined type="textarea" rows="2"
+            />
+          </q-card-section>
+
+          <q-separator />
+          <q-card-section class="row justify-end q-pa-sm">
+            <q-btn flat no-caps label="Cancelar" :loading="creandoRango" class="q-mr-sm" v-close-popup />
+            <q-btn
+              color="deep-purple" icon="add_link" no-caps label="Crear y vincular"
+              :loading="creandoRango"
+              :disable="!nuevoRangoForm.rango_nombre || !nuevoRangoForm.rango_nombre.trim()"
+              @click="guardarNuevoRango"
+            />
+          </q-card-section>
+        </q-card>
+      </q-dialog>
     </q-card>
   </q-dialog>
 </template>
@@ -271,7 +338,7 @@ export default {
     loading: Boolean
   },
 
-  emits: ['update:modelValue', 'save'],
+  emits: ['update:modelValue', 'save', 'rango-creado'],
 
   data () {
     return {
@@ -280,6 +347,18 @@ export default {
       opcionesFiltradas: [],
       dragFromIndex: null,
       dragOverIndex: null,
+
+      dialogNuevoRango: false,
+      creandoRango: false,
+      nuevoRangoForm: {
+        rango_nombre: '',
+        perfil: '',
+        metodo: '',
+        unidad: '',
+        interpretacion: '',
+        rango_minimo: null,
+        rango_maximo: null
+      },
 
       formulas: [],
       agregando: false,
@@ -316,7 +395,10 @@ export default {
           interpretacion: r.interpretacion || '',
           unidad: r.unidad || '',
           nombre_variable: r.pivot?.nombre_variable || '',
-          orden: r.pivot?.orden ?? idx + 1
+          orden: r.pivot?.orden ?? idx + 1,
+          visible: r.pivot?.visible === undefined || r.pivot?.visible === null
+            ? true
+            : Boolean(Number(r.pivot.visible))
         }))
       this.formulas = this.formulasIniciales.map(f => ({
         nombre_variable: f.nombre_variable,
@@ -362,7 +444,8 @@ export default {
         interpretacion: rango.interpretacion || '',
         unidad: rango.unidad || '',
         nombre_variable: this.toVariable(nombre),
-        orden: this.lista.length + 1
+        orden: this.lista.length + 1,
+        visible: true
       })
       this.$nextTick(() => { this.rangoParaAgregar = null })
       this.opcionesFiltradas = this.disponibles()
@@ -384,6 +467,39 @@ export default {
       const item = this.lista.splice(from, 1)[0]
       this.lista.splice(to, 0, item)
       this.dragFromIndex = null; this.dragOverIndex = null
+    },
+
+    abrirNuevoRango () {
+      this.nuevoRangoForm = {
+        rango_nombre: '',
+        perfil: '',
+        metodo: '',
+        unidad: '',
+        interpretacion: '',
+        rango_minimo: null,
+        rango_maximo: null
+      }
+      this.dialogNuevoRango = true
+    },
+
+    async guardarNuevoRango () {
+      if (!this.nuevoRangoForm.rango_nombre?.trim()) return
+      this.creandoRango = true
+      try {
+        const { data } = await this.$axios.post('area-rangos', {
+          ...this.nuevoRangoForm,
+          area_id: this.servicio?.area_id
+        })
+        this.onAgregar(data)
+        this.$emit('rango-creado', data)
+        this.dialogNuevoRango = false
+        this.$q.notify({ type: 'positive', message: 'Rango creado y vinculado' })
+      } catch (e) {
+        const msg = e.response?.data?.message || e.message
+        this.$q.notify({ type: 'negative', message: 'Error: ' + msg })
+      } finally {
+        this.creandoRango = false
+      }
     },
 
     toVariable (nombre) {
@@ -483,7 +599,8 @@ export default {
       const rangos = this.lista.map((item, idx) => ({
         area_rango_id: item.id,
         nombre_variable: item.nombre_variable || null,
-        orden: idx + 1
+        orden: idx + 1,
+        visible: item.visible !== false
       }))
       const formulas = this.formulas.map((f, idx) => ({ ...f, label: '', unidad: '', orden: idx + 1 }))
       this.$emit('save', { rangos, formulas })

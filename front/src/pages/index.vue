@@ -179,6 +179,8 @@ const menuSections = [
     icon: 'medication',
     links: [
       { title: 'Productos', icon: 'inventory_2', link: '/farmacia', can: 'Ver Productos' },
+      { title: 'Productos por vencer', icon: 'hourglass_bottom', link: '/productos-por-vencer', can: 'Ver Productos por Vencer' },
+      { title: 'Productos vencidos', icon: 'warning', link: '/productos-vencidos', can: 'Ver Productos Vencidos' },
       { title: 'Compras',   icon: 'shopping_cart', link: '/compras', can: 'Ver Compras' },
       { title: 'Ventas',    icon: 'point_of_sale', link: '/ventas',  can: 'Ver Ventas' },
     ],
@@ -196,6 +198,13 @@ const menuSections = [
     links: [
       { title: 'Pacientes', icon: 'badge', link: '/pacientes', can: ['Ver Pacientes', 'Ver Internaciones'] },
       { title: 'Doctores',  icon: 'medical_information', link: '/doctores', can: 'Ver Doctores' },
+    ],
+  },
+  {
+    title: 'Laboratorio',
+    icon: 'biotech',
+    links: [
+      { title: 'Productos', icon: 'science', link: '/laboratorio', can: 'Ver Productos' },
     ],
   },
 ]

@@ -24,7 +24,7 @@ use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 // Row 8…N : Data rows
 // Row N+1 : Totals row
 
-class DetalleAlmacenExport implements FromArray, WithTitle, WithColumnWidths, WithStyles, WithEvents
+class DetalleAlmacenExport implements FromArray, WithColumnWidths, WithEvents, WithStyles, WithTitle
 {
     private const DATA_START = 8;
 
@@ -50,18 +50,18 @@ class DetalleAlmacenExport implements FromArray, WithTitle, WithColumnWidths, Wi
             ['(Expresado en Bolivianos)'],
             // Row 6 — main headers (Cantidad spans E-H, Valores spans I-L)
             ['Nº', 'Descripción (Item)', 'Unidad de medida', 'Precio Unitario',
-             'Cantidad', '', '', '',
-             'Valores', '', '', ''],
+                'Cantidad', '', '', '',
+                'Valores', '', '', ''],
             // Row 7 — sub-headers
             ['', '', '', '',
-             'Saldo Inicial', 'Entradas', 'Salidas', 'Saldo Final',
-             'Saldo Inicial', 'Entradas', 'Salidas', 'Saldo Final'],
+                'Saldo Inicial', 'Entradas', 'Salidas', 'Saldo Final',
+                'Saldo Inicial', 'Entradas', 'Salidas', 'Saldo Final'],
         ];
 
-        $totCantIni = $totCantEnt = $totCantSal = $totCantFin = 0;
-        $totValIni  = $totValEnt  = $totValSal  = $totValFin  = 0.0;
+        $dataStart = self::DATA_START;
 
-        foreach ($this->rows as $row) {
+        foreach ($this->rows as $i => $row) {
+            $r = $dataStart + $i;
             $data[] = [
                 $row['nro'],
                 $row['descripcion'],
@@ -70,32 +70,38 @@ class DetalleAlmacenExport implements FromArray, WithTitle, WithColumnWidths, Wi
                 $row['cant_saldo_ini'],
                 $row['cant_entradas'],
                 $row['cant_salidas'],
-                $row['cant_saldo_final'],
+                "=E{$r}+F{$r}-G{$r}",
                 $row['val_saldo_ini'],
                 $row['val_entradas'],
                 $row['val_salidas'],
-                $row['val_saldo_final'],
+                "=I{$r}+J{$r}-K{$r}",
             ];
-            $totCantIni += $row['cant_saldo_ini'];
-            $totCantEnt += $row['cant_entradas'];
-            $totCantSal += $row['cant_salidas'];
-            $totCantFin += $row['cant_saldo_final'];
-            $totValIni  += $row['val_saldo_ini'];
-            $totValEnt  += $row['val_entradas'];
-            $totValSal  += $row['val_salidas'];
-            $totValFin  += $row['val_saldo_final'];
         }
 
-        $data[] = [
-            '', 'TOTAL', '', '',
-            $totCantIni, $totCantEnt, $totCantSal, $totCantFin,
-            round($totValIni, 2), round($totValEnt, 2), round($totValSal, 2), round($totValFin, 2),
-        ];
+        if ($this->rows) {
+            $dataEnd = $dataStart + count($this->rows) - 1;
+            $data[] = [
+                '', 'TOTAL', '', '',
+                "=SUM(E{$dataStart}:E{$dataEnd})",
+                "=SUM(F{$dataStart}:F{$dataEnd})",
+                "=SUM(G{$dataStart}:G{$dataEnd})",
+                "=SUM(H{$dataStart}:H{$dataEnd})",
+                "=SUM(I{$dataStart}:I{$dataEnd})",
+                "=SUM(J{$dataStart}:J{$dataEnd})",
+                "=SUM(K{$dataStart}:K{$dataEnd})",
+                "=SUM(L{$dataStart}:L{$dataEnd})",
+            ];
+        } else {
+            $data[] = ['', 'TOTAL', '', '', 0, 0, 0, 0, 0, 0, 0, 0];
+        }
 
         return $data;
     }
 
-    public function title(): string { return 'DGCF-R1.06 Detalle'; }
+    public function title(): string
+    {
+        return 'DGCF-R1.06 Detalle';
+    }
 
     public function columnWidths(): array
     {
@@ -111,9 +117,9 @@ class DetalleAlmacenExport implements FromArray, WithTitle, WithColumnWidths, Wi
         return [
             1 => ['font' => ['size' => 9]],
             2 => ['font' => ['bold' => true, 'size' => 11],
-                  'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER]],
+                'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER]],
             3 => ['font' => ['bold' => true, 'size' => 10],
-                  'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER]],
+                'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER]],
             4 => ['alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER]],
             5 => ['alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER]],
         ];
@@ -138,13 +144,13 @@ class DetalleAlmacenExport implements FromArray, WithTitle, WithColumnWidths, Wi
                 }
 
                 $headerStyle = [
-                    'font'      => ['bold' => true, 'color' => ['rgb' => 'FFFFFF'], 'size' => 9],
-                    'fill'      => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => '0F5EA8']],
+                    'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF'], 'size' => 9],
+                    'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => '0F5EA8']],
                     'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER,
-                                    'vertical'   => Alignment::VERTICAL_CENTER,
-                                    'wrapText'   => true],
-                    'borders'   => ['allBorders' => ['borderStyle' => Border::BORDER_THIN,
-                                                      'color'       => ['rgb' => '0A4A8A']]],
+                        'vertical' => Alignment::VERTICAL_CENTER,
+                        'wrapText' => true],
+                    'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN,
+                        'color' => ['rgb' => '0A4A8A']]],
                 ];
                 $sheet->getStyle('A6:L7')->applyFromArray($headerStyle);
                 $sheet->getRowDimension(6)->setRowHeight(22);
@@ -155,14 +161,14 @@ class DetalleAlmacenExport implements FromArray, WithTitle, WithColumnWidths, Wi
                 $sheet->getStyle('I6:L7')->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('156A3C');
 
                 $dataStart = self::DATA_START;
-                $dataEnd   = $dataStart + count($this->rows) - 1;
-                $totalRow  = $dataEnd + 1;
+                $dataEnd = $dataStart + count($this->rows) - 1;
+                $totalRow = $dataEnd + 1;
 
                 if ($dataEnd >= $dataStart) {
                     $sheet->getStyle("A{$dataStart}:L{$dataEnd}")->applyFromArray([
                         'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN,
-                                                        'color'       => ['rgb' => 'B8D0EA']]],
-                        'font'    => ['size' => 8],
+                            'color' => ['rgb' => 'B8D0EA']]],
+                        'font' => ['size' => 8],
                     ]);
                     for ($r = $dataStart; $r <= $dataEnd; $r++) {
                         if ($r % 2 === 0) {
@@ -171,30 +177,30 @@ class DetalleAlmacenExport implements FromArray, WithTitle, WithColumnWidths, Wi
                         }
                     }
                     $sheet->getStyle("D{$dataStart}:L{$dataEnd}")->getNumberFormat()
-                          ->setFormatCode('#,##0.00');
+                        ->setFormatCode('#,##0.00');
                 }
 
                 // Totals row: label (A-D), quantity blue (E-H), values yellow (I-L)
                 $sheet->getStyle("A{$totalRow}:D{$totalRow}")->applyFromArray([
-                    'font'      => ['bold' => true, 'size' => 10],
+                    'font' => ['bold' => true, 'size' => 10],
                     'alignment' => ['horizontal' => Alignment::HORIZONTAL_RIGHT],
-                    'borders'   => ['allBorders' => ['borderStyle' => Border::BORDER_THIN,
-                                                      'color'       => ['rgb' => '0A4A8A']]],
+                    'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN,
+                        'color' => ['rgb' => '0A4A8A']]],
                 ]);
                 $sheet->getStyle("E{$totalRow}:H{$totalRow}")->applyFromArray([
-                    'font'      => ['bold' => true, 'color' => ['rgb' => 'FFFFFF'], 'size' => 10],
-                    'fill'      => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => '0F5EA8']],
+                    'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF'], 'size' => 10],
+                    'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => '0F5EA8']],
                     'alignment' => ['horizontal' => Alignment::HORIZONTAL_RIGHT],
-                    'borders'   => ['allBorders' => ['borderStyle' => Border::BORDER_THIN,
-                                                      'color'       => ['rgb' => '0A4A8A']]],
+                    'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN,
+                        'color' => ['rgb' => '0A4A8A']]],
                 ]);
                 $sheet->getStyle("E{$totalRow}:H{$totalRow}")->getNumberFormat()->setFormatCode('#,##0.00');
                 $sheet->getStyle("I{$totalRow}:L{$totalRow}")->applyFromArray([
-                    'font'      => ['bold' => true, 'color' => ['rgb' => '000000'], 'size' => 11],
-                    'fill'      => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => 'FFD700']],
+                    'font' => ['bold' => true, 'color' => ['rgb' => '000000'], 'size' => 11],
+                    'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => 'FFD700']],
                     'alignment' => ['horizontal' => Alignment::HORIZONTAL_RIGHT],
-                    'borders'   => ['allBorders' => ['borderStyle' => Border::BORDER_MEDIUM,
-                                                      'color'       => ['rgb' => 'B8860B']]],
+                    'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_MEDIUM,
+                        'color' => ['rgb' => 'B8860B']]],
                 ]);
                 $sheet->getStyle("I{$totalRow}:L{$totalRow}")->getNumberFormat()->setFormatCode('#,##0.00');
                 $sheet->getRowDimension($totalRow)->setRowHeight(18);

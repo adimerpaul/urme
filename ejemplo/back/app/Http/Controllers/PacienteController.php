@@ -7,10 +7,10 @@ use App\Models\Solicitude;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
-use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
-use PhpOffice\PhpSpreadsheet\Style\Fill;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Border;
+use PhpOffice\PhpSpreadsheet\Style\Fill;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
 class PacienteController extends Controller
 {
@@ -26,28 +26,49 @@ class PacienteController extends Controller
 
     private function generarNombrePorTipo(?string $tipo)
     {
-        if (!in_array($tipo, ['NN', 'RN'])) {
+        if (! in_array($tipo, ['NN', 'RN'])) {
             return response()->json(['error' => 'Tipo inválido'], 422);
         }
 
-        $count = Paciente::where('nombre_completo', 'LIKE', $tipo . '-%')->count();
+        $count = Paciente::where('nombre_completo', 'LIKE', $tipo.'-%')->count();
 
-        return $tipo . '-' . ($count + 1);
+        return $tipo.'-'.($count + 1);
     }
 
     public function index(Request $request)
     {
         $perPage = (int) $request->get('per_page', 20);
-        $search  = $request->get('search');
+        $search = $request->get('search');
 
-        $query = Paciente::orderBy('id', 'desc');
+        $query = Paciente::query()
+            ->select('pacientes.*')
+            ->addSelect(['codigos_solicitudes' => Solicitude::selectRaw("GROUP_CONCAT(DISTINCT CONCAT(codigo, ' · ', DATE_FORMAT(fecha_creacion, '%d/%m/%Y')) ORDER BY id DESC SEPARATOR ', ')")
+                ->whereColumn('paciente_id', 'pacientes.id')
+                ->whereNotNull('codigo')
+                ->where('codigo', '!=', ''),
+            ])
+            ->orderBy('id', 'desc');
 
         if ($search) {
             $search = trim($search);
             $query->where(function ($q) use ($search) {
                 $q->where('nombre_completo', 'like', "%{$search}%")
-                    ->orWhere('ci', 'like', "%{$search}%")
-                    ->orWhere('telefono', 'like', "%{$search}%");
+                    ->orWhere('codigo', 'like', "%{$search}%")
+                    ->orWhereExists(function ($sub) use ($search) {
+                        $sub->selectRaw(1)
+                            ->from('solicitudes')
+                            ->whereColumn('solicitudes.paciente_id', 'pacientes.id')
+                            ->whereNull('solicitudes.deleted_at')
+                            ->where(function ($s) use ($search) {
+                                // Numérico: código de solicitud exacto (LIKE sobre la
+                                // concatenación nro_registro+codigo da falsos positivos)
+                                if (ctype_digit($search)) {
+                                    $s->where('solicitudes.codigo', $search);
+                                } else {
+                                    $s->where('solicitudes.codigo_solicitud', 'like', "%{$search}%");
+                                }
+                            });
+                    });
             });
         }
 
@@ -64,12 +85,13 @@ class PacienteController extends Controller
         $request->validate(['nombre_completo' => 'required|string|max:255']);
 
         $existe = Paciente::where('ci', $request->ci)->first();
-        if ($existe && !empty($request->ci)) {
-            return response()->json(['message' => 'El paciente con CI ' . $request->ci . ' ya existe'], 409);
+        if ($existe && ! empty($request->ci)) {
+            return response()->json(['message' => 'El paciente con CI '.$request->ci.' ya existe'], 409);
         }
 
         $datos = $request->all();
         $datos['codigo'] = Paciente::generarCodigo($datos['nombre_completo'] ?? null, $datos['fecha_nac'] ?? null);
+
         return response()->json(Paciente::create($datos), 201);
     }
 
@@ -77,21 +99,24 @@ class PacienteController extends Controller
     {
         $paciente = Paciente::findOrFail($id);
         $paciente->update($request->all());
+
         return response()->json($paciente);
     }
 
     public function destroy($id)
     {
         Paciente::findOrFail($id)->delete();
+
         return response()->json(['message' => 'Paciente eliminado correctamente']);
     }
 
     public function buscarPorCi($ci)
     {
         $paciente = Paciente::where('ci', $ci)->first();
-        if (!$paciente) {
+        if (! $paciente) {
             return response()->json(['message' => 'Paciente no encontrado'], 404);
         }
+
         return response()->json($paciente);
     }
 
@@ -101,8 +126,8 @@ class PacienteController extends Controller
     {
         return Solicitude::where('paciente_id', $pacienteId)
             ->whereNull('solicitudes.deleted_at')
-            ->when($dateFrom, fn($q) => $q->whereDate('solicitudes.fecha_creacion', '>=', $dateFrom))
-            ->when($dateTo,   fn($q) => $q->whereDate('solicitudes.fecha_creacion', '<=', $dateTo))
+            ->when($dateFrom, fn ($q) => $q->whereDate('solicitudes.fecha_creacion', '>=', $dateFrom))
+            ->when($dateTo, fn ($q) => $q->whereDate('solicitudes.fecha_creacion', '<=', $dateTo))
             ->select(
                 'solicitudes.id',
                 'solicitudes.codigo_solicitud',
@@ -127,14 +152,14 @@ class PacienteController extends Controller
 
     public function historico(Request $request, $id)
     {
-        $paciente  = Paciente::findOrFail($id);
-        $perPage   = min((int) $request->get('per_page', 15), 100);
-        $dateFrom  = $request->get('date_from');
-        $dateTo    = $request->get('date_to');
+        $paciente = Paciente::findOrFail($id);
+        $perPage = min((int) $request->get('per_page', 15), 100);
+        $dateFrom = $request->get('date_from');
+        $dateTo = $request->get('date_to');
         $solicitudes = $this->historicQuery($id, $dateFrom, $dateTo)->paginate($perPage);
 
         return response()->json([
-            'paciente'    => $paciente,
+            'paciente' => $paciente,
             'solicitudes' => $solicitudes,
         ]);
     }
@@ -143,18 +168,18 @@ class PacienteController extends Controller
     {
         $paciente = Paciente::findOrFail($id);
         $dateFrom = $request->get('date_from');
-        $dateTo   = $request->get('date_to');
-        $rows     = $this->historicQuery($id, $dateFrom, $dateTo)->get();
+        $dateTo = $request->get('date_to');
+        $rows = $this->historicQuery($id, $dateFrom, $dateTo)->get();
 
-        $spreadsheet = new Spreadsheet();
+        $spreadsheet = new Spreadsheet;
         $sheet = $spreadsheet->getActiveSheet()->setTitle('Histórico');
 
         // ── Encabezado del paciente ──
         $sheet->mergeCells('A1:L1');
         $sheet->setCellValue('A1', 'HISTÓRICO CLÍNICO DEL PACIENTE');
         $sheet->getStyle('A1')->applyFromArray([
-            'font'      => ['bold' => true, 'size' => 14, 'color' => ['argb' => 'FFFFFFFF']],
-            'fill'      => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => 'FF0D47A1']],
+            'font' => ['bold' => true, 'size' => 14, 'color' => ['argb' => 'FFFFFFFF']],
+            'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => 'FF0D47A1']],
             'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER],
         ]);
         $sheet->getRowDimension(1)->setRowHeight(26);
@@ -180,7 +205,7 @@ class PacienteController extends Controller
 
         // ── Separador ──
         $headerRow = $infoRow + 1;
-        $cols = ['A','B','C','D','E','F','G','H','I','J','K','L'];
+        $cols = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L'];
         $lastCol = end($cols);
 
         // ── Cabecera de tabla ──
@@ -194,28 +219,28 @@ class PacienteController extends Controller
             $sheet->setCellValueByColumnAndRow($i + 1, $headerRow, $h);
         }
         $sheet->getStyle("A{$headerRow}:{$lastCol}{$headerRow}")->applyFromArray([
-            'font'      => ['bold' => true, 'color' => ['argb' => 'FFFFFFFF']],
-            'fill'      => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => 'FF1565C0']],
+            'font' => ['bold' => true, 'color' => ['argb' => 'FFFFFFFF']],
+            'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => 'FF1565C0']],
             'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER],
         ]);
-        $sheet->freezePane("A" . ($headerRow + 1));
+        $sheet->freezePane('A'.($headerRow + 1));
 
         // ── Filas de datos ──
         $dataRow = $headerRow + 1;
         foreach ($rows as $r) {
             $fecha = $r->fecha_creacion ? substr($r->fecha_creacion, 0, 10) : '';
-            $salaCama = trim(($r->sala ? 'Sala: ' . $r->sala : '') . ($r->cama ? '  Cama: ' . $r->cama : ''));
-            $unidad = trim(($r->unidad_solicitante ?? '') . ($r->sala ? ' / ' . $r->sala : ''));
+            $salaCama = trim(($r->sala ? 'Sala: '.$r->sala : '').($r->cama ? '  Cama: '.$r->cama : ''));
+            $unidad = trim(($r->unidad_solicitante ?? '').($r->sala ? ' / '.$r->sala : ''));
 
-            $sheet->setCellValueByColumnAndRow(1,  $dataRow, $fecha);
-            $sheet->setCellValueByColumnAndRow(2,  $dataRow, $r->hora_solicitud);
-            $sheet->setCellValueByColumnAndRow(3,  $dataRow, $r->codigo_solicitud);
-            $sheet->setCellValueByColumnAndRow(4,  $dataRow, $r->nro_registro);
-            $sheet->setCellValueByColumnAndRow(5,  $dataRow, $r->doctor_nombre);
-            $sheet->setCellValueByColumnAndRow(6,  $dataRow, $r->tipo_atencion);
-            $sheet->setCellValueByColumnAndRow(7,  $dataRow, $r->establecimiento_nombre);
-            $sheet->setCellValueByColumnAndRow(8,  $dataRow, $unidad);
-            $sheet->setCellValueByColumnAndRow(9,  $dataRow, $r->cama);
+            $sheet->setCellValueByColumnAndRow(1, $dataRow, $fecha);
+            $sheet->setCellValueByColumnAndRow(2, $dataRow, $r->hora_solicitud);
+            $sheet->setCellValueByColumnAndRow(3, $dataRow, $r->codigo_solicitud);
+            $sheet->setCellValueByColumnAndRow(4, $dataRow, $r->nro_registro);
+            $sheet->setCellValueByColumnAndRow(5, $dataRow, $r->doctor_nombre);
+            $sheet->setCellValueByColumnAndRow(6, $dataRow, $r->tipo_atencion);
+            $sheet->setCellValueByColumnAndRow(7, $dataRow, $r->establecimiento_nombre);
+            $sheet->setCellValueByColumnAndRow(8, $dataRow, $unidad);
+            $sheet->setCellValueByColumnAndRow(9, $dataRow, $r->cama);
             $sheet->setCellValueByColumnAndRow(10, $dataRow, $r->areas);
             $sheet->setCellValueByColumnAndRow(11, $dataRow, $r->pruebas);
             $sheet->setCellValueByColumnAndRow(12, $dataRow, $r->estado);
@@ -229,7 +254,7 @@ class PacienteController extends Controller
         }
 
         // ── Borde en toda la tabla ──
-        $sheet->getStyle("A{$headerRow}:{$lastCol}" . ($dataRow - 1))->applyFromArray([
+        $sheet->getStyle("A{$headerRow}:{$lastCol}".($dataRow - 1))->applyFromArray([
             'borders' => [
                 'allBorders' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['argb' => 'FFBDBDBD']],
             ],
@@ -241,7 +266,7 @@ class PacienteController extends Controller
         }
 
         $filename = "historico_{$paciente->id}_{$paciente->nombre_completo}.xlsx";
-        $path = storage_path('app/' . $filename);
+        $path = storage_path('app/'.$filename);
         (new Xlsx($spreadsheet))->save($path);
 
         return response()->download($path, $filename)->deleteFileAfterSend(true);

@@ -522,7 +522,7 @@
                       />
                       <span>x {{ money(det.precio_unitario) }} Bs</span>
                     </template>
-                    <span v-else>{{ det.cantidad }} x {{ money(det.precio_unitario) }} Bs</span>
+                    <span v-else>{{ formatQty(det.cantidad) }} x {{ money(det.precio_unitario) }} Bs</span>
                   </div>
                 </div>
                 <div class="detail-item-actions">
@@ -1231,6 +1231,10 @@ function estadoColor (estado) {
   if (estado === 'RECHAZADO') return 'red'
   if (estado === 'ANULADO') return 'grey-7'
   return 'amber-8'
+}
+
+function formatQty (value) {
+  return parseFloat(Number(value || 0).toFixed(4))
 }
 
 function money (value) {

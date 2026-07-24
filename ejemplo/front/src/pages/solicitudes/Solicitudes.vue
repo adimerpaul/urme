@@ -21,7 +21,7 @@
 
       <q-card-section class="row items-center q-col-gutter-xs">
         <div class="col-12 col-sm-4">
-          <q-input dense outlined v-model="search" clearable label="Buscar por código, paciente o CI">
+          <q-input dense outlined v-model="search" clearable label="Buscar por código, paciente o CI" @keyup.enter="getSolicitudes">
             <template #prepend><q-icon name="search" /></template>
           </q-input>
         </div>
@@ -318,7 +318,7 @@ export default {
       columns: [
         { name: 'actions', label: 'Acciones', align: 'center' },
         { name: 'codigo', label: 'Código', field: 'codigo', align: 'left', style: 'font-weight:600' },
-        { name: 'fecha_solicitud', label: 'Fecha', field: row => row.fecha_solicitud, format: v => v || '', align: 'left' },
+        { name: 'fecha_creacion', label: 'Fecha', field: row => row.fecha_creacion, format: v => v ? moment(v).format('DD/MM/YYYY HH:mm') : '', align: 'left' },
         { name: 'paciente', label: 'Paciente', field: row => row?.paciente_nombre || '', align: 'left' },
         { name: 'doctor', label: 'Doctor', field: row => row.doctor?.nombre || row.doctor_nombre || '', align: 'left' },
         { name: 'tipo_atencion', label: 'Tipo atención', field: 'tipo_atencion', align: 'left' },

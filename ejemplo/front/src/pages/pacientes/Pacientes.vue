@@ -33,9 +33,26 @@
           class="q-mr-sm"
           :loading="loading"
         />
-        <q-input dense outlined v-model="filter" label="Buscar" debounce="500">
+        <q-input dense outlined v-model="filter" label="Buscar por código, nombre o código de solicitud" debounce="500">
           <template #append><q-icon name="search" /></template>
         </q-input>
+      </template>
+
+      <!-- CÓDIGOS DE SOLICITUDES -->
+      <template #body-cell-codigos_solicitudes="props">
+        <q-td :props="props" style="max-width:260px; white-space:normal">
+          <template v-if="props.row.codigos_solicitudes">
+            <q-chip
+              v-for="cod in props.row.codigos_solicitudes.split(', ')"
+              :key="cod"
+              dense square color="blue-1" text-color="primary"
+              style="font-size:11px"
+            >
+              {{ cod }}
+            </q-chip>
+          </template>
+          <span v-else class="text-grey-5">—</span>
+        </q-td>
       </template>
 
       <!-- ACCIONES -->
@@ -389,6 +406,7 @@ export default {
       columns: [
         { name: 'actions', label: 'Acciones', align: 'center' },
         { name: 'id', label: 'Código paciente', field: 'id', align: 'left' },
+        { name: 'codigos_solicitudes', label: 'Código', field: 'codigos_solicitudes', align: 'left' },
         { name: 'nombre_completo', label: 'Nombre', field: 'nombre_completo' },
         { name: 'ci', label: 'CI', field: 'ci' },
         { name: 'telefono', label: 'Teléfono', field: 'telefono' },

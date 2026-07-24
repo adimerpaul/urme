@@ -585,7 +585,7 @@
             <div class="q-mt-sm q-mb-xs">
               <div class="row items-center">
                 <q-icon name="bar_chart" color="primary" class="q-mr-xs" size="16px" />
-                <span class="text-caption text-weight-bold text-primary">RANGOS DE REFERENCIA (hasta 5)</span>
+                <span class="text-caption text-weight-bold text-primary">RANGOS DE REFERENCIA (hasta 8)</span>
               </div>
               <div class="text-caption text-grey-6 q-mb-xs">
                 Ej: Fase folicular: 3,0 – 12,0 · Menopáusia: 35,0 – 151,0
@@ -602,7 +602,7 @@
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="n in 5" :key="n">
+                <tr v-for="n in 8" :key="n">
                   <td class="tc text-grey-6">{{ n }}</td>
                   <td>
                     <input
@@ -686,6 +686,7 @@
       :formulas-iniciales="formulasIniciales"
       :loading="loading"
       @save="guardarVinculoRangos"
+      @rango-creado="onRangoCreado"
     />
 
     <q-dialog v-model="dialogVincularServicio">
@@ -846,6 +847,9 @@ export default {
         rango_3_descripcion: '', rango_3_minimo: null, rango_3_maximo: null,
         rango_4_descripcion: '', rango_4_minimo: null, rango_4_maximo: null,
         rango_5_descripcion: '', rango_5_minimo: null, rango_5_maximo: null,
+        rango_6_descripcion: '', rango_6_minimo: null, rango_6_maximo: null,
+        rango_7_descripcion: '', rango_7_minimo: null, rango_7_maximo: null,
+        rango_8_descripcion: '', rango_8_minimo: null, rango_8_maximo: null,
         unidad: '',
         interpretacion: '',
         muestra: '',
@@ -907,7 +911,9 @@ export default {
           String(s.codigo || '').includes(t)
         )
       }
-      return list
+      return [...list].sort((a, b) =>
+        (a.nombre || '').localeCompare(b.nombre || '', 'es', { sensitivity: 'base' })
+      )
     },
     filteredRangos () {
       const t = (this.searchRango || '').toLowerCase()
@@ -1011,6 +1017,10 @@ export default {
       }
       this.editandoServicio = false
       this.dialogServicio = true
+      this.$axios.get('servicios/next-codigo')
+        .then(res => {
+          this.servicioForm.codigo = res.data.codigo
+        })
     },
     editarServicio (row) {
       this.servicioForm = {
@@ -1075,6 +1085,9 @@ export default {
       } finally {
         this.loading = false
       }
+    },
+    onRangoCreado (rango) {
+      this.rangos.push(rango)
     },
     abrirVincularServicio (row) {
       this.servicioVincular = row
@@ -1149,6 +1162,9 @@ export default {
         rango_3_descripcion: '', rango_3_minimo: null, rango_3_maximo: null,
         rango_4_descripcion: '', rango_4_minimo: null, rango_4_maximo: null,
         rango_5_descripcion: '', rango_5_minimo: null, rango_5_maximo: null,
+        rango_6_descripcion: '', rango_6_minimo: null, rango_6_maximo: null,
+        rango_7_descripcion: '', rango_7_minimo: null, rango_7_maximo: null,
+        rango_8_descripcion: '', rango_8_minimo: null, rango_8_maximo: null,
         unidad: '',
         interpretacion: '',
         muestra: '',

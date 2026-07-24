@@ -110,7 +110,32 @@
                 <q-input v-model="form.categoria_programatica" dense outlined label="Categoría programática" />
               </div>
               <div class="col-12 col-sm-4">
-                <q-input v-model="form.orden_de_compra" dense outlined label="Orden de compra" />
+                <q-select
+                  v-model="form.metodo_orden"
+                  dense outlined
+                  emit-value
+                  map-options
+                  clearable
+                  label="Método"
+                  :options="metodoOrdenOptions"
+                />
+              </div>
+              <div class="col-12 col-sm-4">
+                <q-input v-model="form.orden_de_compra" dense outlined :label="`Nro. ${metodoOrdenLabel}`" />
+              </div>
+              <div class="col-12 col-sm-4">
+                <q-select
+                  v-model="form.metodo_orden"
+                  dense outlined
+                  emit-value
+                  map-options
+                  clearable
+                  label="Tipo de fecha"
+                  :options="fechaOrdenTipoOptions"
+                />
+              </div>
+              <div class="col-12 col-sm-4">
+                <q-input v-model="form.fecha_orden" dense outlined type="date" :label="`Fecha ${metodoOrdenLabel}`" />
               </div>
               <div class="col-12 col-sm-4">
                 <q-input v-model="form.codigo_interno" dense outlined label="Código interno" />
@@ -342,8 +367,15 @@
               <div v-if="confirmData?.orden_de_compra" class="meta-item">
                 <q-icon name="description" size="20px" class="meta-icon" />
                 <div class="meta-content">
-                  <div class="meta-label">Orden de compra</div>
+                  <div class="meta-label">{{ confirmData.metodo_orden || 'Orden de compra' }}</div>
                   <div class="meta-value">{{ confirmData.orden_de_compra }}</div>
+                </div>
+              </div>
+              <div v-if="confirmData?.fecha_orden" class="meta-item">
+                <q-icon name="event_note" size="20px" class="meta-icon" />
+                <div class="meta-content">
+                  <div class="meta-label">Fecha {{ (confirmData.metodo_orden || 'Orden de compra').toLowerCase() }}</div>
+                  <div class="meta-value">{{ confirmData.fecha_orden }}</div>
                 </div>
               </div>
               <div v-if="confirmData?.codigo_interno" class="meta-item">
@@ -469,12 +501,24 @@ export default {
         comentario: '',
         categoria_programatica: '',
         orden_de_compra: '',
+        metodo_orden: 'ORDEN DE COMPRA',
+        fecha_orden: '',
         codigo_interno: '',
         hoja_de_ruta: '',
         retencion_activa: false,
         retencion_porcentaje: 7,
       },
       entradaMotivos: ['COMPRA', 'DONACION', 'TRANSFERENCIA', 'JUSTO','AJUSTE POSITIVO', 'AJUSTE NEGATIVO', 'OTRO'],
+      metodoOrdenOptions: [
+        { label: 'Orden de compra', value: 'ORDEN DE COMPRA' },
+        { label: 'Orden de servicio', value: 'ORDEN DE SERVICIO' },
+        { label: 'Contrato', value: 'CONTRATO' },
+      ],
+      fechaOrdenTipoOptions: [
+        { label: 'FECHA ORD COMP', value: 'ORDEN DE COMPRA' },
+        { label: 'FECHA ORD SERV', value: 'ORDEN DE SERVICIO' },
+        { label: 'FECHA CTO', value: 'CONTRATO' },
+      ],
       pagoOptions: [
         { label: 'Ninguno', value: '' },
         { label: 'Efectivo', value: 'EFECTIVO' },
@@ -500,6 +544,10 @@ export default {
     },
     motivoOptions () {
       return this.entradaMotivos.map(value => ({ label: value, value }))
+    },
+    metodoOrdenLabel () {
+      const opt = this.metodoOrdenOptions.find(o => o.value === this.form.metodo_orden)
+      return opt ? opt.label : 'Orden de compra'
     },
     isEditMode () {
       return !!this.editId
@@ -659,6 +707,8 @@ export default {
         comentario: this.form.comentario || '',
         categoria_programatica: this.form.categoria_programatica || '',
         orden_de_compra: this.form.orden_de_compra || '',
+        metodo_orden: this.form.metodo_orden || '',
+        fecha_orden: this.form.fecha_orden || '',
         codigo_interno: this.form.codigo_interno || '',
       }
       this.showConfirmDialog = true
@@ -713,6 +763,8 @@ export default {
         this.form.comentario = compra.comentario || ''
         this.form.categoria_programatica = compra.categoria_programatica || ''
         this.form.orden_de_compra = compra.orden_de_compra || ''
+        this.form.metodo_orden = compra.metodo_orden || 'ORDEN DE COMPRA'
+        this.form.fecha_orden = compra.fecha_orden ? moment(compra.fecha_orden).format('YYYY-MM-DD') : ''
         this.form.codigo_interno = compra.codigo_interno || ''
         this.form.hoja_de_ruta = compra.hoja_de_ruta || ''
         this.form.retencion_porcentaje = parseFloat(compra.retencion_porcentaje) || 7

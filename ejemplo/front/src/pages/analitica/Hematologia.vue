@@ -160,8 +160,8 @@
             </thead>
 
             <tbody>
-            <tr>
-              <td>Glóbulos rojos</td>
+            <tr v-if="canVariable('globulos_rojos')">
+              <td>Glóbulos rojos <span class="var-tag">globulos_rojos</span></td>
               <td>
                 <q-input
                   v-model.number="form.globulos_rojos"
@@ -181,8 +181,8 @@
               <td>{{ rangoUnidad('Globulos Rojos') }}</td>
             </tr>
 
-            <tr>
-              <td>Glóbulos blancos</td>
+            <tr v-if="canVariable('globulos_blancos')">
+              <td>Glóbulos blancos <span class="var-tag">globulos_blancos</span></td>
               <td>
                 <q-input
                   v-model.number="form.globulos_blancos"
@@ -200,8 +200,8 @@
               <td>{{ rangoUnidad('Globulos Blancos (Leucocitos)') }}</td>
             </tr>
 
-            <tr>
-              <td>Plaquetas</td>
+            <tr v-if="canVariable('plaquetas')">
+              <td>Plaquetas <span class="var-tag">plaquetas</span></td>
               <td>
                 <q-input
                   v-model.number="form.plaquetas"
@@ -219,8 +219,8 @@
               <td>{{ rangoUnidad('Plaquetas') }}</td>
             </tr>
 
-            <tr >
-              <td>Hemoglobina</td>
+            <tr v-if="canVariable('hemoglobina')">
+              <td>Hemoglobina <span class="var-tag">hemoglobina</span></td>
               <td>
                 <q-input
                   v-model.number="form.hemoglobina"
@@ -240,8 +240,8 @@
               <td>{{ rangoUnidad('Hemoglobina') }}</td>
             </tr>
 
-            <tr>
-              <td>Hematocrito</td>
+            <tr v-if="canVariable('hematocrito')">
+              <td>Hematocrito <span class="var-tag">hematocrito</span></td>
               <td>
                 <q-input
                   v-model.number="form.hematocrito"
@@ -339,11 +339,11 @@
             </tbody>
           </q-markup-table>
           <div class="section-title q-mb-xs"
-               v-if="canServicios(['ÍNDICES HEMATIMÉTRICOS','HEMOGRAMA COMPLETO+ PLAQUETAS'])"
+               v-if="canAny(['vcm','hbcm','chcm'])"
           >Indices hematimetricos</div>
 
           <q-markup-table dense flat bordered square class="bg-white q-mb-md"
-                          v-if="canServicios(['ÍNDICES HEMATIMÉTRICOS','HEMOGRAMA COMPLETO+ PLAQUETAS'])"
+                          v-if="canAny(['vcm','hbcm','chcm'])"
           >
             <thead>
             <tr>
@@ -450,8 +450,8 @@
 <!--              <td>{{ rangoUnidad('Hematocrito') }}</td>-->
 <!--            </tr>-->
 
-            <tr v-if="canServicios(['ÍNDICES HEMATIMÉTRICOS','HEMOGRAMA COMPLETO+ PLAQUETAS'])">
-              <td>VCM</td>
+            <tr v-if="canVariable('vcm')">
+              <td>VCM <span class="var-tag">vcm</span></td>
               <td>
                 <q-input
                   v-model.number="form.vcm"
@@ -469,8 +469,8 @@
               <td>{{ rangoUnidad('V.C.M.') }}</td>
             </tr>
 
-            <tr v-if="canServicios(['ÍNDICES HEMATIMÉTRICOS','HEMOGRAMA COMPLETO+ PLAQUETAS'])">
-              <td>HBCM</td>
+            <tr v-if="canVariable('hbcm')">
+              <td>HBCM <span class="var-tag">hbcm</span></td>
               <td>
                 <q-input
                   v-model.number="form.hbcm"
@@ -488,8 +488,8 @@
               <td>{{ rangoUnidad('Hb.C.M.') }}</td>
             </tr>
 
-            <tr v-if="canServicios(['ÍNDICES HEMATIMÉTRICOS','HEMOGRAMA COMPLETO+ PLAQUETAS'])">
-              <td>CHCM</td>
+            <tr v-if="canVariable('chcm')">
+              <td>CHCM <span class="var-tag">chcm</span></td>
               <td>
                 <q-input
                   v-model.number="form.chcm"
@@ -543,8 +543,8 @@
             </thead>
 
             <tbody>
-            <tr v-if="canServicios('HEMOGRAMA COMPLETO+ PLAQUETAS')">
-              <td>Basófilos</td>
+            <tr v-if="canVariable('basofilos_porcentaje')">
+              <td>Basófilos <span class="var-tag">basofilos_porcentaje</span></td>
               <td>
                 <q-input v-model.number="form.basofilos_porcentaje" dense outlined type="number" step="0.01"
                          :input-class="['text-right', isOutOfRange('Basofilos', form.basofilos_porcentaje) ? 'text-negative text-weight-bold' : '']"
@@ -565,8 +565,8 @@
               <td>{{ rangoTexto('Basilos (Absoluto)') }}</td>
             </tr>
 
-            <tr v-if="canServicios('HEMOGRAMA COMPLETO+ PLAQUETAS')">
-              <td>Eosinófilos</td>
+            <tr v-if="canVariable('eosinofilos_porcentaje')">
+              <td>Eosinófilos <span class="var-tag">eosinofilos_porcentaje</span></td>
               <td>
                 <q-input v-model.number="form.eosinofilos_porcentaje" dense outlined type="number" step="0.01"
                          :input-class="['text-right', isOutOfRange('Eosinofilos', form.eosinofilos_porcentaje) ? 'text-negative text-weight-bold' : '']"
@@ -584,8 +584,8 @@
               <td>{{ rangoTexto('Eosinofilos (Absoluto)') }}</td>
             </tr>
 
-            <tr v-if="canServicios('HEMOGRAMA COMPLETO+ PLAQUETAS')">
-              <td>Cayados</td>
+            <tr v-if="canVariable('cayados_porcentaje')">
+              <td>Cayados <span class="var-tag">cayados_porcentaje</span></td>
               <td>
                 <q-input v-model.number="form.cayados_porcentaje" dense outlined type="number" step="0.01"
                          :input-class="['text-right', isOutOfRange('Cayados', form.cayados_porcentaje) ? 'text-negative text-weight-bold' : '']"
@@ -603,8 +603,8 @@
               <td>{{ rangoTexto('Cayados (Absoluto)') }}</td>
             </tr>
 
-            <tr v-if="canServicios('HEMOGRAMA COMPLETO+ PLAQUETAS')">
-              <td>Segmentados</td>
+            <tr v-if="canVariable('segmentados_porcentaje')">
+              <td>Segmentados <span class="var-tag">segmentados_porcentaje</span></td>
               <td>
                 <q-input v-model.number="form.segmentados_porcentaje" dense outlined type="number" step="0.01"
                          :input-class="['text-right', isOutOfRange('Segmentados', form.segmentados_porcentaje) ? 'text-negative text-weight-bold' : '']"
@@ -622,8 +622,8 @@
               <td>{{ rangoTexto('Segmentados (Absoluto)') }}</td>
             </tr>
 
-            <tr v-if="canServicios('HEMOGRAMA COMPLETO+ PLAQUETAS')">
-              <td>Linfocitos</td>
+            <tr v-if="canVariable('linfocitos_porcentaje')">
+              <td>Linfocitos <span class="var-tag">linfocitos_porcentaje</span></td>
               <td>
                 <q-input v-model.number="form.linfocitos_porcentaje" dense outlined type="number" step="0.01"
                          :input-class="['text-right', isOutOfRange('Linfocitos', form.linfocitos_porcentaje) ? 'text-negative text-weight-bold' : '']"
@@ -641,8 +641,8 @@
               <td>{{ rangoTexto('Linfocitos (Absoluto)') }}</td>
             </tr>
 
-            <tr v-if="canServicios('HEMOGRAMA COMPLETO+ PLAQUETAS')">
-              <td>Monocitos</td>
+            <tr v-if="canVariable('monocitos_porcentaje')">
+              <td>Monocitos <span class="var-tag">monocitos_porcentaje</span></td>
               <td>
                 <q-input v-model.number="form.monocitos_porcentaje" dense outlined type="number" step="0.01"
                          :input-class="['text-right', isOutOfRange('Monocitos', form.monocitos_porcentaje) ? 'text-negative text-weight-bold' : '']"
@@ -660,8 +660,8 @@
               <td>{{ rangoTexto('Monocitos (Absoluto)') }}</td>
             </tr>
 
-            <tr v-if="canServicios('HEMOGRAMA COMPLETO+ PLAQUETAS')">
-              <td>Blastos</td>
+            <tr v-if="canVariable('blastos_porcentaje')">
+              <td>Blastos <span class="var-tag">blastos_porcentaje</span></td>
               <td>
                 <q-input v-model.number="form.blastos_porcentaje" dense outlined type="number" step="0.01"
                          :input-class="['text-right', isOutOfRange('BLASTOS', form.blastos_porcentaje) ? 'text-negative text-weight-bold' : '']"
@@ -677,8 +677,8 @@
               <td></td>
             </tr>
 
-            <tr v-if="canServicios('HEMOGRAMA COMPLETO+ PLAQUETAS')">
-              <td>Metamielocitos</td>
+            <tr v-if="canVariable('metamielocitos_porcentaje')">
+              <td>Metamielocitos <span class="var-tag">metamielocitos_porcentaje</span></td>
               <td>
                 <q-input v-model.number="form.metamielocitos_porcentaje" dense outlined type="number" step="0.01"
                          :input-class="['text-right', isOutOfRange('METAMIELOCITO', form.metamielocitos_porcentaje) ? 'text-negative text-weight-bold' : '']"
@@ -694,8 +694,8 @@
               <td></td>
             </tr>
 
-            <tr v-if="canServicios('HEMOGRAMA COMPLETO+ PLAQUETAS')">
-              <td>Eritroblastos</td>
+            <tr v-if="canVariable('eritroblastos_porcentaje')">
+              <td>Eritroblastos <span class="var-tag">eritroblastos_porcentaje</span></td>
               <td>
                 <q-input v-model.number="form.eritroblastos_porcentaje" dense outlined type="number" step="0.01"
                          :input-class="['text-right', isOutOfRange('ERITROBLASTOS', form.eritroblastos_porcentaje) ? 'text-negative text-weight-bold' : '']"
@@ -776,8 +776,8 @@
             </thead>
 
             <tbody>
-            <tr v-if="canServicios(['COAGULOGRAMA (TP,RECUENTO DE PLAQUETAS, APTT)','TIEMPO DE PROTROMBINA (TP)'])">
-              <td>Tiempo de protrombina (TP)</td>
+            <tr v-if="canVariable('tiempo_protrombina')">
+              <td>Tiempo de protrombina (TP) <span class="var-tag">tiempo_protrombina</span></td>
               <td>
 <!--                <q-input v-model.number="form.tiempo_protrombina" dense outlined type="number" step="0.01" input-class="text-right" />-->
                 <q-select v-model.number="form.tiempo_protrombina" dense outlined input-class="text-right"
@@ -792,8 +792,8 @@
               <td>seg</td>
             </tr>
 
-            <tr v-if="canServicios(['COAGULOGRAMA (TP,RECUENTO DE PLAQUETAS, APTT)','TIEMPO DE PROTROMBINA (TP)'])">
-              <td>Actividad de protrombina</td>
+            <tr v-if="canVariable('actividad_protrombina')">
+              <td>Actividad de protrombina <span class="var-tag">actividad_protrombina</span></td>
               <td>
                 <q-input v-model.number="form.actividad_protrombina" dense outlined type="number" step="0.01" input-class="text-right" />
               </td>
@@ -801,8 +801,8 @@
               <td>%</td>
             </tr>
 
-            <tr v-if="canServicios(['COAGULOGRAMA (TP,RECUENTO DE PLAQUETAS, APTT)','TIEMPO DE PROTROMBINA (TP)'])">
-              <td>INR</td>
+            <tr v-if="canVariable('inr')">
+              <td>INR <span class="var-tag">inr</span></td>
               <td>
                 <q-input v-model.number="form.inr" dense outlined type="number" step="0.01" input-class="text-right" />
               </td>
@@ -810,8 +810,8 @@
               <td>-</td>
             </tr>
 
-            <tr v-if="canServicios('ERITROSEDIMENTACIÓN (VSG- VES)')">
-              <td>V.S.G</td>
+            <tr v-if="canVariable('ves')">
+              <td>V.S.G <span class="var-tag">ves</span></td>
               <td>
                 <q-input v-model.number="form.ves" dense outlined type="number" step="0.1" input-class="text-right" />
               </td>
@@ -819,8 +819,8 @@
               <td>mm/h</td>
             </tr>
 
-            <tr v-if="canServicios(['COAGULOGRAMA (TP,RECUENTO DE PLAQUETAS, APTT)','TIEMPO PARCIAL DE TROMBOPLASTINA ACTIVADA (APTT)'])">
-              <td>APTT</td>
+            <tr v-if="canVariable('aptt')">
+              <td>APTT <span class="var-tag">aptt</span></td>
               <td>
                 <q-input v-model.number="form.aptt" dense outlined type="number" step="0.1" input-class="text-right" />
               </td>
@@ -828,8 +828,8 @@
               <td>seg</td>
             </tr>
 
-            <tr v-if="canServicios('FIBRINÓGENO')">
-              <td>Fibrinógeno</td>
+            <tr v-if="canVariable('fibrinogeno')">
+              <td>Fibrinógeno <span class="var-tag">fibrinogeno</span></td>
               <td>
                 <q-input v-model.number="form.fibrinogeno" dense outlined type="number" step="1"
                          :input-class="['text-right', isOutOfRange('FIBRINOGENO', form.fibrinogeno) ? 'text-negative text-weight-bold' : '']"
@@ -839,8 +839,8 @@
               <td>{{ rangoUnidad('FIBRINOGENO') || 'mg/dl' }}</td>
             </tr>
 
-            <tr v-if="canServicios('FIBRINÓGENO')">
-              <td>Dímeros D</td>
+            <tr v-if="canVariable('dimeros_d')">
+              <td>Dímeros D <span class="var-tag">dimeros_d</span></td>
               <td>
                 <q-input v-model.number="form.dimeros_d" dense outlined type="number" step="0.01"
                          :input-class="['text-right', isOutOfRange('Dimeros D', form.dimeros_d) ? 'text-negative text-weight-bold' : '']"
@@ -949,8 +949,8 @@
 <!--              <td>&lt; 20</td>-->
 <!--              <td>mm/h</td>-->
 <!--            </tr>-->
-            <tr v-if="canServicios('RECUENTO DE RETICULOCITOS')">
-              <td>RETICULOCITOS</td>
+            <tr v-if="canVariable('ipr2')">
+              <td>RETICULOCITOS <span class="var-tag">ipr2</span></td>
               <td>
                 <q-input
                   v-model.number="form.ipr2" dense outlined type="number" step="0.1"
@@ -964,8 +964,8 @@
                 {{ rangoUnidad('Reticulocitos') }}
               </td>
             </tr>
-            <tr v-if="canServicios('RECUENTO DE RETICULOCITOS')">
-              <td>IRC</td>
+            <tr v-if="canVariable('rc')">
+              <td>IRC <span class="var-tag">rc</span></td>
               <td>
                 <q-input
                   v-model.number="form.rc" dense outlined type="number" step="0.1" readonly
@@ -979,8 +979,8 @@
                 {{ rangoUnidad('RC') }}
               </td>
             </tr>
-            <tr v-if="canServicios('RECUENTO DE RETICULOCITOS')">
-              <td>IPR</td>
+            <tr v-if="canVariable('ipr')">
+              <td>IPR <span class="var-tag">ipr</span></td>
               <td>
                 <q-input
                   v-model.number="form.ipr" dense outlined type="number" step="0.1" readonly
@@ -1000,8 +1000,9 @@
             <div class="section-title q-mb-xs">FROTIS DE SANGRE PERIFERICA</div>
             <div class="row">
               <div class="col-12 col-md-4">
+                <div v-if="canVariable('serie_roja')" class="q-mb-xs"><span class="var-tag">serie_roja</span></div>
                 <q-input
-                  v-if="canServicios(['FROTIS SANGUÍNEO/LEUCOGRAMA','MORFOLOGÍA DE GLÓBULOS ROJOS'])"
+                  v-if="canVariable('serie_roja')"
                   v-model="form.serie_roja"
                   type="textarea"
                   dense
@@ -1012,8 +1013,9 @@
                 />
               </div>
               <div class="col-12 col-md-4">
+                <div v-if="canVariable('serie_blanca')" class="q-mb-xs"><span class="var-tag">serie_blanca</span></div>
                 <q-input
-                  v-if="canServicios(['FROTIS SANGUÍNEO/LEUCOGRAMA'])"
+                  v-if="canVariable('serie_blanca')"
                   v-model="form.serie_blanca"
                   type="textarea"
                   dense
@@ -1024,8 +1026,9 @@
                 />
               </div>
               <div class="col-12 col-md-4">
+                <div v-if="canVariable('serie_plaqueta')" class="q-mb-xs"><span class="var-tag">serie_plaqueta</span></div>
                 <q-input
-                  v-if="canServicios(['FROTIS SANGUÍNEO/LEUCOGRAMA'])"
+                  v-if="canVariable('serie_plaqueta')"
                   v-model="form.serie_plaqueta"
                   type="textarea"
                   dense
@@ -1039,8 +1042,8 @@
 
           <!-- GRUPO SANGUÍNEO -->
           <div class="row q-col-gutter-sm q-mb-md">
-            <div class="col-12 col-sm-4" v-if="canServicios('GRUPO SANGUÍNEO Y FACTOR')">
-              <div class="section-title q-mb-xs">Grupo sanguíneo</div>
+            <div class="col-12 col-sm-4" v-if="canVariable('grupo_sanguineo')">
+              <div class="section-title q-mb-xs">Grupo sanguíneo <span class="var-tag">grupo_sanguineo</span></div>
               <q-select
                 v-model="form.grupo_sanguineo"
                 :options="['O', 'A', 'B', 'AB']"
@@ -1052,8 +1055,8 @@
               />
             </div>
 
-            <div class="col-12 col-sm-4" v-if="canServicios('GRUPO SANGUÍNEO Y FACTOR')">
-              <div class="section-title q-mb-xs">Factor Rh</div>
+            <div class="col-12 col-sm-4" v-if="canVariable('factor_rh')">
+              <div class="section-title q-mb-xs">Factor Rh <span class="var-tag">factor_rh</span></div>
               <q-select
                 v-model="form.factor_rh"
                 :options="['Positivo', 'Negativo']"
@@ -1226,6 +1229,7 @@ export default {
       tiempos: [],
       formLoaded: false,
       rangos: [],
+      datos: [],
       form: {
         globulos_rojos: null,
         globulos_blancos: null,
@@ -1400,6 +1404,23 @@ export default {
       return this.header.servicios.some(s => wanted.includes(norm(s.nombre)))
     },
 
+    // ========= visibilidad por configuración (datos_hematologia) =========
+    // Sin dato configurado o sin prestaciones asignadas => siempre visible.
+    // Con prestaciones asignadas => visible solo si la solicitud incluye alguna.
+    // Dato inactivo => nunca visible.
+    canVariable (variable) {
+      const dato = (this.datos || []).find(d => d.variable === variable)
+      if (!dato) return true
+      if (!dato.activo) return false
+      const ids = (dato.prestaciones || []).map(p => p.id)
+      if (!ids.length) return true
+      const solicitudIds = (this.header?.servicios || []).map(s => s.id)
+      return solicitudIds.some(id => ids.includes(id))
+    },
+    canAny (variables) {
+      return (variables || []).some(v => this.canVariable(v))
+    },
+
     // ========= api =========
     async load () {
       try {
@@ -1414,6 +1435,7 @@ export default {
         this.form.muestra_rechazada = muestra_rechazada
         this.form.muestra_observacion = muestra_observacion
         this.rangos = data.rangos || []
+        this.datos = data.datos || []
         this.calculateHematimetricos()
         this.calculateReticulocitos()
         this.formLoaded = true
@@ -1517,5 +1539,17 @@ export default {
 }
 .bg-white {
   background-color: #ffffff;
+}
+.var-tag {
+  font-family: monospace;
+  font-size: 10px;
+  background: #eceff1;
+  border: 1px solid #cfd8dc;
+  border-radius: 4px;
+  padding: 0 4px;
+  color: #78909c;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
 }
 </style>

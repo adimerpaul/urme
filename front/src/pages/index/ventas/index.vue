@@ -1,5 +1,5 @@
 <template>
-  <q-page class="q-pa-md">
+  <q-page class="q-pa-sm ventas-compactas">
 
     <!-- Sin acceso -->
     <div v-if="proxy.$store.isLogged && !canVer"
@@ -11,35 +11,35 @@
 
     <template v-else-if="proxy.$store.isLogged">
 
-      <div class="q-mb-md">
-        <div class="text-h5 text-weight-bold">Ventas</div>
-        <div class="text-body2 text-grey-6">Historial de ventas y proformas de pago</div>
+      <div class="q-mb-xs">
+        <div class="text-h6 text-weight-bold">Ventas</div>
+        <div class="text-caption text-grey-6">Historial de ventas y proformas de pago</div>
       </div>
 
       <!-- Tarjetas resumen -->
-      <div class="row q-col-gutter-md q-mb-md">
+      <div class="row q-col-gutter-xs q-mb-xs">
         <div class="col-12 col-sm-3">
-          <q-card flat class="bg-primary text-white q-pa-md rounded-borders full-height">
+          <q-card flat class="bg-primary text-white q-pa-sm rounded-borders full-height">
             <div class="text-caption text-teal-2 text-uppercase text-weight-bold">Ventas activas</div>
-            <div class="text-h5 text-weight-bold">{{ money(resumen.total_ventas) }} <span class="text-caption text-teal-2">Bs</span></div>
+            <div class="text-subtitle1 text-weight-bold">{{ money(resumen.total_ventas) }} <span class="text-caption text-teal-2">Bs</span></div>
           </q-card>
         </div>
         <div class="col-12 col-sm-3">
-          <q-card flat bordered class="q-pa-md rounded-borders full-height">
+          <q-card flat bordered class="q-pa-sm rounded-borders full-height">
             <div class="text-caption text-grey-6 text-uppercase text-weight-bold">Pendientes</div>
-            <div class="text-h5 text-weight-bold text-orange-8">{{ money(resumen.total_pendientes) }} <span class="text-caption text-grey-6">Bs</span></div>
+            <div class="text-subtitle1 text-weight-bold text-orange-8">{{ money(resumen.total_pendientes) }} <span class="text-caption text-grey-6">Bs</span></div>
           </q-card>
         </div>
         <div class="col-12 col-sm-3">
-          <q-card flat bordered class="q-pa-md rounded-borders full-height">
+          <q-card flat bordered class="q-pa-sm rounded-borders full-height">
             <div class="text-caption text-grey-6 text-uppercase text-weight-bold">Anuladas</div>
-            <div class="text-h5 text-weight-bold text-negative">{{ money(resumen.total_anuladas) }} <span class="text-caption text-grey-6">Bs</span></div>
+            <div class="text-subtitle1 text-weight-bold text-negative">{{ money(resumen.total_anuladas) }} <span class="text-caption text-grey-6">Bs</span></div>
           </q-card>
         </div>
         <div class="col-12 col-sm-3">
-          <q-card flat bordered class="q-pa-md rounded-borders full-height">
+          <q-card flat bordered class="q-pa-sm rounded-borders full-height">
             <div class="text-caption text-grey-6 text-uppercase text-weight-bold">Total registros</div>
-            <div class="text-h5 text-weight-bold">{{ resumen.cantidad }}</div>
+            <div class="text-subtitle1 text-weight-bold">{{ resumen.cantidad }}</div>
           </q-card>
         </div>
       </div>
@@ -49,7 +49,7 @@
         <q-tab name="historial" icon="history" label="Historial" no-caps />
         <q-tab v-if="canCrear" name="nueva" icon="point_of_sale" label="Nueva venta" no-caps />
       </q-tabs>
-      <q-separator class="q-mb-md" />
+      <q-separator class="q-mb-xs" />
 
       <!-- ══ TAB HISTORIAL ══════════════════════════════════════════ -->
       <div v-show="tab === 'historial'">
@@ -162,6 +162,10 @@
               <q-select v-model="filtroTipo" dense outlined clearable label="Tipo" style="width:150px"
                         :options="tiposProducto" option-value="id" option-label="nombre"
                         emit-value map-options @update:model-value="onBuscarProducto" />
+              <q-btn dense outline no-caps color="primary" icon="refresh" label="Actualizar"
+                     :loading="loadingProductos" @click="actualizarProductos">
+                <q-tooltip>Actualizar productos y cantidades disponibles</q-tooltip>
+              </q-btn>
               <q-input v-model="buscarProducto" placeholder="Buscar producto…" dense outlined rounded clearable
                        bg-color="white" style="width:220px" @update:model-value="onBuscarProducto">
                 <template v-slot:prepend><q-icon name="search" /></template>
@@ -175,21 +179,25 @@
                   <th class="text-left">Código</th>
                   <th class="text-left">Producto</th>
                   <th class="text-left">Tipo</th>
+                  <th class="text-right">Cantidad</th>
                   <th class="text-right">Precio</th>
                 </tr>
               </thead>
               <tbody>
                 <tr v-if="loadingProductos">
-                  <td colspan="5" class="text-center q-pa-md"><q-spinner color="primary" size="24px" /></td>
+                  <td colspan="6" class="text-center q-pa-md"><q-spinner color="primary" size="24px" /></td>
                 </tr>
                 <tr v-else-if="!productos.length">
-                  <td colspan="5" class="text-center text-grey-5 q-pa-md">Sin productos</td>
+                  <td colspan="6" class="text-center text-grey-5 q-pa-md">Sin productos</td>
                 </tr>
                 <tr v-else v-for="p in productos" :key="p.id">
                   <td class="text-center">
                     <q-btn dense round unelevated size="sm" color="primary" icon="add"
+                           :disable="esProductoFarmacia(p) && cantidadDisponibleProducto(p) <= 0"
                            @click="agregarProducto(p)">
-                      <q-tooltip>Agregar a la venta</q-tooltip>
+                      <q-tooltip>
+                        {{ !esProductoFarmacia(p) || cantidadDisponibleProducto(p) > 0 ? 'Agregar a la venta' : 'Sin lote disponible' }}
+                      </q-tooltip>
                     </q-btn>
                   </td>
                   <td>{{ p.codigo || '—' }}</td>
@@ -199,6 +207,16 @@
                       {{ p.tipo_producto.nombre }}
                     </q-badge>
                     <span v-else>—</span>
+                  </td>
+                  <td class="text-right">
+                    <q-badge v-if="esProductoFarmacia(p)"
+                             :color="cantidadDisponibleProducto(p) > 0 ? 'green-1' : 'red-1'"
+                             :text-color="cantidadDisponibleProducto(p) > 0 ? 'green-9' : 'negative'">
+                      {{ cantidadDisponibleProducto(p).toFixed(2) }}
+                    </q-badge>
+                    <q-badge v-else color="blue-grey-1" text-color="blue-grey-8">
+                      LIBRE
+                    </q-badge>
                   </td>
                   <td class="text-right">{{ money(p.precio) }}</td>
                 </tr>
@@ -216,7 +234,7 @@
 
           <!-- Carrito / datos de la venta -->
           <div class="col-12 col-md-5">
-            <q-card flat bordered class="q-pa-md rounded-borders">
+            <q-card flat bordered class="q-pa-sm rounded-borders">
               <div class="text-subtitle2 text-weight-bold text-grey-8 q-mb-sm">
                 <q-icon name="shopping_cart" size="18px" class="q-mr-xs" />Detalle de la venta
               </div>
@@ -290,8 +308,19 @@
                       <td class="text-center">
                         <q-btn flat dense round icon="delete" color="negative" size="sm" @click="quitarLinea(idx)" />
                       </td>
-                      <td>{{ linea.nombre }}</td>
+                      <td>
+                        <div>{{ linea.nombre }}</div>
+                        <div v-if="linea.requiere_lote" class="text-caption text-grey-7">
+                          Lote: <b>{{ linea.lote }}</b>
+                          <span class="q-ml-xs">Vence: {{ linea.fecha_vencimiento || 'SIN FECHA' }}</span>
+                        </div>
+                        <div v-if="linea.requiere_lote" class="text-caption text-positive">
+                          Disponible: {{ Number(linea.cantidad_disponible).toFixed(2) }}
+                        </div>
+                        <div v-else class="text-caption text-blue-grey-7">Sin control de lote</div>
+                      </td>
                       <td><q-input v-model.number="linea.cantidad" dense outlined type="number" step="1" min="0"
+                                   :max="linea.requiere_lote ? linea.cantidad_disponible : undefined"
                                    @update:model-value="recalcularLinea(linea)" /></td>
                       <td><q-input v-model.number="linea.precio" dense outlined type="number" step="0.01" min="0"
                                    @update:model-value="recalcularLinea(linea)" /></td>
@@ -335,6 +364,42 @@
 
     </template>
 
+    <!-- DIALOG SELECCIONAR LOTE -->
+    <q-dialog v-model="dialogLotes">
+      <q-card style="width:min(96vw,650px)">
+        <q-card-section class="row items-center bg-primary text-white q-py-sm">
+          <q-icon name="inventory_2" size="20px" class="q-mr-sm" />
+          <div>
+            <div class="text-subtitle2 text-weight-bold">Seleccionar lote</div>
+            <div class="text-caption">{{ productoParaLote?.nombre }}</div>
+          </div>
+          <q-space />
+          <q-btn icon="close" flat round dense color="white" v-close-popup />
+        </q-card-section>
+        <q-card-section class="q-pa-sm">
+          <q-list bordered separator>
+            <q-item v-for="lote in lotesDisponibles" :key="lote.compra_detalle_id"
+                    clickable v-ripple @click="seleccionarLote(lote)">
+              <q-item-section avatar>
+                <q-icon name="inventory" color="primary" />
+              </q-item-section>
+              <q-item-section>
+                <q-item-label class="text-weight-bold">Lote {{ lote.lote }}</q-item-label>
+                <q-item-label caption>
+                  Compra #{{ lote.compra_id }} · Vencimiento: {{ lote.fecha_vencimiento || 'SIN FECHA' }}
+                </q-item-label>
+              </q-item-section>
+              <q-item-section side>
+                <q-chip dense color="green-1" text-color="green-9">
+                  Disponible: {{ Number(lote.cantidad_disponible).toFixed(2) }}
+                </q-chip>
+              </q-item-section>
+            </q-item>
+          </q-list>
+        </q-card-section>
+      </q-card>
+    </q-dialog>
+
     <!-- DIALOG DETALLE VENTA -->
     <q-dialog v-model="dialogDetalle">
       <q-card style="width:min(96vw,700px)">
@@ -357,6 +422,7 @@
             <thead>
               <tr class="bg-grey-1 text-grey-7 text-uppercase">
                 <th class="text-left">Producto</th>
+                <th class="text-left">Lote / Vencimiento</th>
                 <th class="text-right">Cantidad</th>
                 <th class="text-right">Precio</th>
                 <th class="text-right">Total</th>
@@ -365,6 +431,7 @@
             <tbody>
               <tr v-for="d in detalleVenta?.detalles || []" :key="d.id">
                 <td>{{ d.nombre }}</td>
+                <td>{{ d.lote || '—' }} / {{ d.fecha_vencimiento || 'SIN FECHA' }}</td>
                 <td class="text-right">{{ d.cantidad }}</td>
                 <td class="text-right">{{ money(d.precio) }}</td>
                 <td class="text-right">{{ money(d.total) }}</td>
@@ -609,6 +676,17 @@ const perProductos     = 10
 
 const pagesProductos = computed(() => Math.max(1, Math.ceil(totalProductos.value / perProductos)))
 
+function cantidadDisponibleProducto (producto) {
+  return Math.max(
+    0,
+    Number(producto.cantidad_con_lote || 0) - Number(producto.cantidad_vendida_lote || 0),
+  )
+}
+
+function esProductoFarmacia (producto) {
+  return String(producto.tipo_producto?.nombre || '').toUpperCase() === 'FARMACIA'
+}
+
 let timerProducto = null
 function onBuscarProducto () {
   clearTimeout(timerProducto)
@@ -642,8 +720,16 @@ async function loadTiposProducto () {
   } catch (e) { /* silent */ }
 }
 
+async function actualizarProductos () {
+  pageProductos.value = 1
+  await Promise.all([loadProductos(), loadTiposProducto()])
+}
+
 // ── Nueva venta ────────────────────────────────────────────────
 const registrando = ref(false)
+const dialogLotes = ref(false)
+const productoParaLote = ref(null)
+const lotesDisponibles = ref([])
 let lineaUid = 0
 
 function nuevaVentaVacia () {
@@ -668,8 +754,34 @@ const cambioNueva = computed(() => {
   return Math.round((pago - totalNueva.value) * 100) / 100
 })
 
-function agregarProducto (p) {
-  const existente = nueva.value.detalles.find(l => l.producto_id === p.id)
+async function agregarProducto (p) {
+  if (!esProductoFarmacia(p)) {
+    agregarProductoSinLote(p)
+    return
+  }
+  try {
+    const res = await proxy.$axios.get('productos/' + p.id + '/lotes-disponibles')
+    const lotes = res.data || []
+    if (!lotes.length) {
+      proxy.$alert.error('No se puede vender ' + p.nombre + ': no tiene un lote con stock disponible')
+      return
+    }
+    if (lotes.length === 1) {
+      agregarProductoConLote(p, lotes[0])
+      return
+    }
+    productoParaLote.value = p
+    lotesDisponibles.value = lotes
+    dialogLotes.value = true
+  } catch (e) {
+    proxy.$alert.error(e.response?.data?.message || 'Error al consultar los lotes disponibles')
+  }
+}
+
+function agregarProductoSinLote (p) {
+  const existente = nueva.value.detalles.find(l => (
+    l.producto_id === p.id && !l.requiere_lote
+  ))
   if (existente) {
     existente.cantidad = (Number(existente.cantidad) || 0) + 1
     recalcularLinea(existente)
@@ -679,6 +791,42 @@ function agregarProducto (p) {
     uid: ++lineaUid,
     producto_id: p.id,
     nombre: p.nombre,
+    requiere_lote: false,
+    cantidad: 1,
+    precio: Number(p.precio) || 0,
+    total: 0,
+  }
+  recalcularLinea(linea)
+  nueva.value.detalles.push(linea)
+}
+
+function seleccionarLote (lote) {
+  agregarProductoConLote(productoParaLote.value, lote)
+  dialogLotes.value = false
+}
+
+function agregarProductoConLote (p, lote) {
+  const existente = nueva.value.detalles.find(l => (
+    l.producto_id === p.id && l.compra_detalle_id === lote.compra_detalle_id
+  ))
+  if (existente) {
+    if (Number(existente.cantidad) >= Number(existente.cantidad_disponible)) {
+      proxy.$alert.error('No hay más unidades disponibles en el lote ' + lote.lote)
+      return
+    }
+    existente.cantidad = (Number(existente.cantidad) || 0) + 1
+    recalcularLinea(existente)
+    return
+  }
+  const linea = {
+    uid: ++lineaUid,
+    producto_id: p.id,
+    requiere_lote: true,
+    compra_detalle_id: lote.compra_detalle_id,
+    nombre: p.nombre,
+    lote: lote.lote,
+    fecha_vencimiento: lote.fecha_vencimiento,
+    cantidad_disponible: Number(lote.cantidad_disponible),
     cantidad: 1,
     precio: Number(p.precio) || 0,
     total: 0,
@@ -692,12 +840,35 @@ function quitarLinea (idx) {
 }
 
 function recalcularLinea (linea) {
+  if (linea.requiere_lote && Number(linea.cantidad) > Number(linea.cantidad_disponible)) {
+    linea.cantidad = Number(linea.cantidad_disponible)
+    proxy.$alert.error('La cantidad supera el stock disponible del lote ' + linea.lote)
+  }
   linea.total = Math.round(((Number(linea.cantidad) || 0) * (Number(linea.precio) || 0)) * 100) / 100
 }
 
 async function registrarVenta (estado = 'ACTIVO') {
   if (!nueva.value.detalles.length) {
     proxy.$alert.error('Agregue al menos un producto a la venta')
+    return
+  }
+  const lineaSinLote = nueva.value.detalles.find(l => (
+    l.requiere_lote && (!l.compra_detalle_id || !l.lote)
+  ))
+  if (lineaSinLote) {
+    proxy.$alert.error('Seleccione un lote para ' + lineaSinLote.nombre)
+    return
+  }
+  const lineaSinStock = nueva.value.detalles.find(l => (
+    Number(l.cantidad) <= 0
+    || (l.requiere_lote && Number(l.cantidad) > Number(l.cantidad_disponible))
+  ))
+  if (lineaSinStock) {
+    proxy.$alert.error(
+      lineaSinStock.requiere_lote
+        ? 'Cantidad no disponible para el lote ' + lineaSinStock.lote
+        : 'La cantidad de ' + lineaSinStock.nombre + ' debe ser mayor a cero',
+    )
     return
   }
   const pago = Number(nueva.value.pago) || totalNueva.value
@@ -719,7 +890,9 @@ async function registrarVenta (estado = 'ACTIVO') {
       estado,
       detalles: nueva.value.detalles.map(l => ({
         producto_id: l.producto_id || null,
+        compra_detalle_id: l.compra_detalle_id,
         nombre: l.nombre,
+        lote: l.lote,
         cantidad: l.cantidad,
         precio: l.precio,
       })),
@@ -832,6 +1005,33 @@ watch(() => proxy.$store.isLogged, (val) => { if (val) init() }, { immediate: tr
 </script>
 
 <style scoped>
+.ventas-compactas :deep(.q-field--dense:not(.q-textarea) .q-field__control),
+.ventas-compactas :deep(.q-field--dense:not(.q-textarea) .q-field__marginal) {
+  height: 30px;
+  min-height: 30px;
+}
+
+.ventas-compactas :deep(.q-field--dense .q-field__native),
+.ventas-compactas :deep(.q-field--dense .q-field__input),
+.ventas-compactas :deep(.q-field--dense .q-field__label) {
+  font-size: 11px;
+}
+
+.ventas-compactas :deep(.q-field--dense .q-field__append),
+.ventas-compactas :deep(.q-field--dense .q-field__prepend) {
+  height: 30px;
+}
+
+.ventas-compactas :deep(.q-textarea.q-field--dense .q-field__control) {
+  min-height: 38px;
+}
+
+.ventas-compactas :deep(.q-field__bottom) {
+  min-height: 14px;
+  padding-top: 2px;
+  font-size: 10px;
+}
+
 .tabla-compacta :deep(th),
 .tabla-compacta :deep(td) {
   font-size: 11px;

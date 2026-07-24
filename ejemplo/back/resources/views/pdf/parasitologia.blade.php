@@ -52,7 +52,7 @@
 
             {!! view('components.headerSinCabeceraPequeno', ['solicitud' => $solicitud, 'fecha_solicitud'=>$p->created_at])->render() !!}
 
-            <div class="section center" style="margin-top:20px; font-weight:700; font-size:12px;">
+            <div class="section center" style="margin-top:20px; font-weight:700; font-size:15px;">
                 PARASITOLOGÍA
             </div>
 
@@ -150,10 +150,9 @@
                 <div class="section">
                     <h3>Otros exámenes</h3>
                     <div class="box" style="min-height:22px;">{{ $p->otros_examenes ?? '' }}</div>
-{{--                    <div class="box" style="min-height:22px;">{{ $p->otros_examenes_otros ?? '' }}</div> si tien mostrar si es otr--}}
-                    @if($p->otros_examenes=='OTROS' || $p->otros_examenes=='Otros' || $p->otros_examenes=='otros')
+                    @if(!empty($p->otros_examenes_otros))
                         <div class="box" style="min-height:22px;">
-                            {{ $p->otros_examenes_otros ?? '' }}
+                            {{ $p->otros_examenes_otros }}
                         </div>
                     @endif
                 </div>

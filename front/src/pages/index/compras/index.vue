@@ -1,5 +1,5 @@
 <template>
-  <q-page class="q-pa-md">
+  <q-page class="q-pa-md compras-compactas">
 
     <!-- Sin acceso -->
     <div v-if="proxy.$store.isLogged && !canVer"
@@ -104,6 +104,13 @@
                     <q-item clickable v-close-popup @click="imprimir(row)">
                       <q-item-section avatar><q-icon name="print" color="primary" /></q-item-section>
                       <q-item-section><q-item-label>Imprimir</q-item-label></q-item-section>
+                    </q-item>
+                    <q-item clickable v-close-popup @click="exportCompraExcel(row)">
+                      <q-item-section avatar>
+                        <q-icon v-if="exportingCompraId !== row.id" name="table_view" color="green-8" />
+                        <q-spinner v-else color="green-8" size="20px" />
+                      </q-item-section>
+                      <q-item-section><q-item-label>Exportar Excel con fórmulas</q-item-label></q-item-section>
                     </q-item>
                     <q-item v-if="canEliminar" :disable="row.estado === 'ANULADO'" clickable v-close-popup @click="anular(row)">
                       <q-item-section avatar><q-icon name="block" color="negative" /></q-item-section>
@@ -474,6 +481,28 @@ async function imprimir (row) {
   }
 }
 
+const exportingCompraId = ref(null)
+async function exportCompraExcel (row) {
+  exportingCompraId.value = row.id
+  try {
+    const res = await proxy.$axios.get('compras/' + row.id + '/export-excel', {
+      responseType: 'blob',
+    })
+    const url = window.URL.createObjectURL(new Blob([res.data], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    }))
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'compra_' + row.id + '_' + new Date().toISOString().slice(0, 10) + '.xlsx'
+    a.click()
+    window.URL.revokeObjectURL(url)
+  } catch (e) {
+    proxy.$alert.error(e.response?.data?.message || 'Error al generar el Excel de la compra')
+  } finally {
+    exportingCompraId.value = null
+  }
+}
+
 function anular (row) {
   proxy.$alert.dialog('¿Desea anular la compra #' + row.id + '? Esto revertirá el stock generado.').onOk(() => {
     proxy.$axios.delete('compras/' + row.id)
@@ -701,6 +730,33 @@ watch(() => proxy.$store.isLogged, (val) => { if (val) init() }, { immediate: tr
 </script>
 
 <style scoped>
+.compras-compactas :deep(.q-field--dense:not(.q-textarea) .q-field__control),
+.compras-compactas :deep(.q-field--dense:not(.q-textarea) .q-field__marginal) {
+  height: 30px;
+  min-height: 30px;
+}
+
+.compras-compactas :deep(.q-field--dense .q-field__native),
+.compras-compactas :deep(.q-field--dense .q-field__input),
+.compras-compactas :deep(.q-field--dense .q-field__label) {
+  font-size: 11px;
+}
+
+.compras-compactas :deep(.q-field--dense .q-field__append),
+.compras-compactas :deep(.q-field--dense .q-field__prepend) {
+  height: 30px;
+}
+
+.compras-compactas :deep(.q-textarea.q-field--dense .q-field__control) {
+  min-height: 38px;
+}
+
+.compras-compactas :deep(.q-field__bottom) {
+  min-height: 14px;
+  padding-top: 2px;
+  font-size: 10px;
+}
+
 .tabla-compacta :deep(th),
 .tabla-compacta :deep(td) {
   font-size: 11px;

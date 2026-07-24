@@ -196,7 +196,14 @@
         <td class="cell label">Solicitante</td>
         <td class="cell uppercase">{{ $despacho->solicitante ?: '-' }}</td>
         <td class="cell label">Servicio</td>
-        <td class="cell uppercase">{{ $despacho->servicio ?: '-' }}</td>
+        @php
+            $servicioNombre = $despacho->servicio;
+            $servicioJson = is_string($servicioNombre) ? json_decode($servicioNombre, true) : null;
+            if (is_array($servicioJson)) {
+                $servicioNombre = $servicioJson['nombre'] ?? $servicioJson['NOMBRE'] ?? $servicioNombre;
+            }
+        @endphp
+        <td class="cell uppercase">{{ $servicioNombre ?: '-' }}</td>
     </tr>
     <tr>
         <td class="cell label">Recepcion</td>

@@ -49,4 +49,9 @@ class Producto extends Model implements AuditableContract
     {
         return $this->hasMany(CompraDetalle::class);
     }
+
+    public function ventaDetalles()
+    {
+        return $this->hasMany(VentaDetalle::class);
+    }
 }

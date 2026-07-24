@@ -2,14 +2,14 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use OwenIt\Auditing\Contracts\Auditable;
 use OwenIt\Auditing\Auditable as AuditableTrait;
+use OwenIt\Auditing\Contracts\Auditable;
+
 class Paciente extends Model implements Auditable
 {
-    use SoftDeletes, AuditableTrait;
+    use AuditableTrait, SoftDeletes;
 
     protected $fillable = [
         'fecha_recepcion', 'hora_recepcion',
@@ -17,13 +17,18 @@ class Paciente extends Model implements Auditable
         'nombre_completo', 'fecha_nac', 'genero', 'edad',
         'ci', 'telefono', 'direccion',
         'discapacidad', 'discapacidad_cual', 'discapacidad_otro',
-        'embarazo', 'fum', 'sem_gest'
+        'embarazo', 'fum', 'sem_gest',
     ];
+
+    public function solicitudes()
+    {
+        return $this->hasMany(Solicitude::class, 'paciente_id');
+    }
 
     public static function generarCodigo(?string $nombreCompleto, $fechaNac): string
     {
         $iniciales = '';
-        if (!empty($nombreCompleto)) {
+        if (! empty($nombreCompleto)) {
             $palabras = preg_split('/\s+/', mb_strtoupper(trim($nombreCompleto), 'UTF-8'));
             foreach ($palabras as $palabra) {
                 if ($palabra !== '') {
@@ -33,7 +38,7 @@ class Paciente extends Model implements Auditable
         }
 
         $fecha = '';
-        if (!empty($fechaNac)) {
+        if (! empty($fechaNac)) {
             try {
                 $fecha = \Carbon\Carbon::parse($fechaNac)->format('dmY');
             } catch (\Exception $e) {
@@ -41,11 +46,11 @@ class Paciente extends Model implements Auditable
             }
         }
 
-        return $iniciales . $fecha;
+        return $iniciales.$fecha;
     }
 
     protected $hidden = [
-        'created_at', 'updated_at', 'deleted_at'
+        'created_at', 'updated_at', 'deleted_at',
     ];
 
     protected function toUpperValue($value): ?string

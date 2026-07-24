@@ -146,6 +146,10 @@ export default {
       this.rows.forEach(row => {
         const areas = [...new Set(row.servicios.map(s => s.area?.name || 'Sin área'))]
         areas.forEach(areaName => {
+          // el estado se filtra por área: entregar un área no debe ocultar las otras
+          const entregado = (row.entrega_resultados || []).some(e => e.area === areaName)
+          if (this.filters.estado === 'pendiente' && entregado) return
+          if (this.filters.estado === 'entregado' && !entregado) return
           if (!map.has(areaName)) map.set(areaName, [])
           if (!map.get(areaName).find(r => r.id === row.id)) {
             map.get(areaName).push(row)

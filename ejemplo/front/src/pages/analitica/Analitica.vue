@@ -26,9 +26,9 @@
             v-model="filter"
             dense
             outlined
-            debounce="400"
             clearable
             label="Buscar por código, paciente o CI"
+            @keyup.enter="analiticaGet()"
           >
             <template #prepend><q-icon name="search" /></template>
           </q-input>

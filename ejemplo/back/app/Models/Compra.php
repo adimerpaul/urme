@@ -29,6 +29,8 @@ class Compra extends Model
         'nro_factura',
         'categoria_programatica',
         'orden_de_compra',
+        'metodo_orden',
+        'fecha_orden',
         'codigo_interno',
         'hoja_de_ruta',
     ];

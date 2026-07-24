@@ -90,6 +90,14 @@ class SolicitudeController extends Controller
         $solicitud->codigo_solicitud = ($solicitud->nro_registro ?? '') . ($solicitud->codigo ?? '');
         $solicitud->save();
 
+        if ($request->filled('codigo') && is_numeric($solicitud->codigo)) {
+            \App\Models\SolicitudCorrelativo::registrar(
+                $solicitud->tipo_atencion ?? 'SI',
+                (int) $solicitud->codigo,
+                $solicitud->fecha_creacion
+            );
+        }
+
         return response()->json($solicitud->fresh());
     }
     public function pdfPreanalitica(Request $request)
@@ -1178,6 +1186,17 @@ class SolicitudeController extends Controller
         $tipo = $solicitud->tipo_atencion ?? 'SI';
 
         $fechaBase = $solicitud->fecha_creacion ?: now()->toDateString();
+
+        // Si existe correlativo del mes, esa es la fuente de verdad (reinicia cada mes)
+        $correlativo = \App\Models\SolicitudCorrelativo::where('tipo_atencion', $tipo)
+            ->where('anio', (int) date('Y', strtotime($fechaBase)))
+            ->where('mes', (int) date('m', strtotime($fechaBase)))
+            ->first();
+
+        if ($correlativo) {
+            return $correlativo->ultimo_numero + 1;
+        }
+
         $timestamp = strtotime($fechaBase);
 
         $anio = date('Y', $timestamp);
@@ -1575,6 +1594,7 @@ class SolicitudeController extends Controller
             $s = $request->search;
             $query->where(function ($q) use ($s) {
                 $q->where('paciente_nombre', 'like', "%$s%")
+                  ->orWhere('codigo', 'like', "%$s%")
                   ->orWhere('codigo_solicitud', 'like', "%$s%")
                   ->orWhere('nro_registro', 'like', "%$s%")
                   ->orWhere('doctor_nombre', 'like', "%$s%");
@@ -1650,6 +1670,15 @@ class SolicitudeController extends Controller
             : $nro_registro;
         $solicitud->codigo_solicitud = ($solicitud->nro_registro ?? '') . ($solicitud->codigo ?? '');
         $solicitud->save();
+
+        // La secuencia mensual continúa desde el código usado (manual o generado)
+        if (is_numeric($solicitud->codigo)) {
+            \App\Models\SolicitudCorrelativo::registrar(
+                $solicitud->tipo_atencion ?? 'SI',
+                (int) $solicitud->codigo,
+                $solicitud->fecha_creacion
+            );
+        }
 
 //        $this->syncServicios($solicitud, $request->input('servicios', []));
         $servicios = $request->input('servicios', []);
@@ -1779,6 +1808,13 @@ class SolicitudeController extends Controller
         $this->syncServicios($solicitud, $request->input('servicios', []));
 //        solitud uupte
         $solicitud->update($data);
+
+        // mantener sincronizado el campo denormalizado usado por el buscador
+        $codigoSolicitud = ($solicitud->nro_registro ?? '') . ($solicitud->codigo ?? '');
+        if ($solicitud->codigo_solicitud !== $codigoSolicitud) {
+            $solicitud->codigo_solicitud = $codigoSolicitud;
+            $solicitud->save();
+        }
 
         return response()->json($solicitud->load(['paciente', 'doctor', 'servicios.tiposMuestra', 'consentimiento', 'unidadSolicitante']));
     }

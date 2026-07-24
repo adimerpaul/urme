@@ -9,7 +9,7 @@ use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
 
 class CompraDetalle extends Model implements AuditableContract
 {
-    use SoftDeletes, AuditableTrait;
+    use AuditableTrait, SoftDeletes;
 
     protected $table = 'compra_detalles';
 
@@ -21,11 +21,11 @@ class CompraDetalle extends Model implements AuditableContract
     protected $hidden = ['created_at', 'updated_at', 'deleted_at'];
 
     protected $casts = [
-        'precio'            => 'decimal:2',
-        'cantidad'          => 'decimal:4',
-        'total'             => 'decimal:2',
-        'factor'            => 'decimal:4',
-        'precio_venta'      => 'decimal:2',
+        'precio' => 'decimal:2',
+        'cantidad' => 'decimal:4',
+        'total' => 'decimal:2',
+        'factor' => 'decimal:4',
+        'precio_venta' => 'decimal:2',
         'fecha_vencimiento' => 'date',
     ];
 
@@ -37,5 +37,10 @@ class CompraDetalle extends Model implements AuditableContract
     public function producto()
     {
         return $this->belongsTo(Producto::class);
+    }
+
+    public function ventaDetalles()
+    {
+        return $this->hasMany(VentaDetalle::class);
     }
 }

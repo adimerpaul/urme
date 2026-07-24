@@ -171,12 +171,20 @@
                 <div v-if="loadingPerms" class="text-center q-pa-sm">
                   <q-spinner-dots color="primary" size="28px" />
                 </div>
-                <div v-else class="perm-grid">
-                  <label v-for="perm in filteredPerms" :key="perm.id" class="perm-item"
-                         :class="{ 'perm-item--on': perm.checked }">
-                    <q-checkbox v-model="perm.checked" dense size="sm" color="primary" />
-                    <span class="perm-item__label">{{ perm.name }}</span>
-                  </label>
+                <div v-else class="perm-groups">
+                  <div v-for="group in groupedPermissions" :key="group.name" class="perm-group">
+                    <div class="perm-group__title">
+                      <q-icon :name="group.icon" size="16px" />
+                      {{ group.name }}
+                    </div>
+                    <div class="perm-grid">
+                      <label v-for="perm in group.permissions" :key="perm.id" class="perm-item"
+                             :class="{ 'perm-item--on': perm.checked }">
+                        <q-checkbox v-model="perm.checked" dense size="sm" color="primary" />
+                        <span class="perm-item__label">{{ perm.name }}</span>
+                      </label>
+                    </div>
+                  </div>
                 </div>
               </template>
 
@@ -243,6 +251,44 @@ const filteredPerms = computed(() => {
   return permissions.value.filter(p =>
     p.name.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').includes(q)
   )
+})
+
+const groupedPermissions = computed(() => {
+  const groups = [
+    {
+      name: 'Vencimientos',
+      icon: 'event_busy',
+      matches: ['Productos por Vencer', 'Productos Vencidos'],
+      permissions: [],
+    },
+    {
+      name: 'Farmacia',
+      icon: 'medication',
+      matches: ['Productos', 'Compras', 'Ventas'],
+      permissions: [],
+    },
+    {
+      name: 'Usuarios',
+      icon: 'manage_accounts',
+      matches: ['Usuarios', 'Permisos'],
+      permissions: [],
+    },
+    {
+      name: 'Otros módulos',
+      icon: 'apps',
+      matches: [],
+      permissions: [],
+    },
+  ]
+
+  filteredPerms.value.forEach(permission => {
+    const group = groups.find(item =>
+      item.matches.some(term => permission.name.includes(term))
+    ) || groups[groups.length - 1]
+    group.permissions.push(permission)
+  })
+
+  return groups.filter(group => group.permissions.length)
 })
 
 const checkedCount = computed(() => permissions.value.filter(p => p.checked).length)
@@ -327,7 +373,13 @@ async function saveUser () {
 
     if (canPermisos.value) {
       const ids = permissions.value.filter(p => p.checked).map(p => p.id)
-      await proxy.$axios.put('users/' + savedId + '/permissions', { permissions: ids })
+      const permissionResponse = await proxy.$axios.put('users/' + savedId + '/permissions', { permissions: ids })
+
+      if (Number(savedId) === Number(proxy.$store.user?.id)) {
+        const currentPermissions = permissionResponse.data || []
+        proxy.$store.permissions = currentPermissions
+        localStorage.setItem('permissionsUrme', JSON.stringify(currentPermissions))
+      }
     }
 
     dialog.value = false
@@ -408,15 +460,33 @@ function setAll (val) {
   opacity: 1;
 }
 
+.perm-groups {
+  max-height: 300px;
+  overflow-y: auto;
+  background: #f7fafc;
+  border-radius: 8px;
+  padding: 7px;
+}
+
+.perm-group + .perm-group {
+  margin-top: 9px;
+}
+
+.perm-group__title {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin: 0 2px 5px;
+  color: #455a64;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
 .perm-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
   gap: 3px;
-  max-height: 220px;
-  overflow-y: auto;
-  background: #f7fafc;
-  border-radius: 8px;
-  padding: 6px;
 }
 
 .perm-item {

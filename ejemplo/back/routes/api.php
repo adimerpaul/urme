@@ -1,38 +1,38 @@
 <?php
 
+use App\Http\Controllers\AlmacenItemController;
 use App\Http\Controllers\AreaController;
 use App\Http\Controllers\AreaRangoController;
-use App\Http\Controllers\AlmacenItemController;
+use App\Http\Controllers\AreaTipoMuestraController;
 use App\Http\Controllers\CompraController;
+use App\Http\Controllers\ConsentimientoController;
+use App\Http\Controllers\DespachoController;
 use App\Http\Controllers\DoctorController;
 use App\Http\Controllers\EstablecimientoController;
 use App\Http\Controllers\FormulariosController;
 use App\Http\Controllers\GrupoController;
+use App\Http\Controllers\HerramientasAlmacenController;
+use App\Http\Controllers\HerramientaUsuarioController;
 use App\Http\Controllers\PacienteController;
 use App\Http\Controllers\PartidaController;
-use App\Http\Controllers\ConsentimientoController;
 use App\Http\Controllers\PedidoController;
 use App\Http\Controllers\ProductoPorVencerController;
 use App\Http\Controllers\ProductoVencidoController;
 use App\Http\Controllers\ProveedorController;
-use App\Http\Controllers\ServicioController;
-use App\Http\Controllers\SolicitudeController;
-use App\Http\Controllers\SubpartidaController;
-use App\Http\Controllers\UnidadSolicitanteController;
-use App\Http\Controllers\AreaTipoMuestraController; // <-- NUEVO
-use App\Http\Controllers\SolicitudePropiedadController;
-use App\Http\Controllers\SolicitudCatalogoController;
-use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\ReporteServiciosController;
-use App\Http\Controllers\RecogidoController;
-use App\Http\Controllers\SolicitudSapController;
-use App\Http\Controllers\UnidadController;
-use App\Http\Controllers\HerramientasAlmacenController;
-use App\Http\Controllers\HerramientaUsuarioController;
-use App\Http\Controllers\DespachoController;
-use App\Http\Controllers\ReporteValoradoController;
+use App\Http\Controllers\RecogidoController; // <-- NUEVO
 use App\Http\Controllers\ReporteResumenDetalleController;
+use App\Http\Controllers\ReporteServiciosController;
 use App\Http\Controllers\ReporteUnidadController;
+use App\Http\Controllers\ReporteValoradoController;
+use App\Http\Controllers\ServicioController;
+use App\Http\Controllers\SolicitudCatalogoController;
+use App\Http\Controllers\SolicitudeController;
+use App\Http\Controllers\SolicitudePropiedadController;
+use App\Http\Controllers\SolicitudSapController;
+use App\Http\Controllers\SubpartidaController;
+use App\Http\Controllers\UnidadController;
+use App\Http\Controllers\UnidadSolicitanteController;
+use Illuminate\Support\Facades\Route;
 
 Route::post('/login', [App\Http\Controllers\UserController::class, 'login']);
 Route::post('/register', [App\Http\Controllers\UserController::class, 'register']);
@@ -54,8 +54,8 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
     Route::put('/updatePassword/{user}', [App\Http\Controllers\UserController::class, 'updatePassword']);
     Route::put('/resetPassword/{user}', [App\Http\Controllers\UserController::class, 'resetPassword']);
     Route::post('/{user}/avatar', [App\Http\Controllers\UserController::class, 'updateAvatar']);
-    Route::post('/{user}/firma',  [App\Http\Controllers\UserController::class, 'updateFirma']);
-    Route::post('/{user}/sello',  [App\Http\Controllers\UserController::class, 'updateSello']);
+    Route::post('/{user}/firma', [App\Http\Controllers\UserController::class, 'updateFirma']);
+    Route::post('/{user}/sello', [App\Http\Controllers\UserController::class, 'updateSello']);
     Route::get('/permissions', [App\Http\Controllers\UserController::class, 'permissions']);
     Route::get('/users/{user}/permissions', [App\Http\Controllers\UserController::class, 'userPermissions']);
     Route::put('/users/{user}/permissions', [App\Http\Controllers\UserController::class, 'updateUserPermissions']);
@@ -63,9 +63,9 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
     Route::put('/users/{user}/subpartidas', [App\Http\Controllers\UserController::class, 'syncUserSubpartidas']);
 
     // Pacientes
-    Route::get('pacientes/buscar-ci/{ci}',      [PacienteController::class, 'buscarPorCi']);
-    Route::get('pacientes/nn-rn/{tipo}',         [PacienteController::class, 'buscarPorTipoNN_RN']);
-    Route::get('pacientes/{id}/historico',       [PacienteController::class, 'historico']);
+    Route::get('pacientes/buscar-ci/{ci}', [PacienteController::class, 'buscarPorCi']);
+    Route::get('pacientes/nn-rn/{tipo}', [PacienteController::class, 'buscarPorTipoNN_RN']);
+    Route::get('pacientes/{id}/historico', [PacienteController::class, 'historico']);
     Route::get('pacientes/{id}/historico/excel', [PacienteController::class, 'historicoExcel']);
     Route::apiResource('pacientes', PacienteController::class);
 
@@ -74,16 +74,17 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
     Route::get('solicitudes/{id}/consentimiento', [ConsentimientoController::class, 'showBySolicitude']);
     Route::post('solicitudes/{id}/consentimiento', [ConsentimientoController::class, 'upsertBySolicitude']);
     Route::get('doctores/export/excel', [DoctorController::class, 'exportarExcel']);
-    Route::get('doctores/export/pdf',   [DoctorController::class, 'exportarPdf']);
+    Route::get('doctores/export/pdf', [DoctorController::class, 'exportarPdf']);
     Route::apiResource('doctores', DoctorController::class);
 
     Route::get('solicitudes/export/excel', [SolicitudeController::class, 'indexExcel']);
-    Route::get('solicitudes/export/pdf',   [SolicitudeController::class, 'indexPdf']);
+    Route::get('solicitudes/export/pdf', [SolicitudeController::class, 'indexPdf']);
     Route::apiResource('solicitudes', SolicitudeController::class);
     Route::get('solicitudes-create-catalogos', [SolicitudCatalogoController::class, 'create']);
+    Route::get('solicitudes-siguiente-codigo', [SolicitudCatalogoController::class, 'siguienteCodigo']);
 
     Route::get('establecimientos/export/excel', [EstablecimientoController::class, 'exportarExcel']);
-    Route::get('establecimientos/export/pdf',   [EstablecimientoController::class, 'exportarPdf']);
+    Route::get('establecimientos/export/pdf', [EstablecimientoController::class, 'exportarPdf']);
     Route::apiResource('establecimientos', EstablecimientoController::class);
     Route::apiResource('equipos', \App\Http\Controllers\EquipoController::class);
     Route::apiResource('unidad-solicitantes', UnidadSolicitanteController::class);
@@ -105,6 +106,8 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
     Route::post('almacen-items/{id}/imagen', [AlmacenItemController::class, 'updateImagen']);
     Route::get('almacen/productos-por-vencer', [ProductoPorVencerController::class, 'index']);
     Route::get('almacen/productos-vencidos', [ProductoVencidoController::class, 'index']);
+    Route::get('compras/export/excel', [CompraController::class, 'reportExcel']);
+    Route::get('compras/{id}/excel', [CompraController::class, 'printExcel']);
     Route::get('compras/{id}/pdf', [CompraController::class, 'printPdf']);
     Route::apiResource('compras', CompraController::class)->only(['index', 'show', 'store', 'update', 'destroy']);
     Route::get('pedidos/limite-mensual', [PedidoController::class, 'limiteMensual']);
@@ -122,10 +125,13 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
     Route::get('reporte-valorado/excel', [ReporteValoradoController::class, 'excel']);
 
     Route::get('reporte-resumen-detalle', [ReporteResumenDetalleController::class, 'index']);
-    Route::get('reporte-resumen-detalle/resumen/pdf', [ReporteResumenDetalleController::class, 'resumenPdf']);
-    Route::get('reporte-resumen-detalle/detalle/pdf', [ReporteResumenDetalleController::class, 'detallePdf']);
-    Route::get('reporte-resumen-detalle/resumen/excel', [ReporteResumenDetalleController::class, 'resumenExcel']);
-    Route::get('reporte-resumen-detalle/detalle/excel', [ReporteResumenDetalleController::class, 'detalleExcel']);
+    Route::get('reporte-resumen-detalle/detalle', [ReporteResumenDetalleController::class, 'detalleIndex']);
+    Route::get('reporte-resumen-detalle/productos/{subpartidaId}', [ReporteResumenDetalleController::class, 'productos']);
+    Route::post('reporte-resumen-detalle/resumen/pdf', [ReporteResumenDetalleController::class, 'resumenPdf']);
+    Route::post('reporte-resumen-detalle/detalle/pdf', [ReporteResumenDetalleController::class, 'detallePdf']);
+    Route::post('reporte-resumen-detalle/resumen/excel', [ReporteResumenDetalleController::class, 'resumenExcel']);
+    Route::post('reporte-resumen-detalle/detalle/excel', [ReporteResumenDetalleController::class, 'detalleExcel']);
+    Route::get('reporte-resumen-detalle/movimientos/{itemId}', [ReporteResumenDetalleController::class, 'movimientos']);
 
     Route::get('despachos/pedido-lookup/{id}', [DespachoController::class, 'pedidoLookup']);
     Route::get('despachos/{id}/pdf', [DespachoController::class, 'printPdf']);
@@ -134,8 +140,9 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
     Route::apiResource('despachos', DespachoController::class)->only(['index', 'show', 'store', 'destroy']);
 
     Route::apiResource('areas', AreaController::class);
-//    areasCreateSolicitud
+    //    areasCreateSolicitud
     Route::get('areasCreateSolicitud', [AreaController::class, 'areasCreateSolicitud']);
+    Route::get('servicios/next-codigo', [ServicioController::class, 'nextCodigo']);
     Route::apiResource('servicios', ServicioController::class);
     Route::post('servicios/{id}/tipos-muestra', [ServicioController::class, 'syncTiposMuestra']);
 
@@ -153,8 +160,8 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
     Route::post('solicitudes/{id}/test-embarazo', [SolicitudeController::class, 'saveTestEmbarazo']);
     Route::get('solicitudes/{id}/test-embarazo/pdf', [SolicitudeController::class, 'printTestEmbarazo']);
 
-//    Route::get('solicitudes-area-analitica', [SolicitudeController::class, 'solicitudesAreaAnalitica']);
-//    Route::post('solicitudes/{id}/analitica', [SolicitudeController::class, 'guardarAnalitica']);
+    //    Route::get('solicitudes-area-analitica', [SolicitudeController::class, 'solicitudesAreaAnalitica']);
+    //    Route::post('solicitudes/{id}/analitica', [SolicitudeController::class, 'guardarAnalitica']);
 
     Route::apiResource('area-rangos', AreaRangoController::class);
 
@@ -167,20 +174,31 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
 
     Route::apiResource('solicitude-propiedades', SolicitudePropiedadController::class);
 
-//    analitica/solicitudes
+    //    analitica/solicitudes
     Route::get('solicitudesAnalitica', [SolicitudeController::class, 'solicitudesAnalitica']);
     Route::get('analitica/para-presentacion', [SolicitudeController::class, 'paraPresentacion']);
     Route::post('analitica/registrar-presentacion', [SolicitudeController::class, 'registrarPresentacion']);
 
-    Route::get   ('formularios',        [FormulariosController::class, 'index']);
-    Route::post  ('formularios',        [FormulariosController::class, 'store']);
-    Route::get   ('formularios/{id}',   [FormulariosController::class, 'show']);
-    Route::put   ('formularios/{id}',   [FormulariosController::class, 'update']);
-    Route::delete('formularios/{id}',   [FormulariosController::class, 'destroy']);
+    Route::get('formularios', [FormulariosController::class, 'index']);
+    Route::post('formularios', [FormulariosController::class, 'store']);
+    Route::get('formularios/{id}', [FormulariosController::class, 'show']);
+    Route::put('formularios/{id}', [FormulariosController::class, 'update']);
+    Route::delete('formularios/{id}', [FormulariosController::class, 'destroy']);
 
-    Route::get('reportes/solicitudes-dashboard',       [SolicitudeController::class, 'dashboard']);
-    Route::get('reportes/solicitudes-dashboard/list',  [SolicitudeController::class, 'dashboardList']);
+    Route::get('reportes/solicitudes-dashboard', [SolicitudeController::class, 'dashboard']);
+    Route::get('reportes/solicitudes-dashboard/list', [SolicitudeController::class, 'dashboardList']);
     Route::get('reportes/solicitudes-dashboard/excel', [SolicitudeController::class, 'dashboardExcel']);
+
+    Route::get('/datos-hematologia', [\App\Http\Controllers\DatoHematologiaController::class, 'index']);
+    Route::put('/datos-hematologia/{id}', [\App\Http\Controllers\DatoHematologiaController::class, 'update']);
+
+    Route::get('/datos-quimica-sanguinea', [\App\Http\Controllers\DatoQuimicaSanguineaController::class, 'index']);
+    Route::put('/datos-quimica-sanguinea/{id}', [\App\Http\Controllers\DatoQuimicaSanguineaController::class, 'update']);
+
+    Route::get('/agrupaciones', [\App\Http\Controllers\AgrupacionController::class, 'index']);
+    Route::post('/agrupaciones', [\App\Http\Controllers\AgrupacionController::class, 'store']);
+    Route::put('/agrupaciones/{id}', [\App\Http\Controllers\AgrupacionController::class, 'update']);
+    Route::delete('/agrupaciones/{id}', [\App\Http\Controllers\AgrupacionController::class, 'destroy']);
 
     Route::get('/hematologia/solicitud/{id}', [\App\Http\Controllers\HematologiaController::class, 'showBySolicitude']);
     Route::post('/hematologia/solicitud/{id}', [\App\Http\Controllers\HematologiaController::class, 'upsert']);
@@ -198,9 +216,9 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
     Route::post('parasitologia/solicitud/{id}', [\App\Http\Controllers\ParasitologiaController::class, 'upsert']);
     Route::delete('parasitologia/solicitud/{id}', [\App\Http\Controllers\ParasitologiaController::class, 'destroyBySolicitude']);
 
-    Route::get   ('diagnosticos',      [\App\Http\Controllers\DiagnosticoController::class, 'index']);
-    Route::post  ('diagnosticos',      [\App\Http\Controllers\DiagnosticoController::class, 'store']);
-    Route::put   ('diagnosticos/{id}', [\App\Http\Controllers\DiagnosticoController::class, 'update']);
+    Route::get('diagnosticos', [\App\Http\Controllers\DiagnosticoController::class, 'index']);
+    Route::post('diagnosticos', [\App\Http\Controllers\DiagnosticoController::class, 'store']);
+    Route::put('diagnosticos/{id}', [\App\Http\Controllers\DiagnosticoController::class, 'update']);
     Route::delete('diagnosticos/{id}', [\App\Http\Controllers\DiagnosticoController::class, 'destroy']);
     Route::get('papiloma-humano/solicitud/{id}', [\App\Http\Controllers\PapilomaHumanoController::class, 'showBySolicitude']);
     Route::post('papiloma-humano/solicitud/{id}', [\App\Http\Controllers\PapilomaHumanoController::class, 'upsert']);
@@ -270,17 +288,17 @@ Route::get('public/reportes/{codigo}', [SolicitudeController::class, 'imprimirAn
 
 Route::get('consentimientos/{id}/print', [ConsentimientoController::class, 'print']);
 Route::get('solicitudes/{id}/consentimiento/print', [ConsentimientoController::class, 'printBySolicitude']);
-//pacientes/nn-rn/
+// pacientes/nn-rn/
 Route::get('pacientesnn-rn/', [PacienteController::class, 'buscarPorNN_RN']);
 
-//pdfBySolicitude
+// pdfBySolicitude
 Route::get('/hematologia/solicitud/{id}/pdf', [\App\Http\Controllers\HematologiaController::class, 'pdfBySolicitude']);
 Route::get('parasitologia/solicitud/{id}/pdf', [\App\Http\Controllers\ParasitologiaController::class, 'pdfBySolicitude']);
 Route::get('uroanalisis/solicitud/{id}/pdf', [\App\Http\Controllers\UroanalisisController::class, 'pdfBySolicitude']);
 Route::get('/quimica-sanguinea/solicitud/{id}/pdf', [\App\Http\Controllers\QuimicaSanguineaController::class, 'pdfBySolicitude']);
-//const url = `${this.$axios.defaults.baseURL}/quimica-sanguinea/solicitud/${solicitud.quimica_sanguinea?.code}/pdf-tolerancia`
+// const url = `${this.$axios.defaults.baseURL}/quimica-sanguinea/solicitud/${solicitud.quimica_sanguinea?.code}/pdf-tolerancia`
 Route::get('/quimica-sanguinea/solicitud/{id}/pdf-tolerancia', [\App\Http\Controllers\QuimicaSanguineaController::class, 'pdfToleranciaBySolicitude']);
-//const url = `${this.$axios.defaults.baseURL}/quimica-sanguinea/solicitud/${solicitud.quimica_sanguinea?.code}/pdf-cito-quimico`
+// const url = `${this.$axios.defaults.baseURL}/quimica-sanguinea/solicitud/${solicitud.quimica_sanguinea?.code}/pdf-cito-quimico`
 Route::get('/quimica-sanguinea/solicitud/{id}/pdf-cito-quimico', [\App\Http\Controllers\QuimicaSanguineaController::class, 'pdfCitoQuimicoBySolicitude']);
 Route::get('papiloma-humano/solicitud/{id}/pdf', [\App\Http\Controllers\PapilomaHumanoController::class, 'pdfBySolicitude']);
 Route::get('/panel-respiratorio/solicitud/{id}/pdf', [\App\Http\Controllers\PanelRespiratorioController::class, 'pdfBySolicitude']);

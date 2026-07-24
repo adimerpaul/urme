@@ -104,7 +104,6 @@
             <tr v-else v-for="row in productos" :key="row.id">
               <td class="q-pa-xs">
                 <q-btn-dropdown
-                  v-if="canEditar || canEliminar"
                   label="Opciones"
                   no-caps
                   size="10px"
@@ -112,6 +111,11 @@
                   color="primary"
                 >
                   <q-list>
+                    <q-item clickable v-close-popup @click="prodHistorial(row)">
+                      <q-item-section avatar><q-icon name="history" color="teal" /></q-item-section>
+                      <q-item-section><q-item-label>Historial de compras y ventas</q-item-label></q-item-section>
+                    </q-item>
+                    <q-separator />
                     <q-item v-if="canEditar" clickable v-close-popup @click="prodEdit(row)">
                       <q-item-section avatar><q-icon name="edit" /></q-item-section>
                       <q-item-section><q-item-label>Editar</q-item-label></q-item-section>
@@ -458,6 +462,98 @@
       </q-card>
     </q-dialog>
 
+    <!-- DIALOG HISTORIAL DEL PRODUCTO -->
+    <q-dialog v-model="dialogHistorial">
+      <q-card style="width:min(96vw,1000px);max-width:1000px">
+        <q-card-section class="row items-center bg-teal text-white q-py-sm">
+          <q-icon name="history" size="22px" class="q-mr-sm" />
+          <div>
+            <div class="text-subtitle1 text-weight-bold">Historial de compras y ventas</div>
+            <div class="text-caption">{{ historialProducto.codigo || 'SIN CÓDIGO' }} · {{ historialProducto.nombre }}</div>
+          </div>
+          <q-space />
+          <q-btn icon="close" flat round dense color="white" v-close-popup />
+        </q-card-section>
+
+        <q-card-section class="q-pa-sm">
+          <div class="row items-center q-gutter-sm q-mb-sm">
+            <q-chip color="blue-1" text-color="blue-9" icon="shopping_cart" square>
+              Comprado: <strong class="q-ml-xs">{{ cantidadComprada.toFixed(2) }}</strong>
+            </q-chip>
+            <q-chip color="teal-1" text-color="teal-9" icon="point_of_sale" square>
+              Vendido: <strong class="q-ml-xs">{{ cantidadVendida.toFixed(2) }}</strong>
+            </q-chip>
+            <q-chip color="green-1" text-color="green-9" icon="inventory_2" square>
+              Saldo: <strong class="q-ml-xs">{{ saldoHistorial.toFixed(2) }}</strong>
+            </q-chip>
+          </div>
+
+          <q-tabs v-model="tabHistorial" dense align="left" no-caps
+                  active-color="primary" indicator-color="primary" class="text-grey-7">
+            <q-tab name="compras" icon="shopping_cart"
+                   :label="'Compras (' + comprasHistorial.length + ')'" />
+            <q-tab name="ventas" icon="point_of_sale"
+                   :label="'Ventas (' + ventasHistorial.length + ')'" />
+          </q-tabs>
+          <q-separator class="q-mb-sm" />
+
+          <q-markup-table dense flat bordered separator="cell">
+            <thead>
+              <tr class="bg-grey-2">
+                <th class="text-left">Fecha</th>
+                <th class="text-left">Documento</th>
+                <th class="text-left">{{ tabHistorial === 'compras' ? 'Proveedor' : 'Cliente' }}</th>
+                <th class="text-left">Lote</th>
+                <th class="text-left">Vencimiento</th>
+                <th class="text-right">{{ tabHistorial === 'compras' ? 'Comprada' : 'Cantidad' }}</th>
+                <th v-if="tabHistorial === 'compras'" class="text-right">Vendida</th>
+                <th v-if="tabHistorial === 'compras'" class="text-right">Saldo</th>
+                <th class="text-right">Precio (Bs.)</th>
+                <th class="text-right">Total (Bs.)</th>
+                <th class="text-center">Estado</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-if="loadingHistorial">
+                <td :colspan="tabHistorial === 'compras' ? 11 : 9" class="text-center q-pa-lg">
+                  <q-spinner color="teal" size="28px" />
+                </td>
+              </tr>
+              <tr v-else-if="!movimientosTabHistorial.length">
+                <td :colspan="tabHistorial === 'compras' ? 11 : 9" class="text-center text-grey-6 q-pa-lg">
+                  No hay {{ tabHistorial }} registradas para este producto.
+                </td>
+              </tr>
+              <tr v-else v-for="(mov, index) in movimientosTabHistorial" :key="mov.tipo + '-' + mov.id + '-' + index">
+                <td>{{ formatFechaHistorial(mov.fecha_hora) }}</td>
+                <td>{{ mov.documento }}</td>
+                <td>{{ mov.tercero }}</td>
+                <td>{{ mov.lote || 'SIN LOTE' }}</td>
+                <td>{{ mov.fecha_vencimiento || 'SIN FECHA' }}</td>
+                <td class="text-right">{{ Number(mov.cantidad).toFixed(2) }}</td>
+                <td v-if="tabHistorial === 'compras'" class="text-right text-teal-8 text-weight-bold">
+                  {{ Number(mov.cantidad_vendida || 0).toFixed(2) }}
+                </td>
+                <td v-if="tabHistorial === 'compras'" class="text-right">
+                  <q-badge :color="Number(mov.saldo) > 0 ? 'green-1' : 'red-1'"
+                           :text-color="Number(mov.saldo) > 0 ? 'green-9' : 'negative'">
+                    {{ Number(mov.saldo || 0).toFixed(2) }}
+                  </q-badge>
+                </td>
+                <td class="text-right">{{ Number(mov.precio).toFixed(2) }}</td>
+                <td class="text-right text-weight-bold">{{ Number(mov.total).toFixed(2) }}</td>
+                <td class="text-center">
+                  <q-badge :color="mov.estado === 'ANULADO' ? 'negative' : (mov.estado === 'PENDIENTE' ? 'warning' : 'positive')">
+                    {{ mov.estado }}
+                  </q-badge>
+                </td>
+              </tr>
+            </tbody>
+          </q-markup-table>
+        </q-card-section>
+      </q-card>
+    </q-dialog>
+
     <!-- DIALOG FABRICANTE -->
     <q-dialog v-model="dialogFab" persistent>
       <q-card style="width:min(96vw,420px)">
@@ -659,6 +755,23 @@ const pageProd    = ref(1)
 const totalProd   = ref(0)
 const perProd     = 15
 const prod        = ref({})
+const dialogHistorial = ref(false)
+const loadingHistorial = ref(false)
+const historialProducto = ref({})
+const movimientosHistorial = ref([])
+const tabHistorial = ref('compras')
+const comprasHistorial = computed(() => movimientosHistorial.value.filter(mov => mov.tipo === 'COMPRA'))
+const ventasHistorial = computed(() => movimientosHistorial.value.filter(mov => mov.tipo === 'VENTA'))
+const movimientosTabHistorial = computed(() => (
+  tabHistorial.value === 'compras' ? comprasHistorial.value : ventasHistorial.value
+))
+const cantidadComprada = computed(() => comprasHistorial.value
+  .filter(mov => mov.estado === 'ACTIVO')
+  .reduce((total, mov) => total + Number(mov.cantidad || 0), 0))
+const cantidadVendida = computed(() => ventasHistorial.value
+  .filter(mov => mov.estado === 'ACTIVO')
+  .reduce((total, mov) => total + Number(mov.cantidad || 0), 0))
+const saldoHistorial = computed(() => cantidadComprada.value - cantidadVendida.value)
 let timerProd     = null
 
 const pagesProd = computed(() => Math.max(1, Math.ceil(totalProd.value / perProd)))
@@ -797,6 +910,31 @@ function prodEdit (row) {
   prod.value = { ...row, fabricante_id: row.fabricante?.id || null, unidad_id: row.unidad?.id || null, tipo_producto_id: row.tipo_producto?.id || null }
   prodAction.value = 'Editar'
   dialogProd.value = true
+}
+
+async function prodHistorial (row) {
+  historialProducto.value = row
+  movimientosHistorial.value = []
+  tabHistorial.value = 'compras'
+  dialogHistorial.value = true
+  loadingHistorial.value = true
+  try {
+    const res = await proxy.$axios.get('productos/' + row.id + '/historial')
+    historialProducto.value = res.data?.producto || row
+    movimientosHistorial.value = res.data?.movimientos || []
+  } catch (e) {
+    proxy.$alert.error(e.response?.data?.message || 'Error al cargar el historial')
+  } finally {
+    loadingHistorial.value = false
+  }
+}
+
+function formatFechaHistorial (fecha) {
+  if (!fecha) return '—'
+  return new Intl.DateTimeFormat('es-BO', {
+    dateStyle: 'short',
+    timeStyle: 'short',
+  }).format(new Date(fecha))
 }
 
 async function prodSave () {

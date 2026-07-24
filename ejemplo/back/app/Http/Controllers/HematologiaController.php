@@ -46,10 +46,16 @@ class HematologiaController extends Controller
                 ->get();
         }
 
+        // configuración de variables visibles por prestación (datos_hematologia)
+        $datos = \App\Models\DatoHematologia::with('prestaciones:id,nombre')
+            ->orderBy('orden')
+            ->get();
+
         return response()->json([
             'solicitud'   => $solicitud,
             'hematologia' => $hematologia,
             'rangos'      => $rangos,
+            'datos'       => $datos,
         ]);
     }
 

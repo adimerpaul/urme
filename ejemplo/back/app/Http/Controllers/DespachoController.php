@@ -181,7 +181,7 @@ class DespachoController extends Controller
             $nro = 'DSP-'.str_pad($count, 4, '0', STR_PAD_LEFT).'/'.$year;
 
             $solicitante = $pedido->nombre_usuario ?? $pedido->user?->name;
-            $servicio = $pedido->unidad;
+            $servicio = $pedido->unidad?->nombre;
 
             $despacho = Despacho::create([
                 'pedido_id' => $pedido->id,

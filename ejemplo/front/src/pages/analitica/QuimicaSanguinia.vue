@@ -150,19 +150,7 @@
                QUÍMICA BÁSICA / RENAL
                ======================= -->
           <div
-            v-if="hasAnyServicios([
-              'ÁCIDO ÚRICO',
-              'ALBUMINA',
-              'PROTEINAS TOTALES',
-              'GLICEMIA (GLUCOSA)',
-              'UREA',
-              'NITROGENO UREICO SERICO (NUS)',
-              'CREATININA SÉRICA',
-              'PERFIL RENAL (CREATININA SÉRICA, ÁCIDO ÚRICO, UREA)',
-              'PROTEINOGRAMA (PROTEÍNAS TOTALES, ALBÚMINA, GLOBULINA)',
-              'CLEARENCE DE CREATININA',
-              'GLUCOSA'
-            ])"
+            v-if="canAny(['acido_urico','albumina','proteinas_totales','glucosa','urea','nus','creatinina','globulina','relacion_ag'])"
           >
             <div class="section-title q-mb-xs">Química sanguínea básica</div>
 
@@ -177,7 +165,7 @@
               </thead>
 
               <tbody>
-              <tr v-if="canServicios(['ÁCIDO ÚRICO','PERFIL RENAL (CREATININA SÉRICA, ÁCIDO ÚRICO, UREA)'])">
+              <tr v-if="canVariable('acido_urico')">
                 <td>Ácido Úrico</td>
                 <td>
                   <q-input v-model.number="form.acido_urico" dense outlined type="number" step="0.01"
@@ -187,7 +175,7 @@
                 <td>{{ rangoUnidad('Acido Urico') }}</td>
               </tr>
 
-              <tr v-if="canServicios(['ALBUMINA','PROTEINOGRAMA (PROTEÍNAS TOTALES, ALBÚMINA, GLOBULINA)'])">
+              <tr v-if="canVariable('albumina')">
                 <td>Albúmina</td>
                 <td>
                   <q-input
@@ -199,7 +187,7 @@
                 <td>{{ rangoUnidad('Albumina') || 'g/dl' }}</td>
               </tr>
 
-              <tr v-if="canServicios(['PROTEINAS TOTALES','PROTEINOGRAMA (PROTEÍNAS TOTALES, ALBÚMINA, GLOBULINA)'])">
+              <tr v-if="canVariable('proteinas_totales')">
                 <td>Proteínas totales</td>
                 <td>
                   <q-input
@@ -211,7 +199,7 @@
                 <td>{{ rangoUnidad('Proteinas totales') }}</td>
               </tr>
 
-              <tr v-if="canServicios(['GLICEMIA (GLUCOSA)','PRUEBA DE TOLERANCIA A LA GLUCOSA (3 MEDICIONES) (PTG)','PRUEBA DE TOLERANCIA A LA GLUCOSA (4 MEDICIONES) (PTG)','GLUCOSA'])">
+              <tr v-if="canVariable('glucosa')">
                 <td>Glucosa</td>
                 <td>
                   <q-input v-model.number="form.glucosa" dense outlined type="number" step="0.01"
@@ -221,7 +209,7 @@
                 <td>{{ rangoUnidad('Glucosa') }}</td>
               </tr>
 
-              <tr v-if="canServicios(['UREA','PERFIL RENAL (CREATININA SÉRICA, ÁCIDO ÚRICO, UREA)','NITROGENO UREICO SERICO (NUS)'])">
+              <tr v-if="canVariable('urea')">
                 <td>Urea</td>
                 <td>
                   <q-input v-model.number="form.urea" dense outlined type="number" step="0.01"
@@ -232,7 +220,7 @@
                 <td>{{ rangoUnidad('Urea') }}</td>
               </tr>
 
-              <tr v-if="canServicios(['NITROGENO UREICO SERICO (NUS)'])">
+              <tr v-if="canVariable('nus')">
                 <td>NUS</td>
                 <td>
                   <q-input v-model.number="form.nus" dense outlined type="number" step="0.01"
@@ -242,7 +230,7 @@
                 <td>{{ rangoUnidad('NUS') }}</td>
               </tr>
 
-              <tr v-if="canServicios(['CREATININA SÉRICA','PERFIL RENAL (CREATININA SÉRICA, ÁCIDO ÚRICO, UREA)','CLEARENCE DE CREATININA'])">
+              <tr v-if="canVariable('creatinina')">
                 <td>Creatinina</td>
                 <td>
                   <q-input v-model.number="form.creatinina" dense outlined type="number" step="0.01"
@@ -253,7 +241,7 @@
               </tr>
 <!--              Globulina = Proteinas_Totales – Albumina-->
 
-              <tr v-if="canServicios('PROTEINOGRAMA (PROTEÍNAS TOTALES, ALBÚMINA, GLOBULINA)')">
+              <tr v-if="canVariable('globulina')">
                 <td>Globulina</td>
                 <td>
                   <!--              Relacion A/G= Albumina/Globulina-->
@@ -265,7 +253,7 @@
                 <td>{{ rangoTexto('Globulina') }}</td>
                 <td>{{ rangoUnidad('Globulina') }}</td>
               </tr>
-              <tr v-if="canServicios('PROTEINOGRAMA (PROTEÍNAS TOTALES, ALBÚMINA, GLOBULINA)')">
+              <tr v-if="canVariable('relacion_ag')">
                 <td>Relación A/G</td>
                 <td>
                   <q-input v-model.number="form.relacion_ag" dense outlined type="number" step="0.01"
@@ -282,15 +270,7 @@
                PERFIL HEPÁTICO
                ======================= -->
           <div
-            v-if="hasAnyServicios([
-              'BILIRRUBINAS TOTALES Y FRACCIONADAS',
-              'TRANSAMINASAS GOT- (ALT)',
-              'TRANSAMINASAS GPT',
-              'FOSFATASA ALCALINA',
-              'GAMA GLUTAMIL TRANSFERASA (GGT)',
-              'AMILASA',
-              'PERFIL HEPÁTICO O HEPATOGRAMA (BILIRRUBINAS TOTALES Y FRACCIONADAS, FOSFATASA ALCALINA, GOT, GPT, GGT, TP)'
-            ])"
+            v-if="canAny(['bilirrubina_total','bilirrubina_directa','bilirrubina_indirecta','got','gpt','fosfatasa_alcalina','ggt','amilasa'])"
           >
             <div class="section-title q-mb-xs">Enzimas hepáticas y bilirrubinas</div>
 
@@ -305,7 +285,7 @@
               </thead>
 
               <tbody>
-              <tr v-if="canServicios(['BILIRRUBINAS TOTALES Y FRACCIONADAS','PERFIL HEPÁTICO O HEPATOGRAMA (BILIRRUBINAS TOTALES Y FRACCIONADAS, FOSFATASA ALCALINA, GOT, GPT, GGT, TP)'])">
+              <tr v-if="canVariable('bilirrubina_total')">
                 <td>Bilirrubina Total</td>
                 <td>
 <!--                  Bilirrubina Indirecta = Bilirrubina Total - Bilirrubina Directa-->
@@ -318,7 +298,7 @@
                 <td>{{ rangoUnidad('Bilirrubina Total') }}</td>
               </tr>
 
-              <tr v-if="canServicios(['BILIRRUBINAS TOTALES Y FRACCIONADAS','PERFIL HEPÁTICO O HEPATOGRAMA (BILIRRUBINAS TOTALES Y FRACCIONADAS, FOSFATASA ALCALINA, GOT, GPT, GGT, TP)'])">
+              <tr v-if="canVariable('bilirrubina_directa')">
                 <td>Bilirrubina Directa</td>
                 <td>
 <!--                  Bilirrubina Indirecta = Bilirrubina Total - Bilirrubina Directa-->
@@ -331,7 +311,7 @@
                 <td>{{ rangoUnidad('Bilirrubina Directa') }}</td>
               </tr>
 
-              <tr v-if="canServicios(['BILIRRUBINAS TOTALES Y FRACCIONADAS','PERFIL HEPÁTICO O HEPATOGRAMA (BILIRRUBINAS TOTALES Y FRACCIONADAS, FOSFATASA ALCALINA, GOT, GPT, GGT, TP)'])">
+              <tr v-if="canVariable('bilirrubina_indirecta')">
                 <td>Bilirrubina Indirecta</td>
                 <td>
                   <q-input v-model.number="form.bilirrubina_indirecta" dense outlined type="number" step="0.01"
@@ -341,7 +321,7 @@
                 <td>{{ rangoUnidad('Bilirrubina Indirecta') }}</td>
               </tr>
 
-              <tr v-if="canServicios(['TRANSAMINASAS GOT- (ALT)','PERFIL HEPÁTICO O HEPATOGRAMA (BILIRRUBINAS TOTALES Y FRACCIONADAS, FOSFATASA ALCALINA, GOT, GPT, GGT, TP)'])">
+              <tr v-if="canVariable('got')">
                 <td>G.O.T. (TGO)</td>
                 <td>
                   <q-input v-model.number="form.got" dense outlined type="number" step="0.01"
@@ -351,7 +331,7 @@
                 <td>{{ rangoUnidad('G.O.T. (TGO)') }}</td>
               </tr>
 
-              <tr v-if="canServicios(['TRANSAMINASAS GPT','PERFIL HEPÁTICO O HEPATOGRAMA (BILIRRUBINAS TOTALES Y FRACCIONADAS, FOSFATASA ALCALINA, GOT, GPT, GGT, TP)'])">
+              <tr v-if="canVariable('gpt')">
                 <td>G.P.T. (TGP)</td>
                 <td>
                   <q-input v-model.number="form.gpt" dense outlined type="number" step="0.01"
@@ -361,7 +341,7 @@
                 <td>{{ rangoUnidad('G.P.T. (TGP)') }}</td>
               </tr>
 
-              <tr v-if="canServicios(['FOSFATASA ALCALINA','PERFIL HEPÁTICO O HEPATOGRAMA (BILIRRUBINAS TOTALES Y FRACCIONADAS, FOSFATASA ALCALINA, GOT, GPT, GGT, TP)'])">
+              <tr v-if="canVariable('fosfatasa_alcalina')">
                 <td>Fosfatasa Alcalina</td>
                 <td>
                   <q-input v-model.number="form.fosfatasa_alcalina" dense outlined type="number" step="0.01"
@@ -371,7 +351,7 @@
                 <td>{{ rangoUnidad('Fosfatasa Alcalina') }}</td>
               </tr>
 
-              <tr v-if="canServicios(['GAMA GLUTAMIL TRANSFERASA (GGT)','PERFIL HEPÁTICO O HEPATOGRAMA (BILIRRUBINAS TOTALES Y FRACCIONADAS, FOSFATASA ALCALINA, GOT, GPT, GGT, TP)'])">
+              <tr v-if="canVariable('ggt')">
                 <td>GGT</td>
                 <td>
                   <q-input v-model.number="form.ggt" dense outlined type="number" step="0.01"
@@ -381,7 +361,7 @@
                 <td>{{ rangoUnidad('GGT') }}</td>
               </tr>
 
-              <tr v-if="canServicios('AMILASA')">
+              <tr v-if="canVariable('amilasa')">
                 <td>Amilasa</td>
                 <td>
                   <q-input v-model.number="form.amilasa" dense outlined type="number" step="0.01"
@@ -398,12 +378,7 @@
                PERFIL LIPÍDICO
                ======================= -->
           <div
-            v-if="hasAnyServicios([
-              'COLESTEROL',
-              'TRIGLICÉRIDOS',
-              'HDLc, LDLc, VLDLc',
-              'PERFIL LIPÍDICO O LIPIDOGRAMA (COLESTEROL, TRIGLICERIDOS, HDLc,LDLc,VLDLc)'
-            ])"
+            v-if="canAny(['trigliceridos','colesterol_total','hdl_colesterol','ldl_colesterol','vldl_colesterol'])"
           >
             <div class="section-title q-mb-xs">Perfil lipídico</div>
 
@@ -418,7 +393,7 @@
               </thead>
 
               <tbody>
-              <tr v-if="canServicios(['HDLc, LDLc, VLDLc','TRIGLICÉRIDOS','PERFIL LIPÍDICO O LIPIDOGRAMA (COLESTEROL, TRIGLICERIDOS, HDLc,LDLc,VLDLc)'])">
+              <tr v-if="canVariable('trigliceridos')">
                 <td>Triglicéridos</td>
                 <td>
                   <q-input v-model.number="form.trigliceridos" dense outlined type="number" step="0.01"
@@ -428,7 +403,7 @@
                 <td>{{ rangoTexto('Triglicéridos') }}</td>
                 <td>{{ rangoUnidad('Triglicéridos') }}</td>
               </tr>
-              <tr v-if="canServicios(['HDLc, LDLc, VLDLc','COLESTEROL','PERFIL LIPÍDICO O LIPIDOGRAMA (COLESTEROL, TRIGLICERIDOS, HDLc,LDLc,VLDLc)'])">
+              <tr v-if="canVariable('colesterol_total')">
                 <td>Colesterol total</td>
                 <td>
                   <q-input v-model.number="form.colesterol_total" dense outlined type="number" step="0.01"
@@ -440,7 +415,7 @@
               </tr>
 
 
-              <tr v-if="canServicios(['HDLc, LDLc, VLDLc','PERFIL LIPÍDICO O LIPIDOGRAMA (COLESTEROL, TRIGLICERIDOS, HDLc,LDLc,VLDLc)'])">
+              <tr v-if="canVariable('hdl_colesterol')">
                 <td>HDL</td>
                 <td>
                   <q-input v-model.number="form.hdl_colesterol" dense outlined type="number" step="0.01"
@@ -451,7 +426,7 @@
                 <td>{{ rangoUnidad('HDL Colesterol') }}</td>
               </tr>
 
-              <tr v-if="canServicios(['HDLc, LDLc, VLDLc','PERFIL LIPÍDICO O LIPIDOGRAMA (COLESTEROL, TRIGLICERIDOS, HDLc,LDLc,VLDLc)'])">
+              <tr v-if="canVariable('ldl_colesterol')">
                 <td>LDL</td>
                 <td>
                   <q-input v-model.number="form.ldl_colesterol" dense outlined type="number" step="0.01"
@@ -462,7 +437,7 @@
                 <td>{{ rangoUnidad('LDL Colesterol') }}</td>
               </tr>
 
-              <tr v-if="canServicios(['HDLc, LDLc, VLDLc','PERFIL LIPÍDICO O LIPIDOGRAMA (COLESTEROL, TRIGLICERIDOS, HDLc,LDLc,VLDLc)'])">
+              <tr v-if="canVariable('vldl_colesterol')">
                 <td>VLDL</td>
                 <td>
                   <q-input v-model.number="form.vldl_colesterol" dense outlined type="number" step="0.01"
@@ -479,15 +454,7 @@
                ELECTROLITOS / IONOGRAMA
                ======================= -->
           <div
-            v-if="hasAnyServicios([
-              'ELECTROLITOS (SODIO, POTASIO, CLORO)',
-              'IONOGRAMA (NA,K,CL,CA,Mg,P)',
-              'CALCIO',
-              'FÓSFORO',
-              'MAGNESIO',
-              'HIERRO',
-              'TRANSFERRINA'
-            ])"
+            v-if="canAny(['sodio','potasio','cloro','calcio','fosforo','magnesio','hierro_serico','trf'])"
           >
             <div class="section-title q-mb-xs">Electrolitos y minerales</div>
 
@@ -502,7 +469,7 @@
               </thead>
 
               <tbody>
-              <tr v-if="canServicios(['ELECTROLITOS (SODIO, POTASIO, CLORO)','IONOGRAMA (NA,K,CL,CA,Mg,P)'])">
+              <tr v-if="canVariable('sodio')">
                 <td>Sodio</td>
                 <td>
                   <q-input v-model.number="form.sodio" dense outlined type="number" step="0.01"
@@ -512,7 +479,7 @@
                 <td>{{ rangoUnidad('Sodio') }}</td>
               </tr>
 
-              <tr v-if="canServicios(['ELECTROLITOS (SODIO, POTASIO, CLORO)','IONOGRAMA (NA,K,CL,CA,Mg,P)'])">
+              <tr v-if="canVariable('potasio')">
                 <td>Potasio</td>
                 <td>
                   <q-input v-model.number="form.potasio" dense outlined type="number" step="0.01"
@@ -522,7 +489,7 @@
                 <td>{{ rangoUnidad('Potasio') }}</td>
               </tr>
 
-              <tr v-if="canServicios(['ELECTROLITOS (SODIO, POTASIO, CLORO)','IONOGRAMA (NA,K,CL,CA,Mg,P)'])">
+              <tr v-if="canVariable('cloro')">
                 <td>Cloro</td>
                 <td>
                   <q-input v-model.number="form.cloro" dense outlined type="number" step="0.01"
@@ -532,7 +499,7 @@
                 <td>{{ rangoUnidad('Cloro') }}</td>
               </tr>
 
-              <tr v-if="canServicios(['CALCIO','IONOGRAMA (NA,K,CL,CA,Mg,P)'])">
+              <tr v-if="canVariable('calcio')">
                 <td>Calcio</td>
                 <td>
                   <q-input v-model.number="form.calcio" dense outlined type="number" step="0.01"
@@ -542,7 +509,7 @@
                 <td>{{ rangoUnidad('Calcio') }}</td>
               </tr>
 
-              <tr v-if="canServicios(['FÓSFORO','IONOGRAMA (NA,K,CL,CA,Mg,P)'])">
+              <tr v-if="canVariable('fosforo')">
                 <td>Fósforo</td>
                 <td>
                   <q-input v-model.number="form.fosforo" dense outlined type="number" step="0.01"
@@ -552,7 +519,7 @@
                 <td>{{ rangoUnidad('Fosforo') }}</td>
               </tr>
 
-              <tr v-if="canServicios(['MAGNESIO','IONOGRAMA (NA,K,CL,CA,Mg,P)'])">
+              <tr v-if="canVariable('magnesio')">
                 <td>Magnesio</td>
                 <td>
                   <q-input v-model.number="form.magnesio" dense outlined type="number" step="0.01"
@@ -561,7 +528,7 @@
                 <td>{{ rangoTexto('Magnesio') }}</td>
                 <td>{{ rangoUnidad('Magnesio') }}</td>
               </tr>
-              <tr v-if="canServicios(['HIERRO'])">
+              <tr v-if="canVariable('hierro_serico')">
                 <td>Hierro serico</td>
                 <td>
                   <q-input v-model.number="form.hierro_serico" dense outlined type="number" step="0.01"
@@ -570,7 +537,7 @@
                 <td>{{ rangoTexto('Hierro sérico') }}</td>
                 <td>{{ rangoUnidad('Hierro sérico') }}</td>
               </tr>
-              <tr v-if="canServicios(['HIERRO', 'TRANSFERRINA'])">
+              <tr v-if="canVariable('trf')">
                 <td>Transferrina (TRF)</td>
                 <td>
                   <q-input v-model.number="form.trf" dense outlined type="number" step="0.01"
@@ -587,12 +554,7 @@
                QUÍMICA BÁSICA EN ORINA
                ======================= -->
           <div
-            v-if="hasAnyServicios([
-              'CREATININA EN ORINA (CREATINURIA)',
-              'PROTEINURIA 24 HRS',
-              'CLEARENCE DE CREATININA',
-              'MICROALBUMINURIA'
-            ])"
+            v-if="canAny(['creatinuria_24h','creatinuria_casual','proteinuria_24h','volumen_24h','dce','microalbuminuria'])"
           >
             <div class="section-title q-mb-xs">Química básica en orina</div>
 
@@ -607,7 +569,7 @@
               </thead>
 
               <tbody>
-              <tr v-if="canServicios(['CREATININA EN ORINA (CREATINURIA)','CLEARENCE DE CREATININA'])">
+              <tr v-if="canVariable('creatinuria_24h')">
                 <td>Creatinuria 24 hrs.</td>
                 <td>
                   <q-input v-model.number="form.creatinuria_24h" dense outlined type="number" step="0.01"
@@ -617,7 +579,7 @@
                 <td>{{ rangoUnidad('Creatinuria 24 hrs.') }}</td>
               </tr>
 
-              <tr v-if="canServicios(['PROTEINURIA 24 HRS','CREATININA EN ORINA (CREATINURIA)'])">
+              <tr v-if="canVariable('creatinuria_casual')">
                 <td>Creatinuria Casual</td>
                 <td>
                   <q-input v-model.number="form.creatinuria_casual" dense outlined type="number" step="0.01"
@@ -627,7 +589,7 @@
                 <td>{{ rangoUnidad('Creatinuria Casual') }}</td>
               </tr>
 
-              <tr v-if="canServicios('PROTEINURIA 24 HRS')">
+              <tr v-if="canVariable('proteinuria_24h')">
                 <td>Proteinuria de 24 hrs.</td>
                 <td>
                   <q-input v-model.number="form.proteinuria_24h" dense outlined type="number" step="0.01"
@@ -637,7 +599,7 @@
                 <td>{{ rangoUnidad('Proteinuria de 24 hrs.') }}</td>
               </tr>
 
-              <tr v-if="canServicios(['PROTEINURIA 24 HRS','CREATININA EN ORINA (CREATINURIA)','CLEARENCE DE CREATININA'])">
+              <tr v-if="canVariable('volumen_24h')">
                 <td>Volumen 24 h</td>
                 <td>
                   <q-input v-model.number="form.volumen_24h" dense outlined type="number" step="0.01"
@@ -646,7 +608,7 @@
                 <td>{{ rangoTexto('VOLUMEN') }}</td>
                 <td>{{ rangoUnidad('VOLUMEN') }}</td>
               </tr>
-              <tr v-if="canServicios('CLEARENCE DE CREATININA')">
+              <tr v-if="canVariable('dce')">
                 <td>DCE (Depuración de Creatinina)</td>
                 <td>
                   <q-input v-model="form.dce" dense outlined placeholder="ml/min"
@@ -655,7 +617,7 @@
                 <td>{{ rangoTexto('DCE') || 'H: 97-137 / M: 88-128' }}</td>
                 <td>{{ rangoUnidad('DCE') || 'ml/min' }}</td>
               </tr>
-              <tr v-if="canServicios('MICROALBUMINURIA')">
+              <tr v-if="canVariable('microalbuminuria')">
                 <td>Microalbuminuria</td>
                 <td>
                   <q-input v-model.number="form.microalbuminuria" dense outlined type="number" step="0.01"
@@ -676,12 +638,7 @@
                OTROS
                ======================= -->
           <div
-            v-if="hasAnyServicios([
-              'CK TOTAL',
-              'CK MB',
-              'LACTATO DESHIDROGENASA ( LDH )',
-              'LIPASA'
-              ])"
+            v-if="canAny(['ck_total','ck_mb','ldh','lipasa'])"
           >
             <div class="section-title q-mb-xs">Otros</div>
 
@@ -696,7 +653,7 @@
               </thead>
 
               <tbody>
-              <tr v-if="canServicios('CK TOTAL')">
+              <tr v-if="canVariable('ck_total')">
                 <td>CK-Total</td>
                 <td>
                   <q-input v-model.number="form.ck_total" dense outlined type="number" step="0.01"
@@ -706,7 +663,7 @@
                 <td>{{ rangoUnidad('CK Total') }}</td>
               </tr>
 
-              <tr v-if="canServicios('CK MB')">
+              <tr v-if="canVariable('ck_mb')">
                 <td>CK MB</td>
                 <td>
                   <q-input v-model.number="form.ck_mb" dense outlined type="number" step="0.01"
@@ -715,7 +672,7 @@
                 <td>{{ rangoTexto('CK-MB') }}</td>
                 <td>{{ rangoUnidad('CK-MB') }}</td>
               </tr>
-              <tr v-if="canServicios('LACTATO DESHIDROGENASA ( LDH )')">
+              <tr v-if="canVariable('ldh')">
                 <td>LDH</td>
                 <td>
                   <q-input v-model.number="form.ldh" dense outlined type="number" step="0.01"
@@ -724,7 +681,7 @@
                 <td>{{ rangoTexto('LDH') }}</td>
                 <td>{{ rangoUnidad('LDH') }}</td>
               </tr>
-              <tr v-if="canServicios('LIPASA')">
+              <tr v-if="canVariable('lipasa')">
                 <td>Lipasa</td>
                 <td>
                   <q-input v-model.number="form.lipasa" dense outlined type="number" step="0.01"
@@ -742,9 +699,7 @@
                CONTROL GLUCÉMICO
                ======================= -->
           <div
-            v-if="hasAnyServicios([
-              'HEMOGLOBINA GLICOSILADA A1c'
-            ])"
+            v-if="canAny(['hb_glicosilada'])"
           >
             <div class="section-title q-mb-xs">Control glucémico</div>
 
@@ -769,7 +724,7 @@
 <!--                <td>{{ rangoUnidad('Hb glicosilada (HbA1c)') }}</td>-->
 <!--              </tr>-->
 <!--              hb_glicosilada-->
-              <tr v-if="canServicios('HEMOGLOBINA GLICOSILADA A1c')">
+              <tr v-if="canVariable('hb_glicosilada')">
                 <td>Hb Glicosilada A1C</td>
                 <td>
                   <q-input v-model.number="form.hb_glicosilada" dense outlined type="number" step="0.01"
@@ -786,21 +741,7 @@
                SEROLÓGICOS / RÁPIDAS
                ======================= -->
           <div
-            v-if="hasAnyServicios([
-              'ASTO O ASO',
-              'FACTOR REUMATOIDEO (FR)',
-              'PCR CUALITATIVO (PROTEÍNA C REACTIVA)',
-              'PRUEBA RAPIDA PARA VIH',
-              'PRUEBA RAPIDA PARA SIFILIS',
-              'PRUEBA RAPIDA PARA CHAGAS',
-              'PRUEBA RAPIDA PARA HEPATITIS B',
-              'PRUEBA RAPIDA PARA HEPATITIS C',
-              'PRUEBA RAPIDA PARA TROPONINA',
-              'REACCIÓN DE WIDAL',
-              'RPR- VDRL',
-              'TEST DE EMBARAZO EN SUERO (GONADOTROFINA CORIÓNICA HUMANA CUALITATIVO)',
-              'CLEARENCE DE CREATININA'
-            ])"
+            v-if="canAny(['aso','fr','pcr','test_embarazo','prueba_rapida_hepatitis_b','prueba_rapida_hepatitis_c','prueba_rapida_chagas','prueba_rapida_vih','prueba_rapida_sifilis','prueba_rapida_troponina','rpr','reaccion_widal_o','reaccion_widal_h','reaccion_widal_a','reaccion_widal_b'])"
           >
             <div class="section-title q-mb-xs">Pruebas serológicas</div>
 
@@ -815,7 +756,7 @@
               </thead>
 
               <tbody>
-              <tr v-if="canServicios('ASTO O ASO')">
+              <tr v-if="canVariable('aso')">
                 <td>ASO O ASTO</td>
                 <td>
                   <div class="row q-col-gutter-xs">
@@ -842,7 +783,7 @@
 <!--                <td>{{ rangoUnidad('ASO') }}</td>-->
 <!--              </tr>-->
 
-              <tr v-if="canServicios('FACTOR REUMATOIDEO (FR)')">
+              <tr v-if="canVariable('fr')">
                 <td>FR</td>
                 <td>
                   <div class="row q-col-gutter-xs">
@@ -869,7 +810,7 @@
 <!--                <td>{{ rangoUnidad('FR') }}</td>-->
 <!--              </tr>-->
 
-              <tr v-if="canServicios(['PCR CUALITATIVO (PROTEÍNA C REACTIVA)'])">
+              <tr v-if="canVariable('pcr')">
                 <td>PCR</td>
                 <td>
                   <div class="row q-col-gutter-xs">
@@ -896,7 +837,7 @@
 <!--                <td>{{ rangoUnidad('PCR') }}</td>-->
 <!--              </tr>-->
 <!--              TEST de embraza-->
-              <tr v-if="canServicios('TEST DE EMBARAZO EN SUERO (GONADOTROFINA CORIÓNICA HUMANA CUALITATIVO (HCG))')">
+              <tr v-if="canVariable('test_embarazo')">
                 <td>Test de embarazo</td>
                 <td>
                   <div class="row q-col-gutter-sm">
@@ -917,7 +858,7 @@
 <!--              PRUEBA RAPIDA PARA VIH-->
 <!--              PRUEBA RAPIDA PARA SIFILIS-->
 <!--              PRUEBA RAPIDA PARA TROPONINA-->
-              <tr v-if="canServicios('PRUEBA RAPIDA PARA HEPATITIS B')">
+              <tr v-if="canVariable('prueba_rapida_hepatitis_b')">
                 <td>Prueba rápida Hepatitis B</td>
                 <td style="width: 250px;">
 <!--                  <q-input v-model="form.prueba_rapida_hepatitis_b" dense outlined placeholder="Reactivo / No reactivo" />-->
@@ -926,7 +867,7 @@
                 <td>{{ rangoTexto('Prueba rápida Hepatitis B') }}</td>
                 <td>{{ rangoUnidad('Prueba rápida Hepatitis B') }}</td>
               </tr>
-              <tr v-if="canServicios('PRUEBA RAPIDA PARA HEPATITIS C')">
+              <tr v-if="canVariable('prueba_rapida_hepatitis_c')">
                 <td>Prueba rápida Hepatitis C</td>
                 <td style="width: 250px;">
 <!--                  <q-input v-model="form.prueba_rapida_hepatitis_c" dense outlined placeholder="Reactivo / No reactivo" />-->
@@ -935,7 +876,7 @@
                 <td>{{ rangoTexto('Prueba rápida Hepatitis C') }}</td>
                 <td>{{ rangoUnidad('Prueba rápida Hepatitis C') }}</td>
               </tr>
-              <tr v-if="canServicios('PRUEBA RAPIDA PARA CHAGAS')">
+              <tr v-if="canVariable('prueba_rapida_chagas')">
                 <td>Prueba rápida Chagas</td>
                 <td style="width: 250px;">
 <!--                  <q-input v-model="form.prueba_rapida_chagas" dense outlined placeholder="Reactivo / No reactivo" />-->
@@ -945,7 +886,7 @@
                 <td>{{ rangoUnidad('Prueba rápida Chagas') }}</td>
               </tr>
 
-              <tr v-if="canServicios(['PRUEBA RAPIDA PARA VIH'])">
+              <tr v-if="canVariable('prueba_rapida_vih')">
                 <td>Prueba rápida VIH</td>
                 <td style="width: 250px;">
 <!--                  <q-input v-model="form.prueba_rapida_vih" dense outlined placeholder="Reactivo / No reactivo" />-->
@@ -954,7 +895,7 @@
                 <td>{{ rangoTexto('Prueba rápida VIH') }}</td>
                 <td>{{ rangoUnidad('Prueba rápida VIH') }}</td>
               </tr>
-              <tr v-if="canServicios('PRUEBA RAPIDA PARA SIFILIS')">
+              <tr v-if="canVariable('prueba_rapida_sifilis')">
                 <td>Prueba rápida Sífilis</td>
                 <td style="width: 250px;">
 <!--                  <q-input v-model="form.prueba_rapida_sifilis" dense outlined placeholder="Reactivo / No reactivo" />-->
@@ -963,7 +904,7 @@
                 <td>{{ rangoTexto('Prueba rápida Sífilis') }}</td>
                 <td>{{ rangoUnidad('Prueba rápida Sífilis') }}</td>
               </tr>
-              <tr v-if="canServicios('PRUEBA RAPIDA PARA TROPONINA')">
+              <tr v-if="canVariable('prueba_rapida_troponina')">
                 <td>Prueba rápida Troponina</td>
                 <td style="width: 250px;">
 <!--                  <q-input v-model="form.prueba_rapida_troponina" dense outlined placeholder="Reactivo / No reactivo" />-->
@@ -973,7 +914,7 @@
                 <td>{{ rangoUnidad('Prueba rápida Troponina') }}</td>
               </tr>
 
-              <tr v-if="canServicios(['RPR- VDRL'])">
+              <tr v-if="canVariable('rpr')">
                 <td>RPR / VDRL</td>
                 <td>
                   <div class="row q-col-gutter-sm">
@@ -999,7 +940,7 @@
 <!--              $table->string('reaccion_widal_h', 50)->nullable();-->
 <!--              $table->string('reaccion_widal_a', 50)->nullable();-->
 <!--              $table->string('reaccion_widal_b', 50)->nullable();-->
-              <tr v-if="canServicios('REACCIÓN DE WIDAL')">
+              <tr v-if="canVariable('reaccion_widal_o')">
                 <td>Reacción de Widal O</td>
                 <td>
                   <div class="row q-col-gutter-sm">
@@ -1014,7 +955,7 @@
                 <td>{{ rangoTexto('Reacción de Widal O') }}</td>
                 <td>{{ rangoUnidad('Reacción de Widal O') }}</td>
               </tr>
-              <tr v-if="canServicios('REACCIÓN DE WIDAL')">
+              <tr v-if="canVariable('reaccion_widal_h')">
                 <td>Reacción de Widal H</td>
                 <td>
                   <div class="row q-col-gutter-sm">
@@ -1029,7 +970,7 @@
                 <td>{{ rangoTexto('Reacción de Widal H') }}</td>
                 <td>{{ rangoUnidad('Reacción de Widal H') }}</td>
               </tr>
-              <tr v-if="canServicios('REACCIÓN DE WIDAL')">
+              <tr v-if="canVariable('reaccion_widal_a')">
                 <td>Reacción de Widal A</td>
                 <td>
                   <div class="row q-col-gutter-sm">
@@ -1044,7 +985,7 @@
                 <td>{{ rangoTexto('Reacción de Widal A') }}</td>
                 <td>{{ rangoUnidad('Reacción de Widal A') }}</td>
               </tr>
-              <tr v-if="canServicios('REACCIÓN DE WIDAL')">
+              <tr v-if="canVariable('reaccion_widal_b')">
                 <td>Reacción de Widal B</td>
                 <td>
                   <div class="row q-col-gutter-sm">
@@ -1082,14 +1023,13 @@
 <!--          MONONUCLEARES: 32 %-->
           <!-- citoquimico -->
           <div
-            v-if="hasAnyServicios([
-              'CITOQUÍMICO LÍQUIDO CEFALORRAQUÍDEO Y OTROS LÍQUIDOS'
-            ])"
+            v-if="canAny(['tipo_de_muestra','citoquimico_cantidad','citoquimico_color','citoquimico_aspecto','citoquimico_ph','citoquimico_densidad','citoquimico_glucosa','citoquimico_proteinas_totales','citoquimico_ldh','citoquimico_globulos_blancos','citoquimico_polimorfonucleares','citoquimico_mononucleares','citoquimico_observaciones'])"
           >
             <div class="row items-center q-col-gutter-sm q-mb-xs">
               <div class="col-auto section-title">Citoquímico</div>
               <div class="col">
                 <q-input
+                  v-if="canVariable('tipo_de_muestra')"
                   v-model="form.tipo_de_muestra"
                   dense
                   outlined
@@ -1128,7 +1068,7 @@
 
               <tbody>
 <!--              cantidad color aspecto-->
-              <tr v-if="canServicios('CITOQUÍMICO LÍQUIDO CEFALORRAQUÍDEO Y OTROS LÍQUIDOS')">
+              <tr v-if="canVariable('citoquimico_cantidad')">
                 <td>Cantidad (ml)</td>
                 <td>
                   <q-input v-model.number="form.citoquimico_cantidad" dense outlined type="number" step="0.01"
@@ -1137,7 +1077,7 @@
                 <td>{{ rangoTexto('Cantidad (ml)') }}</td>
                 <td>{{ rangoUnidad('Cantidad (ml)') }}</td>
               </tr>
-              <tr v-if="canServicios('CITOQUÍMICO LÍQUIDO CEFALORRAQUÍDEO Y OTROS LÍQUIDOS')">
+              <tr v-if="canVariable('citoquimico_color')">
                 <td>Color</td>
                 <td>
 <!--                  <q-input v-model="form.citoquimico_color" dense outlined placeholder="Ejemplo: Amarillo, rojo, incoloro" />-->
@@ -1148,7 +1088,7 @@
                 <td>{{ rangoTexto('Color') }}</td>
                 <td>{{ rangoUnidad('Color') }}</td>
               </tr>
-              <tr v-if="canServicios('CITOQUÍMICO LÍQUIDO CEFALORRAQUÍDEO Y OTROS LÍQUIDOS')">
+              <tr v-if="canVariable('citoquimico_aspecto')">
                 <td>Aspecto</td>
                 <td>
 <!--                  <q-input v-model="form.citoquimico_aspecto" dense outlined placeholder="Ejemplo: Límpido, turbio" />-->
@@ -1162,7 +1102,7 @@
               </tbody>
               <div  class="section-title q-mb-xs">EXAMEN QUIMICO</div>
               <tbody>
-              <tr v-if="canServicios('CITOQUÍMICO LÍQUIDO CEFALORRAQUÍDEO Y OTROS LÍQUIDOS')">
+              <tr v-if="canVariable('citoquimico_ph')">
                 <td>pH</td>
                 <td>
                   <!--                  <q-input v-model.number="form.citoquimico_ph" dense outlined type="number" step="0.01"-->
@@ -1174,7 +1114,7 @@
                 <td>{{ rangoTexto('pH') }}</td>
                 <td>{{ rangoUnidad('pH') }}</td>
               </tr>
-              <tr v-if="canServicios('CITOQUÍMICO LÍQUIDO CEFALORRAQUÍDEO Y OTROS LÍQUIDOS')">
+              <tr v-if="canVariable('citoquimico_densidad')">
                 <td>Densidad</td>
                 <td>
                   <!--                  <q-input v-model.number="form.citoquimico_densidad" dense outlined type="number" step="0.001"-->
@@ -1187,7 +1127,7 @@
                 <td>{{ rangoTexto('Densidad') }}</td>
                 <td>{{ rangoUnidad('Densidad') }}</td>
               </tr>
-              <tr v-if="canServicios('CITOQUÍMICO LÍQUIDO CEFALORRAQUÍDEO Y OTROS LÍQUIDOS')">
+              <tr v-if="canVariable('citoquimico_glucosa')">
                 <td>Glucosa</td>
                 <td>
                   <q-input v-model.number="form.citoquimico_glucosa" dense outlined type="number" step="0.01"
@@ -1206,7 +1146,7 @@
                 <td>{{ rangoTexto('Glucosa') }}</td>
                 <td>{{ rangoUnidad('Glucosa') }}</td>
               </tr>
-              <tr v-if="canServicios('CITOQUÍMICO LÍQUIDO CEFALORRAQUÍDEO Y OTROS LÍQUIDOS')">
+              <tr v-if="canVariable('citoquimico_proteinas_totales')">
                 <td>Proteínas totales</td>
                 <td>
                   <q-input v-model.number="form.citoquimico_proteinas_totales" dense outlined type="number" step="0.01"
@@ -1216,7 +1156,7 @@
                 <td>{{ rangoUnidad('Proteínas totales') }}</td>
               </tr>
 <!--              densidad-->
-              <tr v-if="canServicios('CITOQUÍMICO LÍQUIDO CEFALORRAQUÍDEO Y OTROS LÍQUIDOS')">
+              <tr v-if="canVariable('citoquimico_ldh')">
                 <td>LDH</td>
                 <td>
                   <q-input v-model.number="form.citoquimico_ldh" dense outlined type="number" step="0.01"
@@ -1228,7 +1168,7 @@
               </tbody>
               <div  class="section-title q-mb-xs">EXAMEN MICROSCOPICO</div>
               <tbody>
-              <tr v-if="canServicios('CITOQUÍMICO LÍQUIDO CEFALORRAQUÍDEO Y OTROS LÍQUIDOS')">
+              <tr v-if="canVariable('citoquimico_globulos_blancos')">
                 <td>Glóbulos blancos</td>
                 <td>
                   <q-input v-model.number="form.citoquimico_globulos_blancos" dense outlined type="number" step="0.01"
@@ -1237,7 +1177,7 @@
                 <td>{{ rangoTexto('Glóbulos blancos') }}</td>
                 <td>{{ rangoUnidad('Glóbulos blancos') }}</td>
               </tr>
-              <tr v-if="canServicios('CITOQUÍMICO LÍQUIDO CEFALORRAQUÍDEO Y OTROS LÍQUIDOS')">
+              <tr v-if="canVariable('citoquimico_polimorfonucleares')">
                 <td>Polimorfonucleares (%)</td>
                 <td>
                   <q-input v-model.number="form.citoquimico_polimorfonucleares" dense outlined type="number" step="0.01"
@@ -1246,7 +1186,7 @@
                 <td>{{ rangoTexto('Polimorfonucleares (%)') }}</td>
                 <td>{{ rangoUnidad('Polimorfonucleares (%)') }}</td>
               </tr>
-              <tr v-if="canServicios('CITOQUÍMICO LÍQUIDO CEFALORRAQUÍDEO Y OTROS LÍQUIDOS')">
+              <tr v-if="canVariable('citoquimico_mononucleares')">
                 <td>Mononucleares (%)</td>
                 <td>
                   <q-input v-model.number="form.citoquimico_mononucleares" dense outlined type="number" step="0.01"
@@ -1259,7 +1199,7 @@
 
             </q-markup-table>
             <q-input
-              v-if="canServicios('CITOQUÍMICO LÍQUIDO CEFALORRAQUÍDEO Y OTROS LÍQUIDOS')"
+              v-if="canVariable('citoquimico_observaciones')"
               v-model="form.citoquimico_observaciones"
               type="textarea"
               dense outlined autogrow
@@ -1288,10 +1228,7 @@
 
           <!--          PRUEBA DE TOLERANCIA A LA GLUCOSA (4 MEDICIONES) (PTG) ,PRUEBA DE TOLERANCIA A LA GLUCOSA (3 MEDICIONES) (PTG)-->
           <div
-            v-if="hasAnyServicios([
-              'PRUEBA DE TOLERANCIA A LA GLUCOSA (4 MEDICIONES) (PTG)',
-              'PRUEBA DE TOLERANCIA A LA GLUCOSA (3 MEDICIONES) (PTG)'
-            ])">
+            v-if="canVariable('tolerancia_glucosa')">
             <div class="section-title q-mb-xs">Prueba de tolerancia a la glucosa</div>
             <q-markup-table dense flat bordered square class="bg-white q-mb-md">
               <thead>
@@ -1322,7 +1259,7 @@
 <!--                  <q-input v-model="form['tolerancia_hora_' + n + 'h']" dense outlined placeholder="HH:MM" />-->
 <!--                </td>-->
 <!--              </tr>-->
-              <template v-if="canServicios(['PRUEBA DE TOLERANCIA A LA GLUCOSA (4 MEDICIONES) (PTG)','PRUEBA DE TOLERANCIA A LA GLUCOSA (3 MEDICIONES) (PTG)'])">
+              <template v-if="canVariable('tolerancia_glucosa')">
                 <tr v-for="n in 5" :key="n">
                   <td>{{ n }}</td>
                   <td>
@@ -1338,7 +1275,7 @@
           </div>
           <!-- GASOMETRÍA -->
           <div
-            v-if="hasAnyServicios(['GASOMETRÍA ARTERIAL O VENOSA', 'GASOMETRÍA', 'GASOMETRIA'])"
+            v-if="canAny(['gasometria_tipo','gasometria_muestra_estado'])"
             class="q-mb-md"
           >
             <div class="section-title q-mb-xs">Gasometría</div>
@@ -1403,6 +1340,7 @@ export default {
       header: null,
       formLoaded: false,
       rangos: [],
+      datos: [],
       equiposAll: [],
       equiposOptions: [],
       form: {
@@ -1527,6 +1465,23 @@ export default {
       return arr.some(x => this.canServicios(x))
     },
 
+    // ========= visibilidad por configuración (datos_quimica_sanguinea) =========
+    // Sin dato configurado o sin prestaciones asignadas => siempre visible.
+    // Con prestaciones asignadas => visible solo si la solicitud incluye alguna.
+    // Dato inactivo => nunca visible.
+    canVariable (variable) {
+      const dato = (this.datos || []).find(d => d.variable === variable)
+      if (!dato) return true
+      if (!dato.activo) return false
+      const ids = (dato.prestaciones || []).map(p => p.id)
+      if (!ids.length) return true
+      const solicitudIds = (this.header?.servicios || []).map(s => s.id)
+      return solicitudIds.some(id => ids.includes(id))
+    },
+    canAny (variables) {
+      return (variables || []).some(v => this.canVariable(v))
+    },
+
     // ========= api =========
     async load () {
       try {
@@ -1540,6 +1495,7 @@ export default {
         this.form.muestra_rechazada = muestra_rechazada
         this.form.muestra_observacion = muestra_observacion
         this.rangos = data.rangos || []
+        this.datos = data.datos || []
         this.formLoaded = true
       } catch (e) {
         const msg = e.response?.data?.message || e.message

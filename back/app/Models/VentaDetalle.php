@@ -14,7 +14,8 @@ class VentaDetalle extends Model implements AuditableContract
     protected $table = 'venta_detalles';
 
     protected $fillable = [
-        'venta_id', 'producto_id', 'nombre', 'precio', 'cantidad', 'total',
+        'venta_id', 'producto_id', 'compra_detalle_id', 'nombre', 'lote',
+        'fecha_vencimiento', 'precio', 'cantidad', 'total',
     ];
 
     protected $hidden = ['created_at', 'updated_at', 'deleted_at'];
@@ -23,6 +24,7 @@ class VentaDetalle extends Model implements AuditableContract
         'precio' => 'decimal:2',
         'cantidad' => 'decimal:4',
         'total' => 'decimal:2',
+        'fecha_vencimiento' => 'date',
     ];
 
     public function venta()
@@ -33,5 +35,10 @@ class VentaDetalle extends Model implements AuditableContract
     public function producto()
     {
         return $this->belongsTo(Producto::class);
+    }
+
+    public function compraDetalle()
+    {
+        return $this->belongsTo(CompraDetalle::class);
     }
 }

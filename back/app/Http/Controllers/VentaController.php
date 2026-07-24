@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Producto;
+use App\Models\CompraDetalle;
 use App\Models\Venta;
 use App\Models\VentaDetalle;
 use Illuminate\Http\Request;
@@ -66,6 +67,8 @@ class VentaController extends Controller
 //            'estado' => 'nullable|in:ACTIVO,PENDIENTE',
             'detalles' => 'required|array|min:1',
             'detalles.*.producto_id' => 'nullable|exists:productos,id',
+            'detalles.*.compra_detalle_id' => 'nullable|exists:compra_detalles,id',
+            'detalles.*.lote' => 'nullable|string|max:255',
             'detalles.*.nombre' => 'required_without:detalles.*.producto_id|nullable|string|max:255',
             'detalles.*.precio' => 'required|numeric|min:0',
             'detalles.*.cantidad' => 'required|numeric|min:0.0001',
@@ -91,16 +94,49 @@ class VentaController extends Controller
 
             $total = 0;
             foreach ($request->detalles as $item) {
-                $producto = ! empty($item['producto_id']) ? Producto::find($item['producto_id']) : null;
+                $producto = ! empty($item['producto_id'])
+                    ? Producto::with('tipoProducto:id,nombre')->find($item['producto_id'])
+                    : null;
                 $precio = (float) $item['precio'];
                 $cantidad = (float) $item['cantidad'];
+
+                $loteCompra = null;
+                $requiereLote = $producto
+                    && mb_strtoupper($producto->tipoProducto?->nombre ?? '') === 'FARMACIA';
+                if ($requiereLote) {
+                    if (empty($item['compra_detalle_id']) || empty($item['lote'])) {
+                        abort(422, "Debe seleccionar un lote para {$producto->nombre}");
+                    }
+                    $loteCompra = CompraDetalle::with('compra:id,estado')
+                        ->lockForUpdate()
+                        ->findOrFail($item['compra_detalle_id']);
+
+                    if ((int) $loteCompra->producto_id !== (int) $producto->id
+                        || $loteCompra->compra?->estado !== 'ACTIVO'
+                        || ! $loteCompra->lote) {
+                        abort(422, "El lote seleccionado para {$producto->nombre} no es válido");
+                    }
+
+                    $cantidadVendida = VentaDetalle::where('compra_detalle_id', $loteCompra->id)
+                        ->whereHas('venta', fn ($query) => $query->where('estado', '<>', 'ANULADO'))
+                        ->sum('cantidad');
+                    $disponible = (float) $loteCompra->cantidad - (float) $cantidadVendida;
+
+                    if ($cantidad > $disponible) {
+                        abort(422, "Stock insuficiente en el lote {$loteCompra->lote} de {$producto->nombre}. Disponible: {$disponible}");
+                    }
+                }
+
                 $lineaTotal = round($precio * $cantidad, 2);
                 $total += $lineaTotal;
 
                 VentaDetalle::create([
                     'venta_id' => $venta->id,
                     'producto_id' => $producto?->id,
+                    'compra_detalle_id' => $loteCompra?->id,
                     'nombre' => mb_strtoupper($item['nombre'] ?? $producto?->nombre ?? ''),
+                    'lote' => $loteCompra?->lote,
+                    'fecha_vencimiento' => $loteCompra?->fecha_vencimiento,
                     'precio' => $precio,
                     'cantidad' => $cantidad,
                     'total' => $lineaTotal,

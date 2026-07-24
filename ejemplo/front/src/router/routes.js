@@ -219,6 +219,24 @@ const routes = [
         meta: {requiresAuth: true, perm: 'Analitica'}
       },
       {
+        path: '/configuracion/hematologia',
+        name: 'configuracion-hematologia',
+        component: () => import('pages/configuracion/ConfiguracionHematologia.vue'),
+        meta: {requiresAuth: true, perm: 'Configuración hematología'}
+      },
+      {
+        path: '/configuracion/quimica-sanguinea',
+        name: 'configuracion-quimica-sanguinea',
+        component: () => import('pages/configuracion/ConfiguracionQuimicaSanguinea.vue'),
+        meta: {requiresAuth: true, perm: 'Configuración química sanguínea'}
+      },
+      {
+        path: '/configuracion/agrupaciones',
+        name: 'configuracion-agrupaciones',
+        component: () => import('pages/configuracion/ConfiguracionAgrupaciones.vue'),
+        meta: {requiresAuth: true, perm: 'Configuración agrupaciones'}
+      },
+      {
         path: '/analitica/quimica-sanguinia/:id',
         name: 'analitica-quimica-sanguinia',
         component: () => import('pages/analitica/QuimicaSanguinia.vue'),

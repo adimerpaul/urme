@@ -44,7 +44,7 @@ tr:nth-child(even) td { background: #f5f9ff; }
     <tr>
       <th style="width:4%;">Nº</th>
       <th style="text-align:left;">DETALLE</th>
-      <th style="width:9%;">Partida</th>
+      <th style="width:9%;">Subpartida</th>
       <th style="width:14%;">Cantidad Inicial<br>al {{ \Carbon\Carbon::parse($meta['desde'])->format('d/m/Y') }}</th>
       <th style="width:16%;">Saldo Inicial<br>al {{ \Carbon\Carbon::parse($meta['desde'])->format('d/m/Y') }} (Bs)</th>
       <th style="width:14%;">Cantidad Final<br>al {{ \Carbon\Carbon::parse($meta['hasta'])->format('d/m/Y') }}</th>
@@ -56,7 +56,7 @@ tr:nth-child(even) td { background: #f5f9ff; }
     <tr>
       <td class="center">{{ $row['nro'] }}</td>
       <td>{{ $row['detalle'] }}</td>
-      <td class="center">{{ $row['partida'] }}</td>
+      <td class="center">{{ $row['subpartida'] }}</td>
       <td class="num">{{ number_format($row['cant_ini'], 2, ',', '.') }}</td>
       <td class="num">{{ number_format($row['saldo_ini'], 2, ',', '.') }}</td>
       <td class="num">{{ number_format($row['cant_final'], 2, ',', '.') }}</td>

@@ -19,6 +19,7 @@ class ProductoLaboratorioDato extends Model implements AuditableContract
         'nombre_variable',
         'unidad',
         'rango_referencia',
+        'valor_defecto',
         'orden',
         'visible',
     ];
@@ -35,5 +36,12 @@ class ProductoLaboratorioDato extends Model implements AuditableContract
     public function formula()
     {
         return $this->hasOne(ProductoLaboratorioFormula::class);
+    }
+
+    public function opciones()
+    {
+        return $this->hasMany(ProductoLaboratorioDatoOpcion::class, 'producto_laboratorio_dato_id')
+            ->orderBy('orden')
+            ->orderBy('id');
     }
 }

@@ -20,6 +20,7 @@ class ProductoLaboratorioController extends Controller
 
         return response()->json($producto->load([
             'laboratorioDatos.formula',
+            'laboratorioDatos.opciones',
             'laboratorioFormulas',
             'laboratorioValidaciones',
         ]));
@@ -30,17 +31,27 @@ class ProductoLaboratorioController extends Controller
         $this->authorizeAny($request, 'Editar Productos');
         $this->ensureLaboratorio($producto);
         $data = $this->validateDato($request, $producto);
+        $opciones = $data['opciones'];
+        unset($data['opciones']);
         $data['producto_id'] = $producto->id;
         $data['orden'] = ((int) $producto->laboratorioDatos()->max('orden')) + 10;
 
-        return response()->json(ProductoLaboratorioDato::create($data), 201);
+        $dato = ProductoLaboratorioDato::create($data);
+        $this->sincronizarOpciones($dato, $opciones);
+
+        return response()->json($dato->load('opciones'), 201);
     }
 
     public function updateDato(Request $request, ProductoLaboratorioDato $dato)
     {
         $this->authorizeAny($request, 'Editar Productos');
         $this->ensureLaboratorio($dato->producto);
-        $dato->update($this->validateDato($request, $dato->producto, $dato));
+        $data = $this->validateDato($request, $dato->producto, $dato);
+        $opciones = $data['opciones'];
+        unset($data['opciones']);
+
+        $dato->update($data);
+        $this->sincronizarOpciones($dato, $opciones);
         $dato->formula?->update([
             'nombre' => $dato->nombre,
             'nombre_variable' => $dato->nombre_variable,
@@ -48,7 +59,7 @@ class ProductoLaboratorioController extends Controller
             'visible' => $dato->visible,
         ]);
 
-        return response()->json($dato);
+        return response()->json($dato->load('opciones'));
     }
 
     public function destroyDato(Request $request, ProductoLaboratorioDato $dato)
@@ -158,6 +169,28 @@ class ProductoLaboratorioController extends Controller
         return response()->json(['message' => 'Fórmula eliminada']);
     }
 
+    /**
+     * Deja la lista de opciones del dato igual a la recibida, conservando las
+     * filas que ya existían para no perder su historial de auditoría.
+     */
+    private function sincronizarOpciones(ProductoLaboratorioDato $dato, array $valores): void
+    {
+        $existentes = $dato->opciones()->get()->keyBy('valor');
+
+        foreach ($valores as $indice => $valor) {
+            $opcion = $existentes->get($valor);
+            if ($opcion) {
+                $opcion->update(['orden' => $indice]);
+                $existentes->forget($valor);
+            } else {
+                $dato->opciones()->create(['valor' => $valor, 'orden' => $indice]);
+            }
+        }
+
+        // Lo que quedó en $existentes ya no está en la lista enviada.
+        $existentes->each->delete();
+    }
+
     private function validateDato(
         Request $request,
         Producto $producto,
@@ -177,7 +210,9 @@ class ProductoLaboratorioController extends Controller
             ],
             'unidad' => 'nullable|string|max:100',
             'rango_referencia' => 'nullable|string|max:2000',
-            'visible' => 'required|boolean',
+            'valor_defecto' => 'nullable|string|max:255',
+            'opciones' => 'nullable|array|max:50',
+            'opciones.*' => 'required|string|max:255',
         ]);
 
         $data['nombre'] = mb_strtoupper(trim($data['nombre']));
@@ -186,6 +221,26 @@ class ProductoLaboratorioController extends Controller
         $data['rango_referencia'] = isset($data['rango_referencia'])
             ? mb_strtoupper(trim($data['rango_referencia']))
             : null;
+        $data['valor_defecto'] = isset($data['valor_defecto']) && trim($data['valor_defecto']) !== ''
+            ? mb_strtoupper(trim($data['valor_defecto']))
+            : null;
+
+        // Las opciones se normalizan y se quitan duplicados y vacíos.
+        $data['opciones'] = collect($data['opciones'] ?? [])
+            ->map(fn ($valor) => mb_strtoupper(trim($valor)))
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+
+        // Si el dato tiene lista cerrada, el valor por defecto debe salir de
+        // ella: si no, el resultado arrancaría con un valor que el operador no
+        // puede volver a elegir.
+        if ($data['opciones'] && $data['valor_defecto'] && ! in_array($data['valor_defecto'], $data['opciones'], true)) {
+            throw ValidationException::withMessages([
+                'valor_defecto' => 'El valor por defecto debe ser una de las opciones de la lista.',
+            ]);
+        }
 
         if ($producto->laboratorioFormulas()
             ->when($dato, fn ($query) => $query->where('producto_laboratorio_dato_id', '!=', $dato->id))

@@ -1,1 +1,0 @@
-import{rt as e,wt as t}from"./QBtn-DwYpSBem.js";import{t as n}from"./ProductosVencimiento-DLQ0mPrj.js";var r={__name:`index`,setup(r){return(r,i)=>(t(),e(n,{tipo:`por-vencer`}))}};export{r as default};

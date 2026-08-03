@@ -1,1 +1,0 @@
-import{U as e,dt as t}from"./QBtn-DwYpSBem.js";var n=e({name:`QSpace`,setup(){let e=t(`div`,{class:`q-space`});return()=>e}});export{n as t};

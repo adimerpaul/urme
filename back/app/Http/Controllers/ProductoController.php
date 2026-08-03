@@ -454,6 +454,7 @@ class ProductoController extends Controller
         $request->validate([
             'nombre' => 'required|string|max:255',
             'precio' => 'nullable|numeric|min:0',
+            'precio_seguro' => 'nullable|numeric|min:0',
             'tipo_producto_id' => 'nullable|exists:tipo_productos,id',
         ]);
         $producto = Producto::create([
@@ -465,6 +466,7 @@ class ProductoController extends Controller
             'unidad_id' => $request->unidad_id ?: null,
             'tipo_producto_id' => $request->tipo_producto_id ?: null,
             'precio' => $request->precio ?: 0,
+            'precio_seguro' => $request->filled('precio_seguro') ? $request->precio_seguro : null,
         ]);
 
         return response()->json($producto->load(['fabricante:id,nombre', 'unidad:id,nombre,abreviatura', 'tipoProducto:id,nombre,color,es_laboratorio']), 201);
@@ -477,6 +479,7 @@ class ProductoController extends Controller
         $request->validate([
             'nombre' => 'required|string|max:255',
             'precio' => 'nullable|numeric|min:0',
+            'precio_seguro' => 'nullable|numeric|min:0',
             'tipo_producto_id' => 'nullable|exists:tipo_productos,id',
         ]);
         $producto->update([
@@ -488,6 +491,7 @@ class ProductoController extends Controller
             'unidad_id' => $request->unidad_id ?: null,
             'tipo_producto_id' => $request->tipo_producto_id ?: null,
             'precio' => $request->precio ?: 0,
+            'precio_seguro' => $request->filled('precio_seguro') ? $request->precio_seguro : null,
         ]);
 
         return response()->json($producto->load(['fabricante:id,nombre', 'unidad:id,nombre,abreviatura', 'tipoProducto:id,nombre,color,es_laboratorio']));

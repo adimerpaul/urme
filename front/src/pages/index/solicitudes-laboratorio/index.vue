@@ -1,59 +1,68 @@
 <template>
-  <q-page class="q-pa-md">
-    <div class="row items-center q-mb-md">
+  <q-page class="q-pa-sm sol-lista">
+    <!-- Cabecera y filtros en una sola línea -->
+    <div class="row items-center no-wrap q-gutter-xs q-mb-xs">
       <div>
-        <div class="text-h5 text-weight-bold">Laboratorios creados</div>
-        <div class="text-grey-7">Solicitudes de laboratorio registradas para pacientes.</div>
+        <div class="text-subtitle1 text-weight-bold">Laboratorios creados</div>
+        <div class="sol-sub text-grey-6">Solicitudes registradas para pacientes</div>
       </div>
       <q-space />
-      <q-btn v-if="canCrear" color="positive" icon="add" label="Crear laboratorio"
-             no-caps to="/solicitudes-laboratorio/nueva" />
+      <q-input v-model="filters.q" dense outlined clearable debounce="400" style="width:230px"
+               placeholder="Código, paciente o CI" @update:model-value="recargar">
+        <template #prepend><q-icon name="search" size="16px" /></template>
+      </q-input>
+      <q-select v-model="filters.estado" dense outlined clearable style="width:160px"
+                :options="estados" label="Estado" @update:model-value="recargar" />
+      <q-input v-model="filters.desde" dense outlined type="date" label="Desde" style="width:135px"
+               @update:model-value="recargar" />
+      <q-input v-model="filters.hasta" dense outlined type="date" label="Hasta" style="width:135px"
+               @update:model-value="recargar" />
+      <q-badge color="primary">{{ pagination.rowsNumber }}</q-badge>
+      <q-btn v-if="canCrear" dense unelevated rounded color="positive" icon="add" label="Crear laboratorio"
+             no-caps size="11px" to="/solicitudes-laboratorio/nueva" />
+      <q-btn flat round dense color="primary" icon="refresh" :loading="loading" @click="recargar">
+        <q-tooltip>Actualizar</q-tooltip>
+      </q-btn>
     </div>
 
-    <q-card flat bordered class="q-mb-md">
-      <q-card-section class="row q-col-gutter-sm">
-        <div class="col-12 col-md-5">
-          <q-input v-model="filters.q" dense outlined clearable debounce="400"
-                   label="Buscar código, paciente o CI" @update:model-value="recargar">
-            <template #prepend><q-icon name="search" /></template>
-          </q-input>
-        </div>
-        <div class="col-12 col-sm-4 col-md-3">
-          <q-select v-model="filters.estado" dense outlined clearable
-                    :options="estados" label="Estado" @update:model-value="recargar" />
-        </div>
-        <div class="col-6 col-sm-4 col-md-2">
-          <q-input v-model="filters.desde" dense outlined type="date" label="Desde" @update:model-value="recargar" />
-        </div>
-        <div class="col-6 col-sm-4 col-md-2">
-          <q-input v-model="filters.hasta" dense outlined type="date" label="Hasta" @update:model-value="recargar" />
-        </div>
-      </q-card-section>
-    </q-card>
-
-    <q-table ref="tableRef" flat bordered row-key="id" title="Solicitudes"
+    <q-table ref="tableRef" flat bordered dense row-key="id" class="tabla-compacta"
              :rows="rows" :columns="columns" :loading="loading"
-             v-model:pagination="pagination" :rows-per-page-options="[10, 15, 25, 50]"
+             v-model:pagination="pagination" :rows-per-page-options="[15, 25, 50, 100]"
              @request="onRequest">
       <template #body-cell-estado="props">
         <q-td :props="props">
           <q-badge :color="estadoColor(props.row.estado)">{{ props.row.estado }}</q-badge>
         </q-td>
       </template>
+      <template #body-cell-codigo="props">
+        <q-td :props="props"><q-badge outline color="primary">{{ props.row.codigo_solicitud }}</q-badge></q-td>
+      </template>
       <template #body-cell-pruebas="props">
-        <q-td :props="props">
-          <div v-for="item in props.row.laboratorio_items" :key="item.id">{{ item.producto_nombre }}</div>
+        <q-td :props="props" class="sol-pruebas">
+          <!-- Se muestran dos y el resto se cuenta, para no estirar la fila -->
+          <q-badge v-for="item in props.row.laboratorio_items.slice(0, 2)" :key="item.id"
+                   color="grey-3" text-color="grey-9" class="q-mr-xs">
+            {{ item.producto_nombre }}
+          </q-badge>
+          <q-badge v-if="props.row.laboratorio_items.length > 2" color="grey-6">
+            +{{ props.row.laboratorio_items.length - 2 }}
+            <q-tooltip>
+              <div v-for="item in props.row.laboratorio_items.slice(2)" :key="item.id">
+                {{ item.producto_nombre }}
+              </div>
+            </q-tooltip>
+          </q-badge>
         </q-td>
       </template>
       <template #body-cell-total="props">
-        <q-td :props="props">Bs {{ money(props.row.total) }}</q-td>
+        <q-td :props="props" class="text-weight-bold">Bs {{ money(props.row.total) }}</q-td>
       </template>
       <template #body-cell-opciones="props">
-        <q-td :props="props">
-          <q-btn-dropdown dense no-caps color="primary" label="Opciones">
-            <q-list dense>
+        <q-td :props="props" class="q-pa-xs">
+          <q-btn-dropdown dense unelevated rounded color="primary" label="Opciones" no-caps size="10px">
+            <q-list dense style="min-width:200px">
               <q-item clickable v-close-popup @click="verDetalle(props.row)">
-                <q-item-section avatar><q-icon name="visibility" /></q-item-section>
+                <q-item-section avatar><q-icon name="visibility" color="primary" /></q-item-section>
                 <q-item-section>Ver detalle</q-item-section>
               </q-item>
               <q-item clickable v-close-popup @click="imprimir(props.row)">
@@ -75,7 +84,7 @@
               <q-item v-if="canEliminar && props.row.estado === 'CREADO'" clickable v-close-popup
                       @click="eliminar(props.row)">
                 <q-item-section avatar><q-icon name="delete" color="negative" /></q-item-section>
-                <q-item-section>Eliminar</q-item-section>
+                <q-item-section><q-item-label class="text-negative">Eliminar</q-item-label></q-item-section>
               </q-item>
             </q-list>
           </q-btn-dropdown>
@@ -85,30 +94,35 @@
 
     <q-dialog v-model="detalleDialog">
       <q-card style="width:min(94vw,850px);max-width:850px">
-        <q-card-section class="row items-center bg-primary text-white">
-          <div class="text-h6">{{ detalle?.codigo_solicitud }}</div>
+        <q-card-section class="row items-center bg-primary text-white q-py-sm">
+          <q-icon name="biotech" class="q-mr-sm" />
+          <span class="text-subtitle2 text-weight-bold">{{ detalle?.codigo_solicitud }}</span>
           <q-space /><q-btn flat round dense icon="close" v-close-popup />
         </q-card-section>
-        <q-card-section v-if="detalle">
-          <div class="row q-col-gutter-md q-mb-md">
-            <div class="col-12 col-sm-6"><strong>Paciente:</strong> {{ detalle.paciente?.nombre_completo }}</div>
-            <div class="col-12 col-sm-6"><strong>Doctor:</strong> {{ detalle.doctor?.nombre || 'NO ASIGNADO' }}</div>
-            <div class="col-12 col-sm-6"><strong>Fecha:</strong> {{ detalle.fecha_solicitud }} {{ detalle.hora_solicitud }}</div>
-            <div class="col-12 col-sm-6"><strong>Estado:</strong> {{ detalle.estado }}</div>
+        <q-card-section v-if="detalle" class="q-pa-sm">
+          <div class="row q-col-gutter-xs q-mb-xs sol-datos">
+            <div class="col-6 col-sm-3"><span class="text-grey-6">Paciente</span><br>{{ detalle.paciente?.nombre_completo }}</div>
+            <div class="col-6 col-sm-3"><span class="text-grey-6">Doctor</span><br>{{ detalle.doctor?.nombre || 'NO ASIGNADO' }}</div>
+            <div class="col-6 col-sm-3"><span class="text-grey-6">Fecha</span><br>{{ detalle.fecha_solicitud }} {{ detalle.hora_solicitud }}</div>
+            <div class="col-6 col-sm-3">
+              <span class="text-grey-6">Estado</span><br>
+              <q-badge :color="estadoColor(detalle.estado)">{{ detalle.estado }}</q-badge>
+            </div>
           </div>
-          <q-list bordered separator>
+          <q-list bordered separator dense>
             <q-expansion-item v-for="item in detalle.laboratorio_items" :key="item.id"
+                              dense dense-toggle
                               icon="biotech" :label="item.producto_nombre"
                               :caption="`${item.resultados?.length || 0} datos · Bs ${money(item.precio)}`">
-              <q-card>
-                <q-card-section>
-                  <div v-for="resultado in item.resultados" :key="resultado.id" class="q-py-xs">
-                    {{ resultado.nombre }}
-                    <strong class="q-ml-sm">{{ resultado.valor || '-' }} {{ resultado.unidad || '' }}</strong>
-                    <span class="text-grey-7">· Ref.: {{ resultado.rango_referencia || '-' }}</span>
-                  </div>
-                </q-card-section>
-              </q-card>
+              <q-markup-table dense flat class="tabla-compacta">
+                <tbody>
+                  <tr v-for="resultado in item.resultados" :key="resultado.id">
+                    <td>{{ resultado.nombre }}</td>
+                    <td class="text-weight-bold">{{ resultado.valor || '—' }} {{ resultado.unidad || '' }}</td>
+                    <td class="text-grey-7">Ref.: {{ resultado.rango_referencia || '—' }}</td>
+                  </tr>
+                </tbody>
+              </q-markup-table>
             </q-expansion-item>
           </q-list>
         </q-card-section>
@@ -128,7 +142,7 @@ const detalle = ref(null)
 const detalleDialog = ref(false)
 const filters = ref({ q: '', estado: null, desde: '', hasta: '' })
 const estados = ['CREADO', 'ATENDIENDO', 'ENVIADO_ANALITICA', 'ANALIZADO', 'FINALIZADO']
-const pagination = ref({ page: 1, rowsPerPage: 15, rowsNumber: 0 })
+const pagination = ref({ page: 1, rowsPerPage: 25, rowsNumber: 0 })
 const canCrear = computed(() => proxy.$store.hasPermission('Crear Solicitudes Laboratorio'))
 const canEditar = computed(() => proxy.$store.hasPermission('Editar Solicitudes Laboratorio'))
 const canEliminar = computed(() => proxy.$store.hasPermission('Eliminar Solicitudes Laboratorio'))
@@ -259,3 +273,40 @@ function estadoColor (estado) {
 
 cargar()
 </script>
+
+<style scoped>
+.sol-sub {
+  font-size: 10px;
+  line-height: 1.3;
+}
+.sol-datos {
+  font-size: 11px;
+  line-height: 1.4;
+}
+.sol-pruebas {
+  max-width: 320px;
+  white-space: normal;
+}
+
+.tabla-compacta :deep(th),
+.tabla-compacta :deep(td) {
+  font-size: 11px;
+  padding: 2px 8px;
+}
+
+.sol-lista :deep(.q-field--dense:not(.q-textarea) .q-field__control),
+.sol-lista :deep(.q-field--dense:not(.q-textarea) .q-field__marginal) {
+  height: 30px;
+  min-height: 30px;
+}
+.sol-lista :deep(.q-field--dense .q-field__native),
+.sol-lista :deep(.q-field--dense .q-field__input),
+.sol-lista :deep(.q-field--dense .q-field__label) {
+  font-size: 11px;
+}
+.sol-lista :deep(.q-field__bottom) {
+  min-height: 14px;
+  padding-top: 2px;
+  font-size: 10px;
+}
+</style>

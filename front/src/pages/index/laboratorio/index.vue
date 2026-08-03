@@ -91,6 +91,14 @@
           <template #body-cell-precio="props">
             <q-td :props="props" class="text-weight-bold">Bs {{ money(props.row.precio) }}</q-td>
           </template>
+          <template #body-cell-precio_seguro="props">
+            <q-td :props="props">
+              <span v-if="props.row.precio_seguro !== null && props.row.precio_seguro !== undefined">
+                Bs {{ money(props.row.precio_seguro) }}
+              </span>
+              <span v-else class="text-grey-5">—</span>
+            </q-td>
+          </template>
         </q-table>
       </q-card>
     </template>
@@ -112,13 +120,17 @@
             <div class="col-12 col-sm-8">
               <q-input v-model="productoForm.nombre" v-uppercase dense outlined label="Nombre *" :rules="[required]" />
             </div>
-            <div class="col-12 col-sm-8">
+            <div class="col-12 col-sm-4">
               <q-select v-model="productoForm.tipo_producto_id" dense outlined emit-value map-options
                         label="Área *" :options="opcionesAreas" :rules="[required]" />
             </div>
-            <div class="col-12 col-sm-4">
+            <div class="col-6 col-sm-4">
               <q-input v-model.number="productoForm.precio" dense outlined type="number" min="0" step="0.01"
-                       label="Precio (Bs) *" :rules="[required]" />
+                       label="P. Normal (Bs) *" :rules="[required]" />
+            </div>
+            <div class="col-6 col-sm-4">
+              <q-input v-model.number="productoForm.precio_seguro" dense outlined type="number" min="0" step="0.01"
+                       label="P. Seguro (Bs)" hint="Precio de convenio" />
             </div>
             <div class="col-12">
               <q-input v-model="productoForm.descripcion" v-uppercase dense outlined type="textarea" rows="2" label="Descripción" />
@@ -242,7 +254,8 @@ const columns = [
   { name: 'codigo', label: 'Código', field: 'codigo', align: 'left' },
   { name: 'nombre', label: 'Producto', field: 'nombre', align: 'left', sortable: true },
   { name: 'tipo', label: 'Área', field: row => row.tipo_producto?.nombre, align: 'center' },
-  { name: 'precio', label: 'Precio', field: 'precio', align: 'right', sortable: true },
+  { name: 'precio', label: 'P. Normal', field: 'precio', align: 'right', sortable: true },
+  { name: 'precio_seguro', label: 'P. Seguro', field: 'precio_seguro', align: 'right', sortable: true },
 ]
 
 const canVer = computed(() => proxy.$store.hasPermission('Ver Productos'))
@@ -314,7 +327,7 @@ async function cargarAreas () {
 
 function nuevoProducto () {
   productoForm.value = {
-    codigo: '', nombre: '', descripcion: '', precio: 0,
+    codigo: '', nombre: '', descripcion: '', precio: 0, precio_seguro: null,
     // Arranca en el área que se está viendo; si son todas, en la primera.
     tipo_producto_id: areaFiltro.value || areas.value[0]?.id || null,
   }
@@ -324,6 +337,9 @@ function editarProducto (producto) {
   productoForm.value = {
     ...producto,
     precio: Number(producto.precio),
+    precio_seguro: producto.precio_seguro !== null && producto.precio_seguro !== undefined
+      ? Number(producto.precio_seguro)
+      : null,
     fabricante_id: producto.fabricante?.id || null,
     unidad_id: producto.unidad?.id || null,
     tipo_producto_id: producto.tipo_producto?.id || null,

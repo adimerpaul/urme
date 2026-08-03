@@ -1,0 +1,1 @@
+import{U as e,ft as t}from"./QBtn-CD3BGnq2.js";var n=e({name:`QSpace`,setup(){let e=t(`div`,{class:`q-space`});return()=>e}});export{n as t};

@@ -41,6 +41,7 @@
               <th class="text-left">Nombre</th>
               <th class="text-left">Variable</th>
               <th class="text-left">Unidad</th>
+              <th class="text-left">Valores posibles</th>
               <th class="text-left">Rangos de referencia</th>
               <th class="text-left">Fórmula aplicada</th>
               <th class="text-center">Visible</th>
@@ -48,10 +49,10 @@
           </thead>
           <tbody>
             <tr v-if="adminLoading">
-              <td colspan="8" class="text-center q-pa-md"><q-spinner color="primary" size="24px" /></td>
+              <td colspan="9" class="text-center q-pa-md"><q-spinner color="primary" size="24px" /></td>
             </tr>
             <tr v-else-if="!datos.length">
-              <td colspan="8" class="text-center text-grey-5 q-pa-md">
+              <td colspan="9" class="text-center text-grey-5 q-pa-md">
                 Sin datos configurados. Use «Nuevo dato» para agregar el primero.
               </td>
             </tr>
@@ -94,6 +95,20 @@
               <td class="text-weight-medium">{{ dato.nombre }}</td>
               <td><q-badge outline color="primary">{{ dato.nombre_variable }}</q-badge></td>
               <td>{{ dato.unidad || '—' }}</td>
+              <td class="lab-opciones">
+                <template v-if="dato.opciones?.length">
+                  <q-badge v-for="opcion in dato.opciones" :key="opcion.id" class="q-mr-xs q-mb-xs"
+                           :color="opcion.valor === dato.valor_defecto ? 'primary' : 'grey-4'"
+                           :text-color="opcion.valor === dato.valor_defecto ? 'white' : 'grey-9'">
+                    {{ opcion.valor }}
+                    <q-icon v-if="opcion.valor === dato.valor_defecto" name="star" size="10px" class="q-ml-xs" />
+                  </q-badge>
+                </template>
+                <span v-else-if="dato.valor_defecto" class="text-grey-8">
+                  Por defecto: <b>{{ dato.valor_defecto }}</b>
+                </span>
+                <span v-else class="text-grey-6">TEXTO LIBRE</span>
+              </td>
               <td class="lab-rangos">{{ dato.rango_referencia || '—' }}</td>
               <td>
                 <code v-if="dato.formula" class="text-deep-purple">{{ dato.formula.formula }}</code>
@@ -194,6 +209,47 @@
             <div class="col-12">
               <q-input v-model="datoForm.rango_referencia" v-uppercase dense outlined type="textarea" rows="2"
                        label="Rangos de referencia" hint="Ej.: HOMBRES: 13–17 | MUJERES: 12–15" />
+            </div>
+
+            <!-- Lista de valores posibles -->
+            <div class="col-12">
+              <q-separator class="q-mb-sm" />
+              <div class="text-caption text-weight-bold text-grey-8">Valores posibles</div>
+              <div class="lab-sub text-grey-6 q-mb-xs">
+                Si deja la lista vacía, el resultado se escribe libremente. Ej.: COLOR → AMARILLO, BLANCO, ÁMBAR.
+              </div>
+
+              <div class="row q-col-gutter-xs items-start">
+                <div class="col">
+                  <q-input v-model="opcionNueva" v-uppercase dense outlined label="Agregar valor"
+                           :error="!!opcionError" :error-message="opcionError"
+                           @keydown.enter.prevent="agregarOpcion" />
+                </div>
+                <div class="col-auto">
+                  <q-btn dense unelevated color="primary" icon="add" no-caps label="Agregar"
+                         size="11px" padding="6px 10px" @click="agregarOpcion" />
+                </div>
+              </div>
+
+              <div v-if="datoForm.opciones?.length" class="q-mt-xs">
+                <q-chip v-for="(opcion, indice) in datoForm.opciones" :key="opcion"
+                        dense removable size="11px"
+                        :color="opcion === datoForm.valor_defecto ? 'primary' : 'grey-3'"
+                        :text-color="opcion === datoForm.valor_defecto ? 'white' : 'grey-9'"
+                        @remove="quitarOpcion(indice)">
+                  {{ opcion }}
+                </q-chip>
+              </div>
+            </div>
+
+            <!-- Valor por defecto: lista cerrada si hay opciones, texto si no -->
+            <div class="col-12 col-sm-6">
+              <q-select v-if="datoForm.opciones?.length" v-model="datoForm.valor_defecto"
+                        dense outlined clearable label="Valor por defecto"
+                        :options="datoForm.opciones"
+                        hint="Se precarga al registrar el resultado" />
+              <q-input v-else v-model="datoForm.valor_defecto" v-uppercase dense outlined
+                       label="Valor por defecto" hint="Se precarga al registrar el resultado" />
             </div>
           </q-card-section>
           <q-card-actions align="right" class="q-pa-sm">
@@ -320,6 +376,8 @@ const adminLoading = ref(false)
 const saving = ref(false)
 const datoDialog = ref(false)
 const datoForm = ref({})
+const opcionNueva = ref('')
+const opcionError = ref('')
 const formulaDialog = ref(false)
 const formulaForm = ref({})
 const formulaDato = ref(null)
@@ -410,12 +468,41 @@ async function cargarConfiguracion () {
 }
 
 function nuevoDato () {
-  datoForm.value = { nombre: '', nombre_variable: '', unidad: '', rango_referencia: '', visible: true }
+  datoForm.value = {
+    nombre: '', nombre_variable: '', unidad: '', rango_referencia: '',
+    valor_defecto: null, opciones: [], visible: true,
+  }
+  opcionNueva.value = ''
+  opcionError.value = ''
   datoDialog.value = true
 }
 function editarDato (dato) {
-  datoForm.value = { ...dato }
+  datoForm.value = {
+    ...dato,
+    // El backend devuelve objetos {id, valor}; el formulario trabaja con texto.
+    opciones: (dato.opciones || []).map(o => o.valor),
+  }
+  opcionNueva.value = ''
+  opcionError.value = ''
   datoDialog.value = true
+}
+
+function agregarOpcion () {
+  const valor = (opcionNueva.value || '').trim().toUpperCase()
+  opcionError.value = ''
+  if (!valor) return
+  if (datoForm.value.opciones?.includes(valor)) {
+    opcionError.value = 'Ese valor ya está en la lista'
+    return
+  }
+  if (!datoForm.value.opciones) datoForm.value.opciones = []
+  datoForm.value.opciones.push(valor)
+  opcionNueva.value = ''
+}
+function quitarOpcion (indice) {
+  const [quitado] = datoForm.value.opciones.splice(indice, 1)
+  // Si se quita el valor que era el predeterminado, deja de serlo.
+  if (datoForm.value.valor_defecto === quitado) datoForm.value.valor_defecto = null
 }
 function actualizarVariableDato () {
   if (!datoForm.value.id) {
@@ -616,6 +703,10 @@ function firstValidationError (error) {
 }
 .lab-rangos {
   max-width: 260px;
+  white-space: normal;
+}
+.lab-opciones {
+  max-width: 240px;
   white-space: normal;
 }
 

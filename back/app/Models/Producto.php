@@ -16,13 +16,14 @@ class Producto extends Model implements AuditableContract
     protected $fillable = [
         'codigo', 'nombre', 'descripcion', 'marca',
         'fabricante_id', 'unidad_id',
-        'tipo_producto_id', 'precio',
+        'tipo_producto_id', 'precio', 'precio_seguro',
     ];
 
     protected $hidden = ['created_at', 'updated_at', 'deleted_at'];
 
     protected $casts = [
         'precio' => 'decimal:2',
+        'precio_seguro' => 'decimal:2',
     ];
 
     public function fabricante()

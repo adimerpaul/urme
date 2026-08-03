@@ -134,7 +134,16 @@
                 <div class="row q-col-gutter-xs q-mt-none">
                   <div v-for="dato in laboratorio.laboratorio_datos" :key="dato.id"
                        :class="compacto ? 'col-6 col-md-3' : 'col-12 col-md-6'">
-                    <q-input v-if="!dato.formula" :model-value="valores[dato.id] || ''"
+                    <!-- Dato con lista cerrada de valores -->
+                    <q-select v-if="!dato.formula && dato.opciones?.length"
+                              :model-value="valores[dato.id] || ''"
+                              dense outlined clearable hide-bottom-space
+                              :label="dato.nombre" :suffix="dato.unidad || undefined"
+                              :options="dato.opciones.map(o => o.valor)"
+                              @update:model-value="valor => valores[dato.id] = valor">
+                      <q-tooltip v-if="dato.rango_referencia">Referencia: {{ dato.rango_referencia }}</q-tooltip>
+                    </q-select>
+                    <q-input v-else-if="!dato.formula" :model-value="valores[dato.id] || ''"
                              dense outlined :label="dato.nombre" hide-bottom-space
                              :suffix="dato.unidad || undefined"
                              @update:model-value="valor => valores[dato.id] = valor">
@@ -376,7 +385,21 @@ async function guardarDoctor () {
 function toggleLaboratorio (id) {
   const index = form.value.producto_ids.indexOf(id)
   if (index >= 0) form.value.producto_ids.splice(index, 1)
-  else form.value.producto_ids.push(id)
+  else {
+    form.value.producto_ids.push(id)
+    precargarDefectos(id)
+  }
+}
+
+/* Precarga el valor por defecto de cada dato al agregar una prueba. Solo
+   rellena lo que está vacío: nunca pisa un resultado ya escrito ni uno
+   recuperado al editar la solicitud. */
+function precargarDefectos (productoId) {
+  const laboratorio = laboratorios.value.find(item => item.id === productoId)
+  for (const dato of laboratorio?.laboratorio_datos || []) {
+    if (dato.formula || !dato.valor_defecto) continue
+    if (!valores.value[dato.id]) valores.value[dato.id] = dato.valor_defecto
+  }
 }
 async function guardar () {
   if (!form.value.producto_ids.length) {

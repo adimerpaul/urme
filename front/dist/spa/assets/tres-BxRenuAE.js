@@ -1,0 +1,1 @@
+import{At as e,rt as t,st as n,t as r,wt as i}from"./QBtn-DwYpSBem.js";import{t as a}from"./QPage-DNl98leK.js";var o={__name:`tres`,setup(o){return(o,s)=>(i(),t(a,{class:`flex flex-center`},{default:e(()=>[n(r,{color:`secondary`,to:`/`,label:`Go to Index Page`,"no-caps":``})]),_:1}))}};export{o as default};

@@ -183,6 +183,7 @@ const menuSections = [
       { title: 'Productos vencidos', icon: 'warning', link: '/productos-vencidos', can: 'Ver Productos Vencidos' },
       { title: 'Compras',   icon: 'shopping_cart', link: '/compras', can: 'Ver Compras' },
       { title: 'Ventas',    icon: 'point_of_sale', link: '/ventas',  can: 'Ver Ventas' },
+      { title: 'Nueva venta', icon: 'add_shopping_cart', link: '/ventas/crear', can: 'Crear Ventas' },
     ],
   },
   {

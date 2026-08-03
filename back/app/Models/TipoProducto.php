@@ -9,13 +9,22 @@ use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
 
 class TipoProducto extends Model implements AuditableContract
 {
-    use SoftDeletes, AuditableTrait;
+    use AuditableTrait, SoftDeletes;
 
     protected $table = 'tipo_productos';
 
-    protected $fillable = ['nombre', 'color'];
+    protected $fillable = ['nombre', 'color', 'es_laboratorio', 'orden'];
 
     protected $hidden = ['created_at', 'updated_at', 'deleted_at'];
+
+    protected $casts = [
+        'es_laboratorio' => 'boolean',
+    ];
+
+    public function scopeLaboratorio($query)
+    {
+        return $query->where('es_laboratorio', true);
+    }
 
     public function productos()
     {

@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\CompraController;
+use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DoctorController;
 use App\Http\Controllers\InternacionController;
 use App\Http\Controllers\InternacionItemController;
@@ -20,6 +21,9 @@ Route::post('/login', [UserController::class, 'login']);
 
 // ── Rutas protegidas ──────────────────────────────────────────
 Route::middleware('auth:sanctum')->group(function () {
+
+    // Dashboard principal
+    Route::get('/dashboard', [DashboardController::class, 'index']);
 
     Route::get('/me', [UserController::class, 'me']);
     Route::post('/logout', [UserController::class, 'logout']);
@@ -80,6 +84,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/productos/{producto}/laboratorio-formulas', [ProductoLaboratorioController::class, 'storeFormula']);
     Route::put('/producto-laboratorio-formulas/{formula}', [ProductoLaboratorioController::class, 'updateFormula']);
     Route::delete('/producto-laboratorio-formulas/{formula}', [ProductoLaboratorioController::class, 'destroyFormula']);
+    Route::post('/productos/{producto}/laboratorio-validaciones', [ProductoLaboratorioController::class, 'storeValidacion']);
+    Route::put('/producto-laboratorio-validaciones/{validacion}', [ProductoLaboratorioController::class, 'updateValidacion']);
+    Route::delete('/producto-laboratorio-validaciones/{validacion}', [ProductoLaboratorioController::class, 'destroyValidacion']);
 
     // Solicitudes de laboratorio
     Route::get('/solicitudes-laboratorio/form-data', [SolicitudeController::class, 'formData']);

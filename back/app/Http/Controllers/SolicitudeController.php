@@ -50,8 +50,8 @@ class SolicitudeController extends Controller
         return response()->json([
             'doctores' => Doctor::where('estado', 'ACTIVO')->orderBy('nombre')->get(['id', 'nombre', 'registro']),
             'laboratorios' => Producto::query()
-                ->whereHas('tipoProducto', fn ($query) => $query->where('nombre', 'LABORATORIOS'))
-                ->with('laboratorioDatos.formula')
+                ->whereHas('tipoProducto', fn ($query) => $query->where('es_laboratorio', true))
+                ->with(['laboratorioDatos.formula', 'laboratorioValidaciones' => fn ($query) => $query->where('activo', true)])
                 ->orderBy('nombre')
                 ->get(['id', 'codigo', 'nombre', 'precio']),
         ]);
@@ -156,7 +156,7 @@ class SolicitudeController extends Controller
         ]);
         $productos = Producto::query()
             ->whereIn('id', $validated['producto_ids'])
-            ->whereHas('tipoProducto', fn ($query) => $query->where('nombre', 'LABORATORIOS'))
+            ->whereHas('tipoProducto', fn ($query) => $query->where('es_laboratorio', true))
             ->with('laboratorioDatos.formula')
             ->get();
         abort_unless($productos->count() === count($validated['producto_ids']), 422, 'Seleccione únicamente productos de laboratorio.');

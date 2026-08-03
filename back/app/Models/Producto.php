@@ -64,4 +64,9 @@ class Producto extends Model implements AuditableContract
     {
         return $this->hasMany(ProductoLaboratorioFormula::class)->orderBy('orden')->orderBy('id');
     }
+
+    public function laboratorioValidaciones()
+    {
+        return $this->hasMany(ProductoLaboratorioValidacion::class)->orderBy('orden')->orderBy('id');
+    }
 }

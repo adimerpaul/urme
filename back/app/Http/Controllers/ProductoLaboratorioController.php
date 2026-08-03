@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Producto;
 use App\Models\ProductoLaboratorioDato;
 use App\Models\ProductoLaboratorioFormula;
+use App\Models\ProductoLaboratorioValidacion;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
@@ -17,7 +18,11 @@ class ProductoLaboratorioController extends Controller
         $this->authorizeAny($request, ['Ver Productos', 'Editar Productos']);
         $this->ensureLaboratorio($producto);
 
-        return response()->json($producto->load(['laboratorioDatos.formula', 'laboratorioFormulas']));
+        return response()->json($producto->load([
+            'laboratorioDatos.formula',
+            'laboratorioFormulas',
+            'laboratorioValidaciones',
+        ]));
     }
 
     public function storeDato(Request $request, Producto $producto)
@@ -278,12 +283,84 @@ class ProductoLaboratorioController extends Controller
         return $data;
     }
 
+    // ── Validaciones (mensajes de control) ────────────────────────
+
+    public function storeValidacion(Request $request, Producto $producto)
+    {
+        $this->authorizeAny($request, 'Editar Productos');
+        $this->ensureLaboratorio($producto);
+        $data = $this->validateValidacion($request, $producto);
+        $data['producto_id'] = $producto->id;
+        $data['orden'] = ((int) $producto->laboratorioValidaciones()->max('orden')) + 10;
+
+        return response()->json(ProductoLaboratorioValidacion::create($data), 201);
+    }
+
+    public function updateValidacion(Request $request, ProductoLaboratorioValidacion $validacion)
+    {
+        $this->authorizeAny($request, 'Editar Productos');
+        $this->ensureLaboratorio($validacion->producto);
+        $validacion->update($this->validateValidacion($request, $validacion->producto));
+
+        return response()->json($validacion);
+    }
+
+    public function destroyValidacion(Request $request, ProductoLaboratorioValidacion $validacion)
+    {
+        $this->authorizeAny($request, 'Editar Productos');
+        $this->ensureLaboratorio($validacion->producto);
+        $validacion->delete();
+
+        return response()->json(['message' => 'Mensaje eliminado']);
+    }
+
+    private function validateValidacion(Request $request, Producto $producto): array
+    {
+        $data = $request->validate([
+            'expresion' => ['required', 'string', 'max:2000', 'regex:/^[a-zA-Z0-9_+\-*\/().\s]+$/'],
+            'operador' => ['required', Rule::in(['=', '!=', '>', '>=', '<', '<=', 'entre'])],
+            'valor' => ['required', 'numeric'],
+            'valor_hasta' => ['nullable', 'numeric', 'required_if:operador,entre'],
+            'mensaje' => ['required', 'string', 'max:255'],
+            'activo' => ['required', 'boolean'],
+        ]);
+
+        $variables = $producto->laboratorioDatos()->pluck('nombre_variable');
+        preg_match_all('/\b[a-zA-Z][a-zA-Z0-9_]*\b/', $data['expresion'], $matches);
+        $unknown = collect($matches[0])
+            ->map(fn ($value) => mb_strtolower($value))
+            ->diff($variables)
+            ->unique()
+            ->values();
+
+        if ($unknown->isNotEmpty()) {
+            throw ValidationException::withMessages([
+                'expresion' => 'Variables desconocidas: '.$unknown->join(', '),
+            ]);
+        }
+
+        if ($data['operador'] === 'entre' && (float) $data['valor_hasta'] < (float) $data['valor']) {
+            throw ValidationException::withMessages([
+                'valor_hasta' => 'El valor final debe ser mayor o igual al inicial.',
+            ]);
+        }
+
+        $data['expresion'] = mb_strtolower(trim($data['expresion']));
+        if ($data['operador'] !== 'entre') {
+            $data['valor_hasta'] = null;
+        }
+
+        return $data;
+    }
+
     private function ensureLaboratorio(Producto $producto): void
     {
+        // Cualquier área marcada como laboratorio sirve (HEMATOLOGIA,
+        // UROANALISIS, …), no solo el tipo genérico LABORATORIOS.
         abort_unless(
-            $producto->tipoProducto()->where('nombre', 'LABORATORIOS')->exists(),
+            $producto->tipoProducto()->where('es_laboratorio', true)->exists(),
             422,
-            'El producto seleccionado no pertenece al tipo LABORATORIOS.'
+            'El producto seleccionado no pertenece a un área de laboratorio.'
         );
     }
 

@@ -5,8 +5,8 @@ namespace App\Http\Controllers;
 use App\Exports\FabricantesExport;
 use App\Exports\ProductosExport;
 use App\Exports\UnidadesExport;
-use App\Models\Fabricante;
 use App\Models\CompraDetalle;
+use App\Models\Fabricante;
 use App\Models\Producto;
 use App\Models\TipoProducto;
 use App\Models\Unidad;
@@ -34,7 +34,7 @@ class ProductoController extends Controller
         $pageUnidades = (int) $request->input('page_unid', 1);
         $pageTipos = (int) $request->input('page_tipo', 1);
 
-        $productosQuery = Producto::with(['fabricante:id,nombre', 'unidad:id,nombre,abreviatura', 'tipoProducto:id,nombre,color'])
+        $productosQuery = Producto::with(['fabricante:id,nombre', 'unidad:id,nombre,abreviatura', 'tipoProducto:id,nombre,color,es_laboratorio'])
             ->withSum(['compraDetalles as stock' => function ($q) {
                 $q->whereHas('compra', fn ($cq) => $cq->where('estado', 'ACTIVO'));
             }], 'cantidad')
@@ -321,7 +321,16 @@ class ProductoController extends Controller
         $q = $request->input('q', '');
         $perPage = $request->input('per_page');
 
-        $query = TipoProducto::orderBy('nombre');
+        $query = TipoProducto::withCount('productos');
+
+        // ?laboratorio=1 devuelve solo las áreas de laboratorio; ?laboratorio=0
+        // solo el resto. Sin el parámetro se devuelve todo, como antes.
+        if ($request->filled('laboratorio')) {
+            $query->where('es_laboratorio', $request->boolean('laboratorio'));
+        }
+
+        $query->orderBy('orden')->orderBy('nombre');
+
         if ($q) {
             $query->where('nombre', 'like', "%$q%");
         }
@@ -339,10 +348,15 @@ class ProductoController extends Controller
         $request->validate([
             'nombre' => 'required|string|max:255',
             'color' => 'nullable|string|max:30',
+            'es_laboratorio' => 'nullable|boolean',
+            'orden' => 'nullable|integer|min:0',
         ]);
         $tipo = TipoProducto::create([
             'nombre' => mb_strtoupper($request->nombre),
             'color' => $request->color ?: 'primary',
+            'es_laboratorio' => $request->boolean('es_laboratorio'),
+            // Sin orden explícito va al final, no al principio de la lista.
+            'orden' => (int) $request->input('orden', TipoProducto::max('orden') + 1),
         ]);
 
         return response()->json($tipo, 201);
@@ -354,11 +368,17 @@ class ProductoController extends Controller
         $request->validate([
             'nombre' => 'required|string|max:255',
             'color' => 'nullable|string|max:30',
+            'es_laboratorio' => 'nullable|boolean',
+            'orden' => 'nullable|integer|min:0',
         ]);
         $tipo = TipoProducto::findOrFail($id);
         $tipo->update([
             'nombre' => mb_strtoupper($request->nombre),
             'color' => $request->color ?: 'primary',
+            'es_laboratorio' => $request->has('es_laboratorio')
+                ? $request->boolean('es_laboratorio')
+                : $tipo->es_laboratorio,
+            'orden' => (int) $request->input('orden', $tipo->orden),
         ]);
 
         return response()->json($tipo);
@@ -367,7 +387,16 @@ class ProductoController extends Controller
     public function destroyTipoProducto(Request $request, $id)
     {
         $this->req($request, 'Eliminar Productos');
-        TipoProducto::findOrFail($id)->delete();
+        $tipo = TipoProducto::withCount('productos')->findOrFail($id);
+
+        // Borrarlo dejaría esos productos sin tipo y fuera de todos los filtros.
+        if ($tipo->productos_count > 0) {
+            return response()->json([
+                'message' => "No se puede eliminar: {$tipo->nombre} tiene {$tipo->productos_count} producto(s) asignado(s).",
+            ], 422);
+        }
+
+        $tipo->delete();
 
         return response()->json(['message' => 'Tipo de producto eliminado']);
     }
@@ -383,7 +412,7 @@ class ProductoController extends Controller
         $tipoNombre = $request->input('tipo', '');
         $perPage = (int) $request->input('per_page', 20);
 
-        $query = Producto::with(['fabricante:id,nombre', 'unidad:id,nombre,abreviatura', 'tipoProducto:id,nombre,color'])
+        $query = Producto::with(['fabricante:id,nombre', 'unidad:id,nombre,abreviatura', 'tipoProducto:id,nombre,color,es_laboratorio'])
             ->withSum(['compraDetalles as cantidad_con_lote' => function ($detalle) {
                 $detalle->whereNotNull('lote')
                     ->where('lote', '<>', '')
@@ -411,6 +440,11 @@ class ProductoController extends Controller
             $query->whereHas('tipoProducto', fn ($tq) => $tq->where('nombre', mb_strtoupper($tipoNombre)));
         }
 
+        // ?laboratorio=1 trae los productos de cualquier área de laboratorio.
+        if ($request->boolean('laboratorio')) {
+            $query->whereHas('tipoProducto', fn ($tq) => $tq->where('es_laboratorio', true));
+        }
+
         return response()->json($query->paginate($perPage));
     }
 
@@ -433,7 +467,7 @@ class ProductoController extends Controller
             'precio' => $request->precio ?: 0,
         ]);
 
-        return response()->json($producto->load(['fabricante:id,nombre', 'unidad:id,nombre,abreviatura', 'tipoProducto:id,nombre,color']), 201);
+        return response()->json($producto->load(['fabricante:id,nombre', 'unidad:id,nombre,abreviatura', 'tipoProducto:id,nombre,color,es_laboratorio']), 201);
     }
 
     public function update(Request $request, $id)
@@ -456,7 +490,7 @@ class ProductoController extends Controller
             'precio' => $request->precio ?: 0,
         ]);
 
-        return response()->json($producto->load(['fabricante:id,nombre', 'unidad:id,nombre,abreviatura', 'tipoProducto:id,nombre,color']));
+        return response()->json($producto->load(['fabricante:id,nombre', 'unidad:id,nombre,abreviatura', 'tipoProducto:id,nombre,color,es_laboratorio']));
     }
 
     public function destroy(Request $request, $id)
@@ -476,7 +510,7 @@ class ProductoController extends Controller
         $q = $request->input('q', '');
         $tipoProductoId = $request->input('tipo_producto_id', '');
 
-        $query = Producto::with(['fabricante:id,nombre', 'unidad:id,nombre,abreviatura', 'tipoProducto:id,nombre,color'])
+        $query = Producto::with(['fabricante:id,nombre', 'unidad:id,nombre,abreviatura', 'tipoProducto:id,nombre,color,es_laboratorio'])
             ->orderBy('nombre');
         if ($tipoProductoId) {
             $query->where('tipo_producto_id', $tipoProductoId);

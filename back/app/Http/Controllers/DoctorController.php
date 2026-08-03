@@ -40,7 +40,7 @@ class DoctorController extends Controller
 
     public function store(Request $request)
     {
-        $this->req($request, ['Crear Doctores', 'Crear Ventas']);
+        $this->req($request, ['Crear Doctores', 'Crear Ventas', 'Crear Solicitudes Laboratorio']);
 
         $request->validate([
             'nombre' => 'required|string|max:255',
@@ -134,7 +134,7 @@ class DoctorController extends Controller
 
     public function especialidades(Request $request)
     {
-        $this->req($request, ['Ver Doctores', 'Crear Doctores', 'Editar Doctores', 'Ver Ventas', 'Crear Ventas']);
+        $this->req($request, ['Ver Doctores', 'Crear Doctores', 'Editar Doctores', 'Ver Ventas', 'Crear Ventas', 'Crear Solicitudes Laboratorio']);
 
         return response()->json(Especialidad::orderBy('nombre')->get());
     }

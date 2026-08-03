@@ -1,5 +1,5 @@
 <template>
-  <q-page class="q-pa-md">
+  <q-page class="q-pa-sm lab-lista">
     <div v-if="proxy.$store.isLogged && !canVer" class="column items-center justify-center q-gutter-sm" style="min-height:320px">
       <q-icon name="lock" size="72px" color="grey-4" />
       <div class="text-h6 text-grey-5">Sin acceso</div>
@@ -7,68 +7,65 @@
     </div>
 
     <template v-else-if="proxy.$store.isLogged">
-      <div class="row items-center q-col-gutter-sm q-mb-md">
-        <div class="col">
-          <div class="text-h5 text-weight-bold">Laboratorio</div>
-          <div class="text-body2 text-grey-6">Productos del tipo LABORATORIOS y configuración de resultados</div>
+      <div class="row items-center no-wrap q-gutter-xs q-mb-xs">
+        <div>
+          <div class="text-subtitle1 text-weight-bold">Laboratorio</div>
+          <div class="lab-sub text-grey-6">Exámenes por área y configuración de resultados</div>
         </div>
-        <q-badge color="primary" class="q-pa-sm">{{ pagination.rowsNumber }} productos</q-badge>
+        <q-space />
+        <q-select v-model="areaFiltro" dense outlined clearable emit-value map-options
+                  style="width:190px" label="Área" :options="opcionesAreas"
+                  @update:model-value="buscar" />
+        <q-input v-model="search" dense outlined clearable debounce="400" style="width:230px"
+                 placeholder="Buscar por nombre o código" @update:model-value="buscar">
+          <template #prepend><q-icon name="search" size="16px" /></template>
+        </q-input>
+        <q-badge color="primary">{{ pagination.rowsNumber }}</q-badge>
+        <q-btn v-if="canCrear" dense unelevated rounded color="primary" icon="add" label="Nuevo examen"
+               no-caps size="11px" @click="nuevoProducto" />
+        <q-btn dense outline rounded color="primary" icon="category" label="Áreas"
+               no-caps size="11px" @click="abrirAreas" />
+        <q-btn flat round dense color="primary" icon="refresh" :loading="loading" @click="cargar">
+          <q-tooltip>Actualizar</q-tooltip>
+        </q-btn>
+      </div>
+
+      <!-- Accesos rápidos por área -->
+      <div class="row items-center q-gutter-xs q-mb-xs">
+        <q-chip :selected="areaFiltro === null" clickable dense size="11px"
+                :color="areaFiltro === null ? 'primary' : 'grey-3'"
+                :text-color="areaFiltro === null ? 'white' : 'grey-8'"
+                @click="seleccionarArea(null)">
+          Todas ({{ totalAreas }})
+        </q-chip>
+        <q-chip v-for="area in areas" :key="area.id" clickable dense size="11px"
+                :color="areaFiltro === area.id ? area.color : 'grey-3'"
+                :text-color="areaFiltro === area.id ? 'white' : 'grey-8'"
+                @click="seleccionarArea(area.id)">
+          {{ area.nombre }} ({{ area.productos_count }})
+        </q-chip>
       </div>
 
       <q-card flat bordered>
-        <q-card-section class="row items-center q-col-gutter-sm q-pa-sm">
-          <div class="col">
-            <q-input v-model="search" dense outlined clearable debounce="400"
-                     placeholder="Buscar por nombre o código" @update:model-value="buscar">
-              <template #prepend><q-icon name="search" /></template>
-            </q-input>
-          </div>
-          <q-btn flat round color="primary" icon="refresh" :loading="loading" @click="cargar">
-            <q-tooltip>Actualizar</q-tooltip>
-          </q-btn>
-        </q-card-section>
-        <q-separator />
-
         <q-table v-model:pagination="pagination" flat dense row-key="id"
+                 class="tabla-compacta"
                  :rows="productos" :columns="columns" :loading="loading"
-                 :rows-per-page-options="[10, 20, 50]"
-                 no-data-label="No existen productos del tipo LABORATORIOS"
+                 :rows-per-page-options="[10, 20, 50, 100]"
+                 no-data-label="No existen exámenes de laboratorio con ese filtro"
                  @request="onRequest">
           <template #body-cell-acciones="props">
             <q-td :props="props">
-              <q-btn-dropdown
-                dense
-                unelevated
-                color="primary"
-                label="Opciones"
-                no-caps
-                size="sm"
-              >
-                <q-list dense style="min-width: 180px">
-                  <q-item
-                    v-if="canEditar"
-                    clickable
-                    v-close-popup
-                    @click="editarProducto(props.row)"
-                  >
-                    <q-item-section avatar>
-                      <q-icon name="edit" color="primary" />
-                    </q-item-section>
-                    <q-item-section>
-                      <q-item-label>Modificar</q-item-label>
-                    </q-item-section>
+              <q-btn-dropdown dense unelevated rounded color="primary" label="Opciones" no-caps size="10px">
+                <q-list dense style="min-width:180px">
+                  <q-item v-if="canEditar" clickable v-close-popup @click="editarProducto(props.row)">
+                    <q-item-section avatar><q-icon name="edit" color="primary" /></q-item-section>
+                    <q-item-section><q-item-label>Modificar</q-item-label></q-item-section>
                   </q-item>
-
-                  <q-item
-                    clickable
-                    v-close-popup
-                    @click="administrar(props.row)"
-                  >
-                    <q-item-section avatar>
-                      <q-icon name="settings" color="teal" />
-                    </q-item-section>
+                  <q-item clickable v-close-popup :to="`/laboratorio/${props.row.id}`">
+                    <q-item-section avatar><q-icon name="settings" color="teal" /></q-item-section>
                     <q-item-section>
                       <q-item-label>Administrar</q-item-label>
+                      <q-item-label caption>Datos, rangos y fórmulas</q-item-label>
                     </q-item-section>
                   </q-item>
                 </q-list>
@@ -81,13 +78,13 @@
           <template #body-cell-nombre="props">
             <q-td :props="props">
               <div class="text-weight-medium">{{ props.row.nombre }}</div>
-              <div v-if="props.row.descripcion" class="text-caption text-grey-6">{{ props.row.descripcion }}</div>
+              <div v-if="props.row.descripcion" class="lab-sub text-grey-6">{{ props.row.descripcion }}</div>
             </q-td>
           </template>
           <template #body-cell-tipo="props">
             <q-td :props="props">
               <q-badge :color="props.row.tipo_producto?.color || 'primary'">
-                {{ props.row.tipo_producto?.nombre || 'LABORATORIOS' }}
+                {{ props.row.tipo_producto?.nombre || 'SIN ÁREA' }}
               </q-badge>
             </q-td>
           </template>
@@ -101,8 +98,10 @@
     <q-dialog v-model="productoDialog" persistent>
       <q-card style="width:min(94vw,620px)">
         <q-card-section class="row items-center bg-primary text-white q-py-sm">
-          <q-icon name="edit" class="q-mr-sm" />
-          <span class="text-subtitle1 text-weight-bold">Modificar producto de laboratorio</span>
+          <q-icon :name="productoForm.id ? 'edit' : 'add'" class="q-mr-sm" />
+          <span class="text-subtitle1 text-weight-bold">
+            {{ productoForm.id ? 'Modificar examen de laboratorio' : 'Nuevo examen de laboratorio' }}
+          </span>
           <q-space /><q-btn flat round dense icon="close" v-close-popup />
         </q-card-section>
         <q-form @submit.prevent="guardarProducto">
@@ -113,182 +112,96 @@
             <div class="col-12 col-sm-8">
               <q-input v-model="productoForm.nombre" v-uppercase dense outlined label="Nombre *" :rules="[required]" />
             </div>
+            <div class="col-12 col-sm-8">
+              <q-select v-model="productoForm.tipo_producto_id" dense outlined emit-value map-options
+                        label="Área *" :options="opcionesAreas" :rules="[required]" />
+            </div>
             <div class="col-12 col-sm-4">
               <q-input v-model.number="productoForm.precio" dense outlined type="number" min="0" step="0.01"
                        label="Precio (Bs) *" :rules="[required]" />
             </div>
             <div class="col-12">
-              <q-input v-model="productoForm.descripcion" v-uppercase dense outlined type="textarea" autogrow label="Descripción" />
+              <q-input v-model="productoForm.descripcion" v-uppercase dense outlined type="textarea" rows="2" label="Descripción" />
             </div>
           </q-card-section>
-          <q-card-actions align="right">
-            <q-btn flat label="Cancelar" no-caps v-close-popup />
-            <q-btn type="submit" color="primary" icon="save" label="Guardar" no-caps :loading="saving" />
+          <q-card-actions align="right" class="q-pa-sm">
+            <q-btn flat dense label="Cancelar" no-caps v-close-popup />
+            <q-btn type="submit" dense padding="4px 14px" color="primary" icon="save" label="Guardar" no-caps :loading="saving" />
           </q-card-actions>
         </q-form>
       </q-card>
     </q-dialog>
 
-    <q-dialog v-model="adminDialog" persistent maximized>
-      <q-card>
-        <q-bar class="bg-teal text-white">
-          <q-icon name="biotech" />
-          <div class="text-weight-bold">Administrar: {{ productoAdmin.nombre }}</div>
-          <q-space /><q-btn flat dense icon="close" v-close-popup />
-        </q-bar>
-
-        <q-card-section class="q-pa-md">
-          <q-banner rounded class="bg-blue-1 text-blue-10 q-mb-md">
-            <template #avatar><q-icon name="info" color="primary" /></template>
-            Los datos y fórmulas configurados aquí serán la base para registrar resultados cuando este laboratorio sea solicitado a un paciente.
-          </q-banner>
-
-          <q-card flat bordered class="q-mb-md">
-            <q-card-section class="q-pa-sm">
-              <div class="row items-center q-mb-sm">
-                <div>
-                  <div class="row items-center q-gutter-sm">
-                    <q-icon name="fact_check" color="primary" size="22px" />
-                    <div class="text-subtitle1 text-weight-bold">Datos y rangos de referencia</div>
-                    <q-badge color="primary">{{ datos.length }}</q-badge>
-                  </div>
-                  <div class="text-caption text-grey-7">Nombre, variable técnica, unidad y rangos de referencia.</div>
-                </div>
-                <q-space />
-                <q-btn v-if="canEditar" color="positive" icon="add" label="Nuevo dato" no-caps @click="nuevoDato" />
-              </div>
-              <q-table flat bordered dense row-key="id" :rows="datos" :columns="datoColumns"
-                       :loading="adminLoading" :rows-per-page-options="[0]">
-                <template #body="props">
-                  <q-tr :props="props"
-                        :draggable="canEditar"
-                        :class="{ 'laboratorio-row--dragging': draggedDatoId === props.row.id }"
-                        @dragstart="iniciarArrastreDato($event, props.row)"
-                        @dragover.prevent
-                        @drop.prevent="soltarDato(props.row)"
-                        @dragend="finalizarArrastreDato">
-                    <q-td key="arrastrar" :props="props">
-                      <q-icon v-if="canEditar" name="drag_indicator" color="grey-7" size="22px"
-                              class="cursor-grab">
-                        <q-tooltip>Arrastre para cambiar el orden</q-tooltip>
-                      </q-icon>
-                    </q-td>
-                    <q-td key="acciones" :props="props">
-                      <q-btn v-if="canEditar" flat round dense color="primary" icon="edit" @click="editarDato(props.row)" />
-                      <q-btn v-if="canEditar" flat round dense color="deep-purple" icon="functions"
-                             @click="administrarFormulaDato(props.row)">
-                        <q-tooltip>{{ props.row.formula ? 'Modificar fórmula' : 'Agregar fórmula' }}</q-tooltip>
-                      </q-btn>
-                      <q-btn v-if="canEditar && props.row.formula" flat round dense color="orange-9"
-                             icon="settings_power" @click="eliminarFormula(props.row.formula)">
-                        <q-tooltip>Quitar fórmula del dato</q-tooltip>
-                      </q-btn>
-                      <q-btn v-if="canEditar" flat round dense color="negative" icon="delete" @click="eliminarDato(props.row)" />
-                    </q-td>
-                    <q-td key="nombre" :props="props">{{ props.row.nombre }}</q-td>
-                    <q-td key="nombre_variable" :props="props">
-                      <q-badge outline color="primary" class="text-mono">{{ props.row.nombre_variable }}</q-badge>
-                    </q-td>
-                    <q-td key="unidad" :props="props">{{ props.row.unidad || '—' }}</q-td>
-                    <q-td key="rango_referencia" :props="props">{{ props.row.rango_referencia || '—' }}</q-td>
-                    <q-td key="formula" :props="props">
-                      <code v-if="props.row.formula" class="text-deep-purple">{{ props.row.formula.formula }}</code>
-                      <span v-else class="text-grey-6">INGRESO MANUAL</span>
-                    </q-td>
-                    <q-td key="visible" :props="props">
-                      <q-badge :color="props.row.visible ? 'positive' : 'grey'">{{ props.row.visible ? 'SÍ' : 'NO' }}</q-badge>
-                    </q-td>
-                  </q-tr>
-                </template>
-              </q-table>
-            </q-card-section>
-          </q-card>
-        </q-card-section>
-      </q-card>
-    </q-dialog>
-
-    <q-dialog v-model="datoDialog" persistent>
-      <q-card style="width:min(94vw,650px)">
-        <q-card-section class="row items-center bg-primary text-white q-py-sm">
-          <q-icon name="fact_check" class="q-mr-sm" />
-          <span class="text-subtitle1 text-weight-bold">{{ datoForm.id ? 'Modificar' : 'Nuevo' }} dato</span>
-          <q-space /><q-btn flat round dense icon="close" v-close-popup />
-        </q-card-section>
-        <q-form @submit.prevent="guardarDato">
-          <q-card-section class="row q-col-gutter-sm">
-            <div class="col-12 col-sm-7">
-              <q-input v-model="datoForm.nombre" v-uppercase dense outlined label="Nombre *"
-                       :rules="[required]" @update:model-value="actualizarVariableDato" />
-            </div>
-            <div class="col-12 col-sm-5">
-              <q-input v-model="datoForm.nombre_variable" dense outlined label="Variable *"
-                       hint="Ej.: glucosa, colesterol_total" :rules="[required, validVariable]" />
-            </div>
-            <div class="col-12 col-sm-4">
-              <q-input v-model="datoForm.unidad" dense outlined label="Unidad" hint="mg/dL, %, U/L..." />
-            </div>
-            <div class="col-12 col-sm-4"><q-toggle v-model="datoForm.visible" label="Visible" /></div>
-            <div class="col-12">
-              <q-input v-model="datoForm.rango_referencia" v-uppercase dense outlined type="textarea" autogrow
-                       label="Rangos de referencia" hint="Ej.: HOMBRES: 13–17 | MUJERES: 12–15" />
-            </div>
-            <div class="col-12">
-              <q-banner dense rounded class="bg-blue-1 text-blue-10">
-                La variable identifica este dato dentro de las fórmulas. Ejemplo:
-                <code>hematocrito</code>.
-              </q-banner>
-            </div>
-          </q-card-section>
-          <q-card-actions align="right">
-            <q-btn flat label="Cancelar" no-caps v-close-popup />
-            <q-btn type="submit" color="primary" icon="save" label="Guardar" no-caps :loading="saving" />
-          </q-card-actions>
-        </q-form>
-      </q-card>
-    </q-dialog>
-
-    <q-dialog v-model="formulaDialog" persistent>
+    <!-- ── Administración de áreas de laboratorio ─────────────────── -->
+    <q-dialog v-model="areasDialog">
       <q-card style="width:min(94vw,720px)">
-        <q-card-section class="row items-center bg-deep-purple text-white q-py-sm">
-          <q-icon name="functions" class="q-mr-sm" />
-          <span class="text-subtitle1 text-weight-bold">{{ formulaForm.id ? 'Modificar' : 'Nueva' }} fórmula</span>
+        <q-card-section class="row items-center bg-primary text-white q-py-sm">
+          <q-icon name="category" class="q-mr-sm" />
+          <span class="text-subtitle1 text-weight-bold">Áreas de laboratorio</span>
           <q-space /><q-btn flat round dense icon="close" v-close-popup />
         </q-card-section>
-        <q-form @submit.prevent="guardarFormula">
-          <q-card-section class="row q-col-gutter-sm">
-            <div class="col-12">
-              <q-banner dense rounded class="bg-blue-1 text-blue-10">
-                Resultado: <strong>{{ formulaDato?.nombre }}</strong>
-                (<code>{{ formulaDato?.nombre_variable }}</code>)
-              </q-banner>
+
+        <q-card-section class="q-pa-sm">
+          <q-form v-if="canCrear || canEditar" class="row items-start q-col-gutter-xs q-mb-sm"
+                  @submit.prevent="guardarArea">
+            <div class="col-12 col-sm-5">
+              <q-input v-model="areaForm.nombre" v-uppercase dense outlined label="Nombre del área *" :rules="[required]" />
             </div>
-            <div class="col-12">
-              <q-input v-model="formulaForm.formula" dense outlined label="Fórmula *"
-                       hint="Ej.: colesterol_total - hdl_colesterol" :rules="[required]" />
-              <div class="q-mt-xs">
-                <span class="text-caption text-grey-7 q-mr-sm">Variables disponibles:</span>
-                <q-chip v-for="variable in variablesDisponibles" :key="variable" dense clickable
-                        color="deep-purple-1" text-color="deep-purple" @click="insertarVariable(variable)">
-                  {{ variable }}
-                </q-chip>
-              </div>
-              <div v-if="formulaError" class="text-negative text-caption">{{ formulaError }}</div>
+            <div class="col-8 col-sm-4">
+              <q-select v-model="areaForm.color" dense outlined emit-value map-options
+                        label="Color" :options="opcionesColores">
+                <template #option="scope">
+                  <q-item v-bind="scope.itemProps">
+                    <q-item-section avatar><q-badge :color="scope.opt.value" /></q-item-section>
+                    <q-item-section>{{ scope.opt.label }}</q-item-section>
+                  </q-item>
+                </template>
+                <template #selected>
+                  <q-badge v-if="areaForm.color" :color="areaForm.color" class="q-mr-xs" />
+                  <span class="lab-sub">{{ areaForm.color || 'Sin color' }}</span>
+                </template>
+              </q-select>
             </div>
-            <div class="col-12">
-              <q-banner dense rounded class="bg-deep-purple-1 text-deep-purple-10">
-                Ejemplos:
-                <code>(hematocrito * 10) / globulos_rojos</code> o
-                <code>(neutrofilos * globulos_blancos) / 100</code>.
-                Haga clic en las variables disponibles para agregarlas.
-              </q-banner>
+            <div class="col-4 col-sm-3">
+              <q-btn type="submit" dense unelevated color="primary" class="full-width"
+                     :icon="areaForm.id ? 'save' : 'add'" :label="areaForm.id ? 'Guardar' : 'Agregar'"
+                     no-caps size="11px" :loading="savingArea" />
+              <q-btn v-if="areaForm.id" flat dense class="full-width q-mt-xs" label="Cancelar edición"
+                     no-caps size="10px" @click="limpiarArea" />
             </div>
-          </q-card-section>
-          <q-card-actions align="right">
-            <q-btn flat label="Cancelar" no-caps v-close-popup />
-            <q-btn type="submit" color="deep-purple" icon="save" label="Guardar" no-caps
-                   :disable="!!formulaError" :loading="saving" />
-          </q-card-actions>
-        </q-form>
+          </q-form>
+
+          <q-markup-table flat dense class="tabla-compacta">
+            <thead>
+              <tr>
+                <th class="text-left">Área</th>
+                <th class="text-center">Exámenes</th>
+                <th class="text-right">Opciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="area in areas" :key="area.id">
+                <td><q-badge :color="area.color || 'primary'">{{ area.nombre }}</q-badge></td>
+                <td class="text-center">{{ area.productos_count }}</td>
+                <td class="text-right">
+                  <q-btn v-if="canEditar" flat round dense size="10px" icon="edit" color="primary"
+                         @click="editarArea(area)">
+                    <q-tooltip>Modificar</q-tooltip>
+                  </q-btn>
+                  <q-btn v-if="canEliminar" flat round dense size="10px" icon="delete" color="negative"
+                         :disable="area.productos_count > 0" @click="eliminarArea(area)">
+                    <q-tooltip>
+                      {{ area.productos_count > 0 ? 'Tiene exámenes asignados' : 'Eliminar' }}
+                    </q-tooltip>
+                  </q-btn>
+                </td>
+              </tr>
+              <tr v-if="!areas.length">
+                <td colspan="3" class="text-center text-grey-6">Sin áreas registradas</td>
+              </tr>
+            </tbody>
+          </q-markup-table>
+        </q-card-section>
       </q-card>
     </q-dialog>
   </q-page>
@@ -305,64 +218,53 @@ const saving = ref(false)
 const search = ref('')
 const productoDialog = ref(false)
 const productoForm = ref({})
-const adminDialog = ref(false)
-const adminLoading = ref(false)
-const productoAdmin = ref({})
-const datos = ref([])
-const formulas = ref([])
-const datoDialog = ref(false)
-const datoForm = ref({})
-const formulaDialog = ref(false)
-const formulaForm = ref({})
-const formulaDato = ref(null)
-const formulaError = ref('')
-const draggedDatoId = ref(null)
 const pagination = ref({ page: 1, rowsPerPage: 20, rowsNumber: 0 })
+
+/* Áreas de laboratorio: son tipos de producto marcados con es_laboratorio,
+   así conviven con FARMACIA, ECOGRAFIA y demás en el mismo catálogo. */
+const areas = ref([])
+const areaFiltro = ref(null)
+const areasDialog = ref(false)
+const areaForm = ref({ nombre: '', color: 'primary' })
+const savingArea = ref(false)
+
+const opcionesColores = [
+  { label: 'Rojo', value: 'red-8' }, { label: 'Azul', value: 'blue-8' },
+  { label: 'Ámbar', value: 'amber-8' }, { label: 'Verde', value: 'green-8' },
+  { label: 'Morado', value: 'purple-8' }, { label: 'Turquesa', value: 'teal-8' },
+  { label: 'Naranja', value: 'deep-orange-8' }, { label: 'Rosa', value: 'pink-8' },
+  { label: 'Índigo', value: 'indigo-8' }, { label: 'Café', value: 'brown-8' },
+  { label: 'Cian', value: 'cyan-8' }, { label: 'Lima', value: 'lime-8' },
+]
 
 const columns = [
   { name: 'acciones', label: 'Opciones', field: 'id', align: 'left' },
   { name: 'codigo', label: 'Código', field: 'codigo', align: 'left' },
   { name: 'nombre', label: 'Producto', field: 'nombre', align: 'left', sortable: true },
-  { name: 'tipo', label: 'Tipo', field: row => row.tipo_producto?.nombre, align: 'center' },
+  { name: 'tipo', label: 'Área', field: row => row.tipo_producto?.nombre, align: 'center' },
   { name: 'precio', label: 'Precio', field: 'precio', align: 'right', sortable: true },
-]
-const datoColumns = [
-  { name: 'arrastrar', label: '', field: 'id', align: 'center' },
-  { name: 'acciones', label: 'Opciones', field: 'id', align: 'center' },
-  { name: 'nombre', label: 'Nombre', field: 'nombre', align: 'left' },
-  { name: 'nombre_variable', label: 'Variable', field: 'nombre_variable', align: 'left' },
-  { name: 'unidad', label: 'Unidad', field: row => row.unidad || '—', align: 'left' },
-  { name: 'rango_referencia', label: 'Rangos de referencia', field: row => row.rango_referencia || '—', align: 'left' },
-  { name: 'formula', label: 'Fórmula aplicada', field: row => row.formula?.formula || '', align: 'left' },
-  { name: 'visible', label: 'Visible', field: 'visible', align: 'center' },
 ]
 
 const canVer = computed(() => proxy.$store.hasPermission('Ver Productos'))
+const canCrear = computed(() => proxy.$store.hasPermission('Crear Productos'))
 const canEditar = computed(() => proxy.$store.hasPermission('Editar Productos'))
-const variablesDisponibles = computed(() => [
-  ...datos.value
-    .filter(item => item.id !== formulaDato.value?.id)
-    .map(item => item.nombre_variable),
-])
+const canEliminar = computed(() => proxy.$store.hasPermission('Eliminar Productos'))
+
+const opcionesAreas = computed(() => areas.value.map(a => ({ label: a.nombre, value: a.id })))
+const totalAreas = computed(() => areas.value.reduce((suma, a) => suma + (a.productos_count || 0), 0))
 
 watch(() => proxy.$store.isLogged, logged => {
-  if (logged && canVer.value) cargar()
+  if (logged && canVer.value) {
+    cargarAreas()
+    cargar()
+  }
 }, { immediate: true })
-
-watch(() => formulaForm.value.formula, validarFormula)
 
 function required (value) {
   return value !== null && value !== undefined && value !== '' || 'Campo requerido'
 }
-function validVariable (value) {
-  return /^[a-z][a-z0-9_]*$/.test(value || '') || 'Use minúsculas, números y guion bajo'
-}
 function money (value) {
   return Number(value || 0).toFixed(2)
-}
-function toVariable (value) {
-  return (value || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
-    .replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '')
 }
 function buscar () {
   pagination.value.page = 1
@@ -373,12 +275,23 @@ function onRequest ({ pagination: requested }) {
   cargar()
 }
 
+function seleccionarArea (id) {
+  areaFiltro.value = id
+  buscar()
+}
+
 async function cargar () {
   if (!canVer.value) return
   loading.value = true
   try {
     const { data } = await proxy.$axios.get('productos', {
-      params: { tipo: 'LABORATORIOS', q: search.value || undefined, page: pagination.value.page, per_page: pagination.value.rowsPerPage },
+      params: {
+        laboratorio: 1,
+        tipo_producto_id: areaFiltro.value || undefined,
+        q: search.value || undefined,
+        page: pagination.value.page,
+        per_page: pagination.value.rowsPerPage,
+      },
     })
     productos.value = data.data || []
     pagination.value = { ...pagination.value, page: data.current_page || 1, rowsPerPage: data.per_page || 20, rowsNumber: data.total || 0 }
@@ -389,6 +302,24 @@ async function cargar () {
   }
 }
 
+async function cargarAreas () {
+  if (!canVer.value) return
+  try {
+    const { data } = await proxy.$axios.get('tipo-productos', { params: { laboratorio: 1 } })
+    areas.value = data
+  } catch (error) {
+    proxy.$alert.error(error.response?.data?.message || 'No se pudieron cargar las áreas')
+  }
+}
+
+function nuevoProducto () {
+  productoForm.value = {
+    codigo: '', nombre: '', descripcion: '', precio: 0,
+    // Arranca en el área que se está viendo; si son todas, en la primera.
+    tipo_producto_id: areaFiltro.value || areas.value[0]?.id || null,
+  }
+  productoDialog.value = true
+}
 function editarProducto (producto) {
   productoForm.value = {
     ...producto,
@@ -402,170 +333,95 @@ function editarProducto (producto) {
 async function guardarProducto () {
   saving.value = true
   try {
-    await proxy.$axios.put('productos/' + productoForm.value.id, productoForm.value)
+    if (productoForm.value.id) {
+      await proxy.$axios.put('productos/' + productoForm.value.id, productoForm.value)
+      proxy.$alert.success('Examen actualizado')
+    } else {
+      await proxy.$axios.post('productos', productoForm.value)
+      proxy.$alert.success('Examen creado')
+    }
     productoDialog.value = false
-    proxy.$alert.success('Producto actualizado')
-    await cargar()
+    await Promise.all([cargar(), cargarAreas()])
   } catch (error) {
-    proxy.$alert.error(error.response?.data?.message || 'No se pudo actualizar')
+    proxy.$alert.error(error.response?.data?.message || 'No se pudo guardar')
   } finally {
     saving.value = false
   }
 }
 
-async function administrar (producto) {
-  productoAdmin.value = producto
-  adminDialog.value = true
-  await cargarConfiguracion()
+/* ── Áreas ─────────────────────────────────────────────────────── */
+function abrirAreas () {
+  limpiarArea()
+  areasDialog.value = true
+  cargarAreas()
 }
-async function cargarConfiguracion () {
-  adminLoading.value = true
+function limpiarArea () {
+  areaForm.value = { nombre: '', color: 'primary' }
+}
+function editarArea (area) {
+  areaForm.value = { id: area.id, nombre: area.nombre, color: area.color || 'primary' }
+}
+async function guardarArea () {
+  savingArea.value = true
   try {
-    const { data } = await proxy.$axios.get(`productos/${productoAdmin.value.id}/laboratorio-configuracion`)
-    datos.value = data.laboratorio_datos || []
-    formulas.value = data.laboratorio_formulas || []
-  } catch (error) {
-    proxy.$alert.error(error.response?.data?.message || 'No se pudo cargar la configuración')
-  } finally {
-    adminLoading.value = false
-  }
-}
-
-function nuevoDato () {
-  datoForm.value = { nombre: '', nombre_variable: '', unidad: '', rango_referencia: '', visible: true }
-  datoDialog.value = true
-}
-function editarDato (dato) {
-  datoForm.value = { ...dato }
-  datoDialog.value = true
-}
-function actualizarVariableDato () {
-  if (!datoForm.value.id) datoForm.value.nombre_variable = toVariable(datoForm.value.nombre)
-}
-async function guardarDato () {
-  saving.value = true
-  try {
-    if (datoForm.value.id) {
-      await proxy.$axios.put(`producto-laboratorio-datos/${datoForm.value.id}`, datoForm.value)
+    // es_laboratorio marca el área como propia del laboratorio: sin esto no
+    // aparecería en esta pantalla.
+    const cuerpo = { ...areaForm.value, es_laboratorio: true }
+    if (areaForm.value.id) {
+      await proxy.$axios.put('tipo-productos/' + areaForm.value.id, cuerpo)
+      proxy.$alert.success('Área actualizada')
     } else {
-      await proxy.$axios.post(`productos/${productoAdmin.value.id}/laboratorio-datos`, datoForm.value)
+      await proxy.$axios.post('tipo-productos', cuerpo)
+      proxy.$alert.success('Área creada')
     }
-    datoDialog.value = false
-    proxy.$alert.success('Dato guardado')
-    await cargarConfiguracion()
+    limpiarArea()
+    await Promise.all([cargarAreas(), cargar()])
   } catch (error) {
-    proxy.$alert.error(error.response?.data?.message || firstValidationError(error) || 'No se pudo guardar')
+    proxy.$alert.error(error.response?.data?.message || 'No se pudo guardar el área')
   } finally {
-    saving.value = false
+    savingArea.value = false
   }
 }
-function eliminarDato (dato) {
-  proxy.$alert.dialog(`¿Eliminar el dato "${dato.nombre}"?`).onOk(async () => {
+function eliminarArea (area) {
+  proxy.$alert.dialog(`¿Eliminar el área "${area.nombre}"?`).onOk(async () => {
     try {
-      await proxy.$axios.delete(`producto-laboratorio-datos/${dato.id}`)
-      proxy.$alert.success('Dato eliminado')
-      await cargarConfiguracion()
+      await proxy.$axios.delete('tipo-productos/' + area.id)
+      proxy.$alert.success('Área eliminada')
+      if (areaFiltro.value === area.id) areaFiltro.value = null
+      await Promise.all([cargarAreas(), cargar()])
     } catch (error) {
-      proxy.$alert.error(error.response?.data?.message || 'No se pudo eliminar')
+      proxy.$alert.error(error.response?.data?.message || 'No se pudo eliminar el área')
     }
   })
-}
-
-function iniciarArrastreDato (event, dato) {
-  draggedDatoId.value = dato.id
-  event.dataTransfer.effectAllowed = 'move'
-  event.dataTransfer.setData('text/plain', String(dato.id))
-}
-async function soltarDato (destino) {
-  const origenIndex = datos.value.findIndex(item => item.id === draggedDatoId.value)
-  const destinoIndex = datos.value.findIndex(item => item.id === destino.id)
-  if (origenIndex < 0 || destinoIndex < 0 || origenIndex === destinoIndex) return
-
-  const ordenAnterior = [...datos.value]
-  const nuevosDatos = [...datos.value]
-  const [movido] = nuevosDatos.splice(origenIndex, 1)
-  nuevosDatos.splice(destinoIndex, 0, movido)
-  datos.value = nuevosDatos
-
-  try {
-    await proxy.$axios.put(`productos/${productoAdmin.value.id}/laboratorio-datos/orden`, {
-      ids: nuevosDatos.map(item => item.id),
-    })
-  } catch (error) {
-    datos.value = ordenAnterior
-    proxy.$alert.error(error.response?.data?.message || 'No se pudo actualizar el orden')
-  } finally {
-    draggedDatoId.value = null
-  }
-}
-function finalizarArrastreDato () {
-  draggedDatoId.value = null
-}
-
-function administrarFormulaDato (dato) {
-  formulaDato.value = dato
-  formulaForm.value = dato.formula ? { ...dato.formula } : { formula: '' }
-  formulaError.value = ''
-  formulaDialog.value = true
-}
-function insertarVariable (variable) {
-  formulaForm.value.formula = `${formulaForm.value.formula || ''} ${variable}`.trim()
-}
-function validarFormula () {
-  const expression = (formulaForm.value.formula || '').trim()
-  formulaError.value = ''
-  if (!expression) return
-  const tokens = expression.replace(/[()]/g, ' ').split(/[\s+\-*/]+/)
-    .filter(token => token && !/^\d+(\.\d+)?$/.test(token))
-  const unknown = [...new Set(tokens.filter(token => !variablesDisponibles.value.includes(token)))]
-  if (unknown.length) formulaError.value = `Variables desconocidas: ${unknown.join(', ')}`
-}
-async function guardarFormula () {
-  validarFormula()
-  if (formulaError.value) return
-  saving.value = true
-  try {
-    if (formulaForm.value.id) {
-      await proxy.$axios.put(`producto-laboratorio-formulas/${formulaForm.value.id}`, {
-        formula: formulaForm.value.formula,
-      })
-    } else {
-      await proxy.$axios.post(`producto-laboratorio-datos/${formulaDato.value.id}/formula`, {
-        formula: formulaForm.value.formula,
-      })
-    }
-    formulaDialog.value = false
-    proxy.$alert.success('Fórmula guardada')
-    await cargarConfiguracion()
-  } catch (error) {
-    proxy.$alert.error(error.response?.data?.message || firstValidationError(error) || 'No se pudo guardar')
-  } finally {
-    saving.value = false
-  }
-}
-function eliminarFormula (formula) {
-  proxy.$alert.dialog(`¿Eliminar la fórmula "${formula.nombre || formula.nombre_variable}"?`).onOk(async () => {
-    try {
-      await proxy.$axios.delete(`producto-laboratorio-formulas/${formula.id}`)
-      proxy.$alert.success('Fórmula eliminada')
-      await cargarConfiguracion()
-    } catch (error) {
-      proxy.$alert.error(error.response?.data?.message || 'No se pudo eliminar')
-    }
-  })
-}
-function firstValidationError (error) {
-  const errors = error.response?.data?.errors
-  return errors ? Object.values(errors).flat()[0] : null
 }
 </script>
 
 <style scoped>
-.laboratorio-row--dragging {
-  opacity: 0.45;
+.lab-sub {
+  font-size: 10px;
+  line-height: 1.3;
 }
 
-.cursor-grab {
-  cursor: grab;
+.tabla-compacta :deep(th),
+.tabla-compacta :deep(td) {
+  font-size: 11px;
+  padding: 2px 8px;
+}
+
+.lab-lista :deep(.q-field--dense:not(.q-textarea) .q-field__control),
+.lab-lista :deep(.q-field--dense:not(.q-textarea) .q-field__marginal) {
+  height: 30px;
+  min-height: 30px;
+}
+.lab-lista :deep(.q-field--dense .q-field__native),
+.lab-lista :deep(.q-field--dense .q-field__input),
+.lab-lista :deep(.q-field--dense .q-field__label) {
+  font-size: 11px;
+}
+.lab-lista :deep(.q-field__bottom) {
+  min-height: 14px;
+  padding-top: 2px;
+  font-size: 10px;
 }
 </style>
+

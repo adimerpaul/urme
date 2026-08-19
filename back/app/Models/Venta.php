@@ -14,7 +14,8 @@ class Venta extends Model implements AuditableContract
     protected $table = 'ventas';
 
     protected $fillable = [
-        'user_id', 'paciente_id', 'doctor_id', 'seguro_id', 'cliente', 'fecha_hora',
+        'user_id', 'cobrado_por_id', 'paciente_id', 'doctor_id', 'seguro_id', 'cliente', 'fecha_hora',
+        'fecha_hora_cobro',
         'tipo_pago', 'comentario', 'estado', 'total', 'pago', 'cambio',
     ];
 
@@ -22,6 +23,7 @@ class Venta extends Model implements AuditableContract
 
     protected $casts = [
         'fecha_hora' => 'datetime',
+        'fecha_hora_cobro' => 'datetime',
         'total' => 'decimal:2',
         'pago' => 'decimal:2',
         'cambio' => 'decimal:2',
@@ -35,6 +37,11 @@ class Venta extends Model implements AuditableContract
     public function user()
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function cobradoPor()
+    {
+        return $this->belongsTo(User::class, 'cobrado_por_id');
     }
 
     public function paciente()

@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use App\Models\User;
+use App\Support\Permisos;
 use Illuminate\Database\Seeder;
 use Spatie\Permission\Models\Permission;
 
@@ -10,35 +11,14 @@ class DatabaseSeeder extends Seeder
 {
     public function run(): void
     {
-        $permisos = [
-            // Usuarios
-            'Ver Usuarios', 'Crear Usuarios', 'Editar Usuarios', 'Eliminar Usuarios',
-            'Gestionar Permisos',
-
-            // Pacientes
-            'Ver Pacientes', 'Crear Pacientes', 'Editar Pacientes', 'Eliminar Pacientes',
-
-            // Internaciones
-            'Ver Internaciones', 'Crear Internaciones', 'Editar Internaciones', 'Eliminar Internaciones',
-
-            // Productos / Farmacia
-            'Ver Productos', 'Crear Productos', 'Editar Productos', 'Eliminar Productos',
-            'Ver Productos por Vencer', 'Ver Productos Vencidos',
-
-            // Compras
-            'Ver Compras', 'Crear Compras', 'Editar Compras', 'Eliminar Compras',
-
-            // Seguros
-            'Ver Seguros', 'Crear Seguros', 'Editar Seguros', 'Eliminar Seguros',
-
-            // Reportes y PDFs
-            'Ver Reportes', 'Imprimir Resultados', 'Exportar Excel',
-
-            // Configuración
-            'Ver Configuracion', 'Editar Configuracion',
-        ];
-        foreach ($permisos as $p) {
-            Permission::firstOrCreate(['name' => $p, 'guard_name' => 'web']);
+        // Catálogo de permisos por módulo: App\Support\Permisos
+        foreach (Permisos::MODULOS as $modulo => $permisos) {
+            foreach ($permisos as $p) {
+                Permission::updateOrCreate(
+                    ['name' => $p, 'guard_name' => 'web'],
+                    ['modulo' => $modulo],
+                );
+            }
         }
 
         $this->call(SeguroSeeder::class);

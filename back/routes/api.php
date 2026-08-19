@@ -1,5 +1,7 @@
 <?php
 
+use App\Http\Controllers\CierreCajaController;
+use App\Http\Controllers\CajaMovimientoController;
 use App\Http\Controllers\CompraController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DoctorController;
@@ -7,6 +9,7 @@ use App\Http\Controllers\InternacionController;
 use App\Http\Controllers\InternacionItemController;
 use App\Http\Controllers\PacienteController;
 use App\Http\Controllers\ProductoController;
+use App\Http\Controllers\ProductoFarmaciaController;
 use App\Http\Controllers\ProductoLaboratorioController;
 use App\Http\Controllers\ProductoVencimientoController;
 use App\Http\Controllers\ProveedorController;
@@ -47,6 +50,17 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/farmacia/resumen', [ProductoController::class, 'resumen']);
     Route::get('/productos-por-vencer', [ProductoVencimientoController::class, 'porVencer']);
     Route::get('/productos-vencidos', [ProductoVencimientoController::class, 'vencidos']);
+
+    // Productos de farmacia (solo tipo FARMACIA, permisos propios)
+    Route::get('/productos-farmacia/catalogos', [ProductoFarmaciaController::class, 'catalogos']);
+    Route::get('/productos-farmacia/resumen', [ProductoFarmaciaController::class, 'resumen']);
+    Route::get('/productos-farmacia/{id}/historial', [ProductoFarmaciaController::class, 'historial']);
+    Route::get('/productos-farmacia/export-pdf', [ProductoFarmaciaController::class, 'exportPdf']);
+    Route::get('/productos-farmacia/export-excel', [ProductoFarmaciaController::class, 'exportExcel']);
+    Route::get('/productos-farmacia', [ProductoFarmaciaController::class, 'index']);
+    Route::post('/productos-farmacia', [ProductoFarmaciaController::class, 'store']);
+    Route::put('/productos-farmacia/{id}', [ProductoFarmaciaController::class, 'update']);
+    Route::delete('/productos-farmacia/{id}', [ProductoFarmaciaController::class, 'destroy']);
 
     // Catálogos - Fabricantes
     Route::get('/fabricantes/export-pdf', [ProductoController::class, 'exportFabricantesPdf']);
@@ -110,6 +124,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Pacientes
     Route::get('/pacientes', [PacienteController::class, 'index']);
+    Route::get('/pacientes/{id}/internaciones', [PacienteController::class, 'internaciones']);
     Route::get('/pacientes/{id}', [PacienteController::class, 'show']);
     Route::post('/pacientes', [PacienteController::class, 'store']);
     Route::put('/pacientes/{id}', [PacienteController::class, 'update']);
@@ -147,6 +162,18 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/ventas', [VentaController::class, 'store']);
     Route::put('/ventas/{id}/completar', [VentaController::class, 'completar']);
     Route::delete('/ventas/{id}', [VentaController::class, 'destroy']);
+
+    // Cierre de caja
+    Route::get('/cierres-caja/estado', [CierreCajaController::class, 'estado']);
+    Route::get('/cierres-caja', [CierreCajaController::class, 'index']);
+    Route::post('/cierres-caja', [CierreCajaController::class, 'store']);
+    Route::put('/cierres-caja/{id}', [CierreCajaController::class, 'update']);
+
+    // Ingresos y gastos de Caja Administrativa y Caja General
+    Route::get('/caja-movimientos', [CajaMovimientoController::class, 'index']);
+    Route::post('/caja-movimientos', [CajaMovimientoController::class, 'store']);
+    Route::put('/caja-movimientos/{cajaMovimiento}', [CajaMovimientoController::class, 'update']);
+    Route::delete('/caja-movimientos/{cajaMovimiento}', [CajaMovimientoController::class, 'destroy']);
 
     // Doctores y especialidades
     Route::get('/especialidades', [DoctorController::class, 'especialidades']);

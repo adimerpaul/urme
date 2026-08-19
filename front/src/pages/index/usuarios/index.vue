@@ -176,6 +176,9 @@
                     <div class="perm-group__title">
                       <q-icon :name="group.icon" size="16px" />
                       {{ group.name }}
+                      <q-badge rounded color="grey-3" text-color="grey-8" class="q-ml-xs">
+                        {{ group.permissions.filter(p => p.checked).length }}/{{ group.permissions.length }}
+                      </q-badge>
                     </div>
                     <div class="perm-grid">
                       <label v-for="perm in group.permissions" :key="perm.id" class="perm-item"
@@ -248,47 +251,53 @@ const columns = [
 const filteredPerms = computed(() => {
   const q = (permFilter.value || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
   if (!q) return permissions.value
+  const limpiar = (t) => (t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
   return permissions.value.filter(p =>
-    p.name.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').includes(q)
+    limpiar(p.name).includes(q) || limpiar(p.modulo).includes(q)
   )
 })
 
+// Cada permiso trae su módulo desde el backend (columna `modulo`).
+// El orden de esta lista es el orden en que se muestran los grupos;
+// cualquier módulo nuevo aparece igual al final, nunca se oculta un permiso.
+const MODULO_ICONOS = {
+  Dashboard: 'dashboard',
+  Usuarios: 'manage_accounts',
+  Pacientes: 'badge',
+  Internaciones: 'local_hotel',
+  Doctores: 'medical_information',
+  Farmacia: 'medication',
+  'Productos Farmacia': 'inventory_2',
+  Vencimientos: 'event_busy',
+  Compras: 'shopping_cart',
+  Ventas: 'point_of_sale',
+  Caja: 'lock_clock',
+  Seguros: 'verified_user',
+  Laboratorio: 'biotech',
+  Reportes: 'summarize',
+  Configuracion: 'settings',
+  Otros: 'apps',
+}
+
 const groupedPermissions = computed(() => {
-  const groups = [
-    {
-      name: 'Vencimientos',
-      icon: 'event_busy',
-      matches: ['Productos por Vencer', 'Productos Vencidos'],
-      permissions: [],
-    },
-    {
-      name: 'Farmacia',
-      icon: 'medication',
-      matches: ['Productos', 'Compras', 'Ventas'],
-      permissions: [],
-    },
-    {
-      name: 'Usuarios',
-      icon: 'manage_accounts',
-      matches: ['Usuarios', 'Permisos'],
-      permissions: [],
-    },
-    {
-      name: 'Otros módulos',
-      icon: 'apps',
-      matches: [],
-      permissions: [],
-    },
-  ]
+  const orden = Object.keys(MODULO_ICONOS)
+  const groups = []
 
   filteredPerms.value.forEach(permission => {
-    const group = groups.find(item =>
-      item.matches.some(term => permission.name.includes(term))
-    ) || groups[groups.length - 1]
+    const modulo = permission.modulo || 'Otros'
+    let group = groups.find(g => g.name === modulo)
+    if (!group) {
+      group = { name: modulo, icon: MODULO_ICONOS[modulo] || 'apps', permissions: [] }
+      groups.push(group)
+    }
     group.permissions.push(permission)
   })
 
-  return groups.filter(group => group.permissions.length)
+  return groups.sort((a, b) => {
+    const ia = orden.indexOf(a.name)
+    const ib = orden.indexOf(b.name)
+    return (ia === -1 ? orden.length : ia) - (ib === -1 ? orden.length : ib)
+  })
 })
 
 const checkedCount = computed(() => permissions.value.filter(p => p.checked).length)

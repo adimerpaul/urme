@@ -1,184 +1,279 @@
 <template>
-  <q-page class="q-pa-md">
-    <div v-if="loading" class="text-center q-pa-xl">
-      <q-spinner color="primary" size="40px" />
+  <q-page class="q-pa-sm paciente-dense">
+    <div v-if="loading" class="text-center q-pa-lg">
+      <q-spinner color="primary" size="32px" />
     </div>
 
     <template v-else-if="paciente.id">
-      <!-- ═══ BREADCRUMB ═══════════════════════════════════════════ -->
-      <q-breadcrumbs class="text-grey-6 q-mb-md" active-color="grey-6">
-        <q-breadcrumbs-el label="Pacientes" to="/pacientes" class="text-primary text-weight-medium" />
-        <q-breadcrumbs-el label="Historial del paciente" />
-      </q-breadcrumbs>
-
-      <!-- ═══ HERO PACIENTE ════════════════════════════════════════ -->
-      <q-card flat class="bg-primary text-white q-pa-lg q-mb-lg rounded-borders">
-        <div class="row items-center q-col-gutter-md">
-          <div class="col-auto">
-            <q-avatar size="64px" color="white" text-color="primary" class="text-weight-bold">
-              {{ initials(paciente.nombre_completo) }}
-            </q-avatar>
-          </div>
-          <div class="col" style="min-width:200px">
-            <div class="text-h5 text-weight-bold">{{ paciente.nombre_completo }}</div>
-            <div class="q-mt-xs row items-center q-gutter-xs">
-              <q-chip dense color="white" text-color="primary" class="text-weight-bold q-ma-none">
-                {{ estadoLabel(paciente.estado_internacion) }}
-              </q-chip>
-              <q-chip v-if="paciente.estado" dense outline color="white" class="q-ma-none">
-                {{ paciente.estado }}
-              </q-chip>
-              <span class="text-caption text-teal-2">Historia clínica del paciente</span>
-            </div>
-          </div>
-          <div class="col-auto row q-gutter-sm">
-            <q-btn v-if="canEditar" outline rounded no-caps color="white" label="Editar" icon="edit" @click="pacEdit" />
-            <q-btn v-if="canEliminar" outline rounded no-caps color="white" label="Eliminar" icon="delete" @click="pacDelete" />
-            <q-btn v-if="canCrearInt" rounded unelevated no-caps color="white" text-color="primary"
-                   label="Nueva internación" icon="add" @click="intNew" />
-          </div>
-        </div>
-
-        <div class="row q-col-gutter-sm q-mt-sm">
-          <div class="col-6 col-sm">
-            <q-card flat class="bg-teal-8 text-white q-pa-sm full-height">
-              <div class="text-caption text-teal-2 text-uppercase text-weight-bold">Sexo</div>
-              <div class="text-body2 text-weight-medium">{{ paciente.sexo === 'M' ? 'Masculino' : paciente.sexo === 'F' ? 'Femenino' : '—' }}</div>
-            </q-card>
-          </div>
-          <div class="col-6 col-sm">
-            <q-card flat class="bg-teal-8 text-white q-pa-sm full-height">
-              <div class="text-caption text-teal-2 text-uppercase text-weight-bold">CI</div>
-              <div class="text-body2 text-weight-medium">{{ paciente.ci || '—' }}</div>
-            </q-card>
-          </div>
-          <div class="col-6 col-sm">
-            <q-card flat class="bg-teal-8 text-white q-pa-sm full-height">
-              <div class="text-caption text-teal-2 text-uppercase text-weight-bold">Teléfono</div>
-              <div class="text-body2 text-weight-medium">{{ paciente.telefono || '—' }}</div>
-            </q-card>
-          </div>
-          <div class="col-6 col-sm">
-            <q-card flat class="bg-teal-8 text-white q-pa-sm full-height">
-              <div class="text-caption text-teal-2 text-uppercase text-weight-bold">Estado</div>
-              <div class="text-body2 text-weight-medium">{{ paciente.estado || '—' }}</div>
-            </q-card>
-          </div>
-          <div class="col-12 col-sm">
-            <q-card flat class="bg-teal-8 text-white q-pa-sm full-height">
-              <div class="text-caption text-teal-2 text-uppercase text-weight-bold">Dirección</div>
-              <div class="text-body2 text-weight-medium">{{ paciente.direccion || '—' }}</div>
-            </q-card>
-          </div>
-        </div>
-      </q-card>
-
-      <!-- ═══ INTERNACIONES ═══════════════════════════════════════ -->
-      <div class="row items-center q-gutter-sm q-mb-md">
-        <span class="text-subtitle1 text-weight-bold">Historial de internaciones</span>
-        <q-badge rounded color="teal-1" text-color="primary" class="text-weight-bold">
-          {{ paciente.internaciones.length }}
-        </q-badge>
-      </div>
-
-      <q-card v-if="!paciente.internaciones.length" flat bordered class="column items-center q-pa-xl rounded-borders">
-        <q-icon name="event_busy" size="40px" color="grey-4" />
-        <div class="text-subtitle2 text-grey-6 q-mt-sm">Sin internaciones registradas</div>
-        <div class="text-caption text-grey-5">Cuando el paciente sea internado, aparecerá aquí su historial.</div>
-      </q-card>
-
-      <q-card v-for="(int, idx) in paciente.internaciones" :key="int.id"
-              flat bordered class="q-mb-md rounded-borders overflow-hidden">
-        <q-card-section class="bg-green-1 row items-center q-gutter-sm q-py-sm">
-          <q-avatar rounded size="30px" color="primary" text-color="white" class="text-weight-bold">
-            {{ idx + 1 }}
+      <!-- CABECERA COMPACTA -->
+      <q-card flat bordered class="q-pa-xs q-mb-xs rounded-borders">
+        <div class="row items-center q-gutter-x-xs no-wrap">
+          <q-btn flat dense round icon="arrow_back" size="sm" color="grey-7" to="/pacientes">
+            <q-tooltip>Volver a pacientes</q-tooltip>
+          </q-btn>
+          <q-avatar size="34px" color="primary" text-color="white" class="text-weight-bold">
+            {{ initials(paciente.nombre_completo) }}
           </q-avatar>
-          <span class="text-subtitle2 text-weight-bold text-primary">Internación</span>
-          <q-chip dense color="white" text-color="primary" class="text-weight-bold q-ma-none">
-            <q-icon name="hotel" size="13px" class="q-mr-xs" />
-            {{ int.dias_internado ?? '—' }} {{ int.dias_internado === 1 ? 'día' : 'días' }}
-          </q-chip>
-          <q-chip v-if="int.tipo_paciente" dense color="amber-1" text-color="orange-9" class="text-weight-bold q-ma-none">
-            {{ int.tipo_paciente }}
-          </q-chip>
-          <q-chip v-if="int.sala" dense color="white" text-color="grey-8" class="text-weight-bold q-ma-none">
-            <q-icon name="meeting_room" size="13px" class="q-mr-xs" />{{ int.sala }}
-          </q-chip>
-          <q-space />
-          <q-btn outline rounded dense no-caps color="grey-7" label="Imprimir" icon="print"
-                 :loading="printingId === int.id" @click="imprimir(int.id)" />
-          <q-btn v-if="canEditarInt" outline rounded dense no-caps color="grey-7" label="Editar" icon="edit" @click="intEdit(int)" />
-          <q-btn v-if="canEliminarInt" outline rounded dense no-caps color="negative" label="Eliminar" icon="delete" @click="intDelete(int.id)" />
-        </q-card-section>
-
-        <q-card-section class="q-py-sm">
-          <div class="row q-col-gutter-md">
-            <div class="col-6 col-sm-3">
-              <div class="text-caption text-grey-6 text-uppercase text-weight-bold">Fecha ingreso</div>
-              <div class="text-body2 text-weight-medium">{{ int.fecha_ingreso || '—' }}</div>
-            </div>
-            <div class="col-6 col-sm-3">
-              <div class="text-caption text-grey-6 text-uppercase text-weight-bold">Fecha alta</div>
-              <div class="text-body2 text-weight-medium">{{ int.fecha_alta || '—' }}</div>
-            </div>
-            <div class="col-6 col-sm-3">
-              <div class="text-caption text-grey-6 text-uppercase text-weight-bold">Código H.C.</div>
-              <div class="text-body2 text-weight-medium">{{ int.codigo_hc || '—' }}</div>
-            </div>
-            <div class="col-6 col-sm-3">
-              <div class="text-caption text-grey-6 text-uppercase text-weight-bold">Total cargos</div>
-              <div class="text-body2 text-weight-bold text-primary">{{ formatMoney(totalItems(int)) }} Bs</div>
+          <div class="col" style="min-width:160px">
+            <div class="text-subtitle2 text-weight-bold ellipsis">{{ paciente.nombre_completo }}</div>
+            <div class="text-caption text-grey-7 ellipsis">
+              <q-icon name="badge" size="13px" /> {{ paciente.ci || '—' }}
+              <span class="q-mx-xs">·</span>
+              <q-icon name="wc" size="13px" /> {{ sexoLabel }}
+              <span class="q-mx-xs">·</span>
+              <q-icon name="phone" size="13px" /> {{ paciente.telefono || '—' }}
+              <span class="q-mx-xs">·</span>
+              <q-icon name="verified_user" size="13px" /> {{ paciente.seguro?.nombre || 'PARTICULAR' }}
+              <span class="q-mx-xs">·</span>
+              <q-icon name="home" size="13px" /> {{ paciente.direccion || '—' }}
             </div>
           </div>
-        </q-card-section>
+          <q-chip dense square :color="estadoChip.bg" :text-color="estadoChip.text"
+                  class="q-ma-none text-weight-bold">
+            {{ estadoLabel(paciente.estado_internacion) }}
+          </q-chip>
+          <q-btn v-if="canEditar" dense outline no-caps size="sm" color="grey-7"
+                 icon="edit" label="Editar" @click="pacEdit" />
+          <q-btn v-if="canEliminar" dense outline no-caps size="sm" color="negative"
+                 icon="delete" label="Eliminar" @click="pacDelete" />
+          <q-btn v-if="canCrearInt" dense unelevated no-caps size="sm" color="primary"
+                 icon="add" label="Internación" @click="intNew" />
+        </div>
 
-        <!-- ═══ CARGOS ═══════════════════════════════════ -->
-        <q-card-section class="row items-center q-py-none">
-          <span class="text-subtitle2 text-weight-bold text-grey-8">Cargos de internación</span>
+        <!-- Montos -->
+        <div class="row items-center q-gutter-xs q-mt-xs">
+          <q-chip dense square color="blue-1" text-color="blue-9" icon="hotel" class="q-ma-none">
+            Cargos internación <b class="q-ml-xs">{{ formatMoney(totalCargos) }} Bs</b>
+          </q-chip>
+          <q-chip dense square color="green-1" text-color="green-9" icon="point_of_sale" class="q-ma-none">
+            Ventas cobradas <b class="q-ml-xs">{{ formatMoney(resumenVentas.total_ventas) }} Bs</b>
+          </q-chip>
+          <q-chip v-if="hayPendientes" square color="orange-8" text-color="white" icon="schedule"
+                  class="q-ma-none text-weight-bold chip-pendiente" clickable @click="verPendientes">
+            Pendiente de cobro <b class="q-ml-xs">{{ formatMoney(resumenVentas.total_pendientes) }} Bs</b>
+            <q-badge color="white" text-color="orange-9" class="q-ml-xs">
+              {{ resumenVentas.cantidad_pendientes || 0 }}
+            </q-badge>
+            <q-tooltip>Ver las ventas pendientes de este paciente</q-tooltip>
+          </q-chip>
+          <q-chip v-else dense square color="grey-3" text-color="grey-8" icon="check_circle" class="q-ma-none">
+            Sin pagos pendientes
+          </q-chip>
           <q-space />
-          <q-btn v-if="canCrearInt" rounded unelevated dense no-caps color="teal-1" text-color="primary"
-                 class="text-weight-bold" label="Agregar cargo" icon="add" @click="itemNew(int)" />
-        </q-card-section>
-        <q-card-section>
-          <q-markup-table dense flat bordered separator="horizontal">
-            <thead>
-              <tr class="bg-grey-1 text-grey-7">
-                <th class="text-left">Ítem</th>
-                <th class="text-right" style="width:80px">Cant.</th>
-                <th class="text-right" style="width:90px">Precio</th>
-                <th class="text-right" style="width:100px">Total</th>
-                <th class="text-left" style="width:130px">Registrado por</th>
-                <th class="text-left" style="width:80px">Hora</th>
-                <th style="width:70px"></th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-if="!int.items || !int.items.length">
-                <td colspan="7" class="text-center text-grey-5 q-pa-sm">Sin cargos registrados</td>
-              </tr>
-              <tr v-for="item in int.items" :key="item.id">
-                <td class="text-weight-medium">{{ item.nombre }}</td>
-                <td class="text-right">{{ formatCantidad(item.cantidad) }}</td>
-                <td class="text-right">{{ formatMoney(item.precio) }}</td>
-                <td class="text-right text-weight-bold">{{ formatMoney(item.total) }}</td>
-                <td class="text-grey-6">{{ item.user?.name || '—' }}</td>
-                <td>{{ formatHora(item.created_at) }}</td>
-                <td class="text-right">
-                  <q-btn v-if="canEditarInt" dense flat round icon="edit" size="sm" color="grey-7" @click="itemEdit(int, item)" />
-                  <q-btn v-if="canEliminarInt" dense flat round icon="delete" color="negative" size="sm" @click="itemDelete(int, item.id)" />
-                </td>
-              </tr>
-            </tbody>
-            <tfoot v-if="int.items && int.items.length">
-              <tr class="bg-grey-1">
-                <td colspan="3" class="text-right text-weight-bold">TOTAL</td>
-                <td class="text-right text-weight-bold text-primary">{{ formatMoney(totalItems(int)) }}</td>
-                <td colspan="3"></td>
-              </tr>
-            </tfoot>
-          </q-markup-table>
-        </q-card-section>
+          <q-chip dense square color="red-1" text-color="negative" icon="payments"
+                  class="q-ma-none text-weight-bold">
+            Total a cobrar <b class="q-ml-xs">{{ formatMoney(totalACobrar) }} Bs</b>
+            <q-tooltip>Cargos de internación + ventas pendientes de pago</q-tooltip>
+          </q-chip>
+        </div>
       </q-card>
+
+      <!-- TABS -->
+      <q-tabs v-model="tab" dense align="left" no-caps
+              active-color="primary" indicator-color="primary" class="text-grey-7">
+        <q-tab name="internaciones" icon="local_hospital"
+               :label="'Internaciones (' + paciente.internaciones.length + ')'" />
+        <q-tab name="ventas" icon="receipt_long"
+               :label="'Ventas (' + (resumenVentas.cantidad || 0) + ')'" />
+      </q-tabs>
+      <q-separator class="q-mb-xs" />
+
+      <q-tab-panels v-model="tab" animated class="bg-transparent">
+
+        <!-- INTERNACIONES -->
+        <q-tab-panel name="internaciones" class="q-pa-none">
+          <q-card v-if="!paciente.internaciones.length" flat bordered
+                  class="column items-center q-pa-md rounded-borders">
+            <q-icon name="event_busy" size="32px" color="grey-4" />
+            <div class="text-caption text-grey-6 q-mt-xs">Sin internaciones registradas</div>
+          </q-card>
+
+          <q-card v-for="(int, idx) in paciente.internaciones" :key="int.id"
+                  flat bordered class="q-mb-xs rounded-borders overflow-hidden">
+            <div class="row items-center q-gutter-xs bg-blue-grey-1 q-px-sm q-py-xs">
+              <q-avatar rounded size="20px" color="primary" text-color="white"
+                        class="text-caption text-weight-bold">{{ idx + 1 }}</q-avatar>
+              <q-chip v-if="int.dias_internado != null" dense square color="white" text-color="primary"
+                      icon="hotel" class="q-ma-none">
+                {{ int.dias_internado }} {{ int.dias_internado === 1 ? 'día' : 'días' }}
+              </q-chip>
+              <q-chip v-if="int.fecha_ingreso" dense square color="white" text-color="grey-8"
+                      icon="login" class="q-ma-none">
+                {{ int.fecha_ingreso }}
+                <q-tooltip>Fecha de ingreso</q-tooltip>
+              </q-chip>
+              <q-chip v-if="int.fecha_alta" dense square color="white" text-color="grey-8"
+                      icon="logout" class="q-ma-none">
+                {{ int.fecha_alta }}
+                <q-tooltip>Fecha de alta</q-tooltip>
+              </q-chip>
+              <q-chip v-else dense square color="orange-1" text-color="orange-9" icon="pending" class="q-ma-none">
+                Sin alta
+              </q-chip>
+              <q-chip v-if="int.tipo_paciente" dense square color="amber-1" text-color="orange-9" class="q-ma-none">
+                {{ int.tipo_paciente }}
+              </q-chip>
+              <q-chip v-if="int.sala" dense square color="white" text-color="grey-8"
+                      icon="meeting_room" class="q-ma-none">{{ int.sala }}</q-chip>
+              <q-chip v-if="int.codigo_hc" dense square color="white" text-color="grey-8"
+                      icon="qr_code_2" class="q-ma-none">{{ int.codigo_hc }}</q-chip>
+              <q-space />
+              <q-chip dense square color="primary" text-color="white" class="q-ma-none text-weight-bold">
+                {{ formatMoney(totalItems(int)) }} Bs
+              </q-chip>
+              <q-btn dense flat round size="sm" icon="print" color="grey-7"
+                     :loading="printingId === int.id" @click="imprimir(int.id)">
+                <q-tooltip>Imprimir proforma</q-tooltip>
+              </q-btn>
+              <q-btn v-if="canCrearInt" dense flat round size="sm" icon="add_circle" color="positive"
+                     @click="itemNew(int)">
+                <q-tooltip>Agregar cargo</q-tooltip>
+              </q-btn>
+              <q-btn v-if="canEditarInt" dense flat round size="sm" icon="edit" color="grey-7"
+                     @click="intEdit(int)">
+                <q-tooltip>Editar internación</q-tooltip>
+              </q-btn>
+              <q-btn v-if="canEliminarInt" dense flat round size="sm" icon="delete" color="negative"
+                     @click="intDelete(int.id)">
+                <q-tooltip>Eliminar internación</q-tooltip>
+              </q-btn>
+            </div>
+
+            <q-markup-table dense flat separator="horizontal" class="tabla-compacta">
+              <thead>
+                <tr class="bg-grey-1 text-grey-7 text-uppercase">
+                  <th class="text-left">Ítem</th>
+                  <th class="text-right" style="width:70px">Cant.</th>
+                  <th class="text-right" style="width:80px">Precio</th>
+                  <th class="text-right" style="width:90px">Total</th>
+                  <th class="text-left" style="width:120px">Registrado por</th>
+                  <th class="text-left" style="width:60px">Hora</th>
+                  <th style="width:60px"></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-if="!int.items || !int.items.length">
+                  <td colspan="7" class="text-center text-grey-5 q-pa-sm">Sin cargos registrados</td>
+                </tr>
+                <tr v-for="item in int.items" :key="item.id">
+                  <td class="text-weight-medium">{{ item.nombre }}</td>
+                  <td class="text-right">{{ formatCantidad(item.cantidad) }}</td>
+                  <td class="text-right">{{ formatMoney(item.precio) }}</td>
+                  <td class="text-right text-weight-bold">{{ formatMoney(item.total) }}</td>
+                  <td class="text-grey-6">{{ item.user?.name || '—' }}</td>
+                  <td>{{ formatHora(item.created_at) }}</td>
+                  <td class="text-right">
+                    <q-btn v-if="canEditarInt" dense flat round icon="edit" size="xs" color="grey-7" @click="itemEdit(int, item)" />
+                    <q-btn v-if="canEliminarInt" dense flat round icon="delete" size="xs" color="negative" @click="itemDelete(int, item.id)" />
+                  </td>
+                </tr>
+              </tbody>
+              <tfoot v-if="int.items && int.items.length">
+                <tr class="bg-grey-1">
+                  <td colspan="3" class="text-right text-weight-bold">TOTAL</td>
+                  <td class="text-right text-weight-bold text-primary">{{ formatMoney(totalItems(int)) }}</td>
+                  <td colspan="3"></td>
+                </tr>
+              </tfoot>
+            </q-markup-table>
+          </q-card>
+        </q-tab-panel>
+
+        <!-- VENTAS -->
+        <q-tab-panel name="ventas" class="q-pa-none">
+          <div class="row items-center q-gutter-xs q-mb-xs">
+            <span class="text-caption text-grey-7">Ventas registradas a este paciente</span>
+            <q-space />
+            <q-btn dense outline no-caps size="sm" color="grey-7" icon="refresh" label="Actualizar"
+                   :loading="loadingVentas" @click="fetchVentas" />
+            <q-btn v-if="canCrearVenta" dense unelevated no-caps size="sm" color="primary"
+                   icon="point_of_sale" label="Nueva venta" to="/ventas/crear" />
+          </div>
+
+          <div class="tabla-wrap">
+            <q-markup-table dense flat bordered separator="horizontal" class="full-width tabla-compacta">
+              <thead>
+                <tr class="bg-grey-1 text-grey-7 text-uppercase">
+                  <th style="width:28px"></th>
+                  <th class="text-left" style="width:60px">N.º</th>
+                  <th class="text-left" style="width:120px">Fecha</th>
+                  <th class="text-left">Doctor</th>
+                  <th class="text-left">Seguro</th>
+                  <th class="text-right" style="width:60px">Ítems</th>
+                  <th class="text-left" style="width:90px">Pago</th>
+                  <th class="text-center" style="width:90px">Estado</th>
+                  <th class="text-right" style="width:90px">Total</th>
+                  <th class="text-right" style="width:70px"></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-if="!ventas.length && !loadingVentas">
+                  <td colspan="10" class="text-center text-grey-5 q-pa-md">Sin ventas registradas</td>
+                </tr>
+                <template v-for="v in ventas" :key="v.id">
+                  <tr class="cursor-pointer" :class="v.estado === 'PENDIENTE' && !v.fecha_hora_cobro ? 'bg-orange-1' : ''"
+                      @click="toggleVenta(v.id)">
+                    <td class="text-center">
+                      <q-icon :name="expandidas.includes(v.id) ? 'expand_less' : 'expand_more'"
+                              size="16px" color="grey-7" />
+                    </td>
+                    <td class="text-weight-bold">#{{ v.id }}</td>
+                    <td>{{ formatFecha(v.fecha_hora) }}</td>
+                    <td>{{ v.doctor?.nombre || '—' }}</td>
+                    <td>{{ v.seguro?.nombre || 'PARTICULAR' }}</td>
+                    <td class="text-right">{{ v.detalles_count ?? (v.detalles?.length || 0) }}</td>
+                    <td>{{ v.tipo_pago || '—' }}</td>
+                    <td class="text-center">
+                      <q-badge :color="estadoVentaColor(v).bg" :text-color="estadoVentaColor(v).text">
+                        {{ estadoVentaLabel(v) }}
+                      </q-badge>
+                    </td>
+                    <td class="text-right text-weight-bold">{{ formatMoney(v.total) }}</td>
+                    <td class="text-right">
+                      <q-btn v-if="v.estado === 'PENDIENTE' && !v.fecha_hora_cobro && canCrearVenta" dense unelevated size="xs"
+                             color="positive" icon="payments" no-caps label="Cobrar"
+                             @click.stop="abrirCobrar(v)" />
+                      <q-btn v-else dense flat round size="xs" color="grey-7" icon="print"
+                             @click.stop="imprimirVentaFila(v)">
+                        <q-tooltip>Imprimir</q-tooltip>
+                      </q-btn>
+                    </td>
+                  </tr>
+                  <tr v-if="expandidas.includes(v.id)" class="bg-grey-1">
+                    <td colspan="10">
+                      <div v-for="d in v.detalles || []" :key="d.id" class="row items-center no-wrap">
+                        <div class="col ellipsis">
+                          {{ d.nombre }}
+                          <span v-if="d.lote" class="text-grey-6">· Lote {{ d.lote }}</span>
+                        </div>
+                        <div class="col-auto text-grey-7 q-mr-md">
+                          {{ formatCantidad(d.cantidad) }} × {{ formatMoney(d.precio) }}
+                        </div>
+                        <div class="col-auto text-weight-bold text-right" style="width:80px">
+                          {{ formatMoney(d.total) }} Bs
+                        </div>
+                      </div>
+                      <div v-if="!v.detalles?.length" class="text-grey-6">Sin ítems registrados</div>
+                      <div v-if="v.fecha_hora_cobro" class="text-caption text-positive q-mt-xs">
+                        Cobrado por {{ v.cobrado_por?.name || '—' }} el {{ formatFecha(v.fecha_hora_cobro) }}
+                      </div>
+                    </td>
+                  </tr>
+                </template>
+              </tbody>
+            </q-markup-table>
+            <q-inner-loading :showing="loadingVentas" color="primary" />
+          </div>
+
+          <div class="row items-center justify-between q-mt-xs q-px-xs">
+            <div class="text-caption text-grey-6">
+              Total: {{ totalVentas }} | Página {{ pageVentas }} de {{ pagesVentas }}
+            </div>
+            <q-pagination v-model="pageVentas" :max="pagesVentas" :max-pages="6"
+                          boundary-links direction-links size="sm" @update:model-value="fetchVentas" />
+          </div>
+        </q-tab-panel>
+      </q-tab-panels>
     </template>
 
     <!-- DIALOG EDITAR PACIENTE -->
@@ -210,6 +305,11 @@
                 </q-input>
               </div>
             </div>
+            <q-select v-model="pacForm.seguro_id" label="Seguro" dense outlined clearable class="q-mb-sm"
+                      :options="seguros" option-label="nombre" option-value="id"
+                      emit-value map-options>
+              <template v-slot:prepend><q-icon name="verified_user" /></template>
+            </q-select>
             <q-input v-model="pacForm.estado" label="Estado" dense outlined class="q-mb-sm" v-uppercase>
               <template v-slot:prepend><q-icon name="toggle_on" /></template>
             </q-input>
@@ -352,11 +452,41 @@
         </q-card-section>
       </q-card>
     </q-dialog>
+    <!-- DIALOG COBRAR VENTA PENDIENTE -->
+    <q-dialog v-model="dialogCobrar" persistent>
+      <q-card style="width:min(96vw,380px)">
+        <q-card-section class="bg-primary text-white q-py-sm">
+          <span class="text-subtitle2 text-weight-bold">Cobrar venta #{{ ventaCobrar?.id }}</span>
+        </q-card-section>
+        <q-card-section style="padding:14px 16px">
+          <q-form @submit.prevent="cobrarVenta">
+            <div class="text-subtitle1 q-mb-sm">
+              Total: <span class="text-primary text-weight-bold">{{ formatMoney(ventaCobrar?.total) }} Bs</span>
+            </div>
+            <q-input v-model.number="cobrarPago" label="Pago Bs *" dense outlined type="number" step="0.01" min="0"
+                     class="q-mb-xs" autofocus input-class="text-right" />
+            <div class="text-body2 q-mb-md">Cambio:
+              <span class="text-weight-bold" :class="cobrarCambio < 0 ? 'text-negative' : 'text-positive'">
+                {{ formatMoney(cobrarCambio) }} Bs
+              </span>
+            </div>
+            <div class="row justify-end q-gutter-sm">
+              <q-btn flat color="grey-7" label="Cancelar" no-caps @click="dialogCobrar = false" />
+              <q-btn color="primary" label="Cobrar e imprimir" icon-right="payments" type="submit"
+                     no-caps :loading="cobrando" />
+            </div>
+          </q-form>
+        </q-card-section>
+      </q-card>
+    </q-dialog>
+
   </q-page>
 </template>
 
 <script setup>
 import { ref, computed, watch, getCurrentInstance } from 'vue'
+import { formatBoliviaDateTime } from '../../../addons/dateTime'
+import { imprimirVenta } from '../../../addons/ventaPrint'
 
 const { proxy } = getCurrentInstance()
 
@@ -365,9 +495,14 @@ const canEliminar    = computed(() => proxy.$store.hasPermission('Eliminar Pacie
 const canCrearInt    = computed(() => proxy.$store.hasPermission('Crear Internaciones'))
 const canEditarInt   = computed(() => proxy.$store.hasPermission('Editar Internaciones'))
 const canEliminarInt = computed(() => proxy.$store.hasPermission('Eliminar Internaciones'))
+const canVerVentas   = computed(() => proxy.$store.hasPermission('Ver Ventas'))
+const canCrearVenta  = computed(() => proxy.$store.hasPermission('Crear Ventas'))
+
+const tab = ref('internaciones')
 
 const loading  = ref(false)
 const paciente = ref({ internaciones: [] })
+const seguros  = ref([])
 
 function initials (name) {
   return (name || '').split(' ').filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase()
@@ -376,6 +511,28 @@ function initials (name) {
 function estadoLabel (estado) {
   return { INTERNADO: 'Internado', ALTA: 'Alta', NO_INTERNADO: 'No internado' }[estado] || estado
 }
+
+const estadoChip = computed(() => ({
+  INTERNADO: { bg: 'orange-1', text: 'orange-9' },
+  ALTA: { bg: 'green-1', text: 'green-9' },
+  NO_INTERNADO: { bg: 'grey-3', text: 'grey-8' },
+}[paciente.value.estado_internacion] || { bg: 'grey-3', text: 'grey-8' }))
+
+const sexoLabel = computed(() => (
+  { M: 'Masculino', F: 'Femenino' }[paciente.value.sexo] || '—'
+))
+
+function estadoVentaLabel (venta) {
+  return venta?.estado === 'PENDIENTE' && venta?.fecha_hora_cobro ? 'COBRADO' : venta?.estado
+}
+
+function estadoVentaColor (venta) {
+  if (venta?.estado === 'ANULADO') return { bg: 'red-1', text: 'negative' }
+  if (venta?.estado === 'PENDIENTE' && !venta?.fecha_hora_cobro) return { bg: 'orange-1', text: 'orange-9' }
+  return { bg: 'green-1', text: 'positive' }
+}
+
+function formatFecha (v) { return formatBoliviaDateTime(v) }
 
 function formatMoney (v) {
   return Number(v || 0).toFixed(2)
@@ -393,6 +550,60 @@ function totalItems (int) {
   return (int.items || []).reduce((s, it) => s + Number(it.total || 0), 0)
 }
 
+const totalCargos = computed(() => (
+  (paciente.value.internaciones || []).reduce((s, int) => s + totalItems(int), 0)
+))
+
+// Lo que el paciente aun debe: cargos de internacion + ventas sin cobrar
+const totalACobrar = computed(() => (
+  totalCargos.value + Number(resumenVentas.value.total_pendientes || 0)
+))
+
+// Ventas del paciente
+const ventas        = ref([])
+const loadingVentas = ref(false)
+const resumenVentas = ref({ total_ventas: 0, total_pendientes: 0, total_anuladas: 0, cantidad: 0, cantidad_pendientes: 0 })
+const pageVentas    = ref(1)
+const perVentas     = 15
+const totalVentas   = ref(0)
+const expandidas    = ref([])
+
+const pagesVentas = computed(() => Math.max(1, Math.ceil(totalVentas.value / perVentas)))
+
+const hayPendientes = computed(() => Number(resumenVentas.value.total_pendientes || 0) > 0)
+
+function verPendientes () {
+  tab.value = 'ventas'
+}
+
+function toggleVenta (id) {
+  const i = expandidas.value.indexOf(id)
+  if (i === -1) expandidas.value.push(id)
+  else expandidas.value.splice(i, 1)
+}
+
+async function fetchVentas () {
+  if (!canVerVentas.value) return
+  loadingVentas.value = true
+  try {
+    const res = await proxy.$axios.get('ventas', {
+      params: {
+        paciente_id: proxy.$route.params.id,
+        page: pageVentas.value,
+        per_page: perVentas,
+      },
+    })
+    const data = res.data || {}
+    resumenVentas.value = data.resumen || resumenVentas.value
+    ventas.value = data.ventas?.data || []
+    totalVentas.value = data.ventas?.total || 0
+  } catch (err) {
+    proxy.$alert.error(err.response?.data?.message || 'Error al cargar las ventas del paciente')
+  } finally {
+    loadingVentas.value = false
+  }
+}
+
 function fetchPaciente () {
   loading.value = true
   proxy.$axios.get('pacientes/' + proxy.$route.params.id).then(res => {
@@ -402,9 +613,18 @@ function fetchPaciente () {
   }).finally(() => { loading.value = false })
 }
 
+async function fetchSeguros () {
+  try {
+    const res = await proxy.$axios.get('seguros')
+    seguros.value = Array.isArray(res.data) ? res.data : (res.data?.data || [])
+  } catch (err) {
+    proxy.$alert.error(err.response?.data?.message || 'Error al cargar los seguros')
+  }
+}
+
 let fetched = false
 watch(() => proxy.$store.isLogged, (val) => {
-  if (val && !fetched) { fetched = true; fetchPaciente() }
+  if (val && !fetched) { fetched = true; fetchPaciente(); fetchVentas(); fetchSeguros() }
 }, { immediate: true })
 
 // ── Editar paciente ────────────────────────────────────────────
@@ -570,6 +790,51 @@ async function itemSave () {
   }
 }
 
+// Cobrar una venta pendiente sin salir de la ficha del paciente
+const dialogCobrar = ref(false)
+const ventaCobrar  = ref(null)
+const cobrarPago   = ref(0)
+const cobrando     = ref(false)
+
+const cobrarCambio = computed(() => {
+  const pago = Number(cobrarPago.value) || 0
+  return Math.round((pago - Number(ventaCobrar.value?.total || 0)) * 100) / 100
+})
+
+function abrirCobrar (row) {
+  ventaCobrar.value = row
+  cobrarPago.value = Number(row.total)
+  dialogCobrar.value = true
+}
+
+async function cobrarVenta () {
+  if (Number(cobrarPago.value) < Number(ventaCobrar.value?.total || 0)) {
+    proxy.$alert.error('El pago no puede ser menor al total')
+    return
+  }
+  cobrando.value = true
+  try {
+    const res = await proxy.$axios.put('ventas/' + ventaCobrar.value.id + '/completar', { pago: cobrarPago.value })
+    proxy.$alert.success('Venta cobrada')
+    dialogCobrar.value = false
+    fetchVentas()
+    imprimirVenta(res.data)
+  } catch (err) {
+    proxy.$alert.error(err.response?.data?.message || 'Error al cobrar')
+  } finally {
+    cobrando.value = false
+  }
+}
+
+async function imprimirVentaFila (venta) {
+  try {
+    const res = await proxy.$axios.get('ventas/' + venta.id)
+    imprimirVenta(res.data)
+  } catch (err) {
+    proxy.$alert.error('Error al imprimir')
+  }
+}
+
 function itemDelete (intRow, id) {
   proxy.$alert.dialog('¿Desea eliminar el cargo?').onOk(() => {
     proxy.$axios.delete('internacion-items/' + id).then(() => {
@@ -582,3 +847,36 @@ function itemDelete (intRow, id) {
 }
 </script>
 
+<style scoped>
+/* Chips y tabs compactos en toda la ficha */
+.paciente-dense :deep(.q-chip) {
+  font-size: 11px;
+}
+
+.paciente-dense :deep(.q-tab) {
+  min-height: 34px;
+  padding: 0 12px;
+}
+
+.paciente-dense :deep(.q-tab__icon) {
+  font-size: 18px;
+}
+
+/* El chip de pendientes no se pierde entre los demas */
+.chip-pendiente {
+  font-size: 12px;
+}
+
+/* Tablas densas */
+.tabla-compacta :deep(th),
+.tabla-compacta :deep(td) {
+  font-size: 11px;
+  padding: 2px 6px;
+}
+
+/* El spinner se superpone: la tabla no cambia de tamano al cargar */
+.tabla-wrap {
+  position: relative;
+  min-height: 120px;
+}
+</style>

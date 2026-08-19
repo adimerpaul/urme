@@ -20,6 +20,10 @@ class DashboardController extends Controller
     {
         $user = $request->user();
 
+        if (! $user->can('Ver Dashboard')) {
+            abort(403, 'No tiene permiso para ver el panel general');
+        }
+
         $dias = (int) $request->input('dias', 30);
         $dias = max(7, min($dias, 365));
 
@@ -88,8 +92,8 @@ class DashboardController extends Controller
             $resumen['ventas_variacion'] = $totalMesAnterior > 0
                 ? round((($totalMes - $totalMesAnterior) / $totalMesAnterior) * 100, 1)
                 : null;
-            $resumen['ventas_pendientes'] = (float) Venta::where('estado', 'PENDIENTE')->sum('total');
-            $resumen['ventas_pendientes_cantidad'] = Venta::where('estado', 'PENDIENTE')->count();
+            $resumen['ventas_pendientes'] = (float) Venta::where('estado', 'PENDIENTE')->whereNull('fecha_hora_cobro')->sum('total');
+            $resumen['ventas_pendientes_cantidad'] = Venta::where('estado', 'PENDIENTE')->whereNull('fecha_hora_cobro')->count();
         }
 
         if ($verCompras) {

@@ -1,1 +1,0 @@
-import{Tt as e,ct as t,it as n,jt as r,t as i}from"./QBtn-CD3BGnq2.js";import{t as a}from"./QPage-BMes_3ta.js";var o={__name:`second`,setup(o){return(o,s)=>(e(),n(a,{class:`flex flex-center`},{default:r(()=>[t(i,{color:`secondary`,to:`/`,label:`Go to Index Page`,"no-caps":``})]),_:1}))}};export{o as default};

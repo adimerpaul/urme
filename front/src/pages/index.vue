@@ -145,6 +145,7 @@
 
 <script setup>
 import { computed, getCurrentInstance, ref } from 'vue'
+import { permissionForPath, hasPermission } from '../router/permissions'
 
 const { proxy } = getCurrentInstance()
 
@@ -170,44 +171,46 @@ const menuSections = [
     icon: 'admin_panel_settings',
     defaultOpened: true,
     links: [
-      { title: 'Inicio',    icon: 'dashboard', link: '/',         can: null },
-      { title: 'Usuarios',  icon: 'people',    link: '/usuarios', can: 'Ver Usuarios' },
+      { title: 'Inicio',    icon: 'dashboard', link: '/' },
+      { title: 'Usuarios',  icon: 'people',    link: '/usuarios' },
     ],
   },
   {
     title: 'Farmacia',
     icon: 'medication',
     links: [
-      { title: 'Productos', icon: 'inventory_2', link: '/farmacia', can: 'Ver Productos' },
-      { title: 'Productos por vencer', icon: 'hourglass_bottom', link: '/productos-por-vencer', can: 'Ver Productos por Vencer' },
-      { title: 'Productos vencidos', icon: 'warning', link: '/productos-vencidos', can: 'Ver Productos Vencidos' },
-      { title: 'Compras',   icon: 'shopping_cart', link: '/compras', can: 'Ver Compras' },
-      { title: 'Ventas',    icon: 'point_of_sale', link: '/ventas',  can: 'Ver Ventas' },
-      { title: 'Nueva venta', icon: 'add_shopping_cart', link: '/ventas/crear', can: 'Crear Ventas' },
+      { title: 'Productos', icon: 'inventory_2', link: '/farmacia' },
+      { title: 'Productos de farmacia', icon: 'medication', link: '/productos-farmacia' },
+      { title: 'Productos por vencer', icon: 'hourglass_bottom', link: '/productos-por-vencer' },
+      { title: 'Productos vencidos', icon: 'warning', link: '/productos-vencidos' },
+      { title: 'Compras',   icon: 'shopping_cart', link: '/compras' },
+      { title: 'Ventas',    icon: 'point_of_sale', link: '/ventas' },
+      { title: 'Nueva venta', icon: 'add_shopping_cart', link: '/ventas/crear' },
+      { title: 'Cierres de caja', icon: 'lock_clock', link: '/cierres-caja' },
     ],
   },
   {
     title: 'Seguros',
     icon: 'verified_user',
     links: [
-      { title: 'Seguros', icon: 'verified_user', link: '/seguros', can: 'Ver Seguros' },
+      { title: 'Seguros', icon: 'verified_user', link: '/seguros' },
     ],
   },
   {
     title: 'Pacientes',
     icon: 'badge',
     links: [
-      { title: 'Pacientes', icon: 'badge', link: '/pacientes', can: ['Ver Pacientes', 'Ver Internaciones'] },
-      { title: 'Doctores',  icon: 'medical_information', link: '/doctores', can: 'Ver Doctores' },
+      { title: 'Pacientes', icon: 'badge', link: '/pacientes' },
+      { title: 'Doctores',  icon: 'medical_information', link: '/doctores' },
     ],
   },
   {
     title: 'Laboratorio',
     icon: 'biotech',
     links: [
-      { title: 'Catálogo de pruebas', icon: 'science', link: '/laboratorio', can: 'Ver Productos' },
-      { title: 'Laboratorios creados', icon: 'assignment', link: '/solicitudes-laboratorio', can: 'Ver Solicitudes Laboratorio' },
-      { title: 'Crear laboratorio', icon: 'post_add', link: '/solicitudes-laboratorio/nueva', can: 'Crear Solicitudes Laboratorio' },
+      { title: 'Catálogo de pruebas', icon: 'science', link: '/laboratorio' },
+      { title: 'Laboratorios creados', icon: 'assignment', link: '/solicitudes-laboratorio' },
+      { title: 'Crear laboratorio', icon: 'post_add', link: '/solicitudes-laboratorio/nueva' },
     ],
   },
 ]
@@ -223,14 +226,10 @@ function toggleLeftDrawer () {
   leftDrawerOpen.value = !leftDrawerOpen.value
 }
 
-function hasPermission (perm) {
-  if (perm === null) return true
-  if (Array.isArray(perm)) return perm.some(p => userPermissions.value.includes(p))
-  return userPermissions.value.includes(perm)
-}
-
 function visibleSectionLinks (section) {
-  return section.links.filter(link => hasPermission(link.can))
+  return section.links.filter(link =>
+    hasPermission(userPermissions.value, permissionForPath(link.link))
+  )
 }
 
 function linkIsActive (link) {

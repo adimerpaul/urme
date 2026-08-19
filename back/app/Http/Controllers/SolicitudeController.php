@@ -69,7 +69,7 @@ class SolicitudeController extends Controller
         }
 
         return response()->json(
-            $query->paginate(min((int) $request->input('per_page', 20), 50), ['id', 'nombre_completo', 'ci', 'sexo'])
+            $query->paginate(min((int) $request->input('per_page', 20), 50), ['id', 'nombre_completo', 'ci', 'sexo', 'fecha_nacimiento'])
         );
     }
 

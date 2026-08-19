@@ -21,15 +21,15 @@ class UserController extends Controller
             ->with('permissions:id,name')
             ->first();
 
-        if (!$user || !password_verify($request->password, $user->password)) {
+        if (! $user || ! password_verify($request->password, $user->password)) {
             return response()->json(['message' => 'Usuario o contraseña incorrectos'], 401);
         }
 
         $token = $user->createToken('auth_token')->plainTextToken;
 
         return response()->json([
-            'token'                => $token,
-            'user'                 => $user,
+            'token' => $token,
+            'user' => $user,
             'must_change_password' => password_verify('123456', $user->password),
         ]);
     }
@@ -37,6 +37,7 @@ class UserController extends Controller
     public function logout(Request $request)
     {
         $request->user()->currentAccessToken()->delete();
+
         return response()->json(['message' => 'Sesión cerrada']);
     }
 
@@ -45,24 +46,26 @@ class UserController extends Controller
         $user = User::where('id', $request->user()->id)
             ->with('permissions:id,name')
             ->first();
+
         return response()->json($user);
     }
 
     public function changePassword(Request $request)
     {
         $request->validate([
-            'password_actual'             => 'required|string',
-            'password_nuevo'              => 'required|string|min:6',
+            'password_actual' => 'required|string',
+            'password_nuevo' => 'required|string|min:6',
             'password_nuevo_confirmation' => 'required|same:password_nuevo',
         ]);
 
         $user = $request->user();
 
-        if (!password_verify($request->password_actual, $user->getAuthPassword())) {
+        if (! password_verify($request->password_actual, $user->getAuthPassword())) {
             return response()->json(['message' => 'La contraseña actual es incorrecta'], 422);
         }
 
         $user->update(['password' => bcrypt($request->password_nuevo)]);
+
         return response()->json(['message' => 'Contraseña actualizada correctamente']);
     }
 
@@ -80,20 +83,20 @@ class UserController extends Controller
         $this->requirePermission($request, 'Crear Usuarios');
 
         $request->validate([
-            'name'     => 'required|string|max:255',
+            'name' => 'required|string|max:255',
             'username' => 'required|string|unique:users,username',
             'password' => 'required|string|min:6',
-            'email'    => 'nullable|email|max:255',
-            'celular'  => 'nullable|string|max:50',
-            'ci'       => 'nullable|string|max:50',
+            'email' => 'nullable|email|max:255',
+            'celular' => 'nullable|string|max:50',
+            'ci' => 'nullable|string|max:50',
         ]);
 
         $user = User::create([
-            'name'     => mb_strtoupper($request->name),
+            'name' => mb_strtoupper($request->name),
             'username' => $request->username,
-            'email'    => $request->email,
-            'celular'  => $request->celular,
-            'ci'       => $request->ci,
+            'email' => $request->email,
+            'celular' => $request->celular,
+            'ci' => $request->ci,
             'password' => bcrypt($request->password),
         ]);
 
@@ -107,10 +110,10 @@ class UserController extends Controller
         $user = User::findOrFail($id);
 
         $request->validate([
-            'name'    => 'sometimes|required|string|max:255',
-            'email'   => 'nullable|email|max:255',
+            'name' => 'sometimes|required|string|max:255',
+            'email' => 'nullable|email|max:255',
             'celular' => 'nullable|string|max:50',
-            'ci'      => 'nullable|string|max:50',
+            'ci' => 'nullable|string|max:50',
         ]);
 
         $data = $request->only(['name', 'email', 'celular', 'ci']);
@@ -119,6 +122,7 @@ class UserController extends Controller
         }
 
         $user->update($data);
+
         return response()->json($user->load('permissions:id,name'));
     }
 
@@ -129,11 +133,14 @@ class UserController extends Controller
         $user = User::findOrFail($id);
 
         if ($user->avatar) {
-            $path = public_path('images/' . $user->avatar);
-            if (file_exists($path)) @unlink($path);
+            $path = public_path('images/'.$user->avatar);
+            if (file_exists($path)) {
+                @unlink($path);
+            }
         }
 
         $user->delete();
+
         return response()->json(['message' => 'Usuario eliminado']);
     }
 
@@ -142,6 +149,7 @@ class UserController extends Controller
         $this->requirePermission($request, 'Editar Usuarios');
 
         User::findOrFail($id)->update(['password' => bcrypt('123456')]);
+
         return response()->json(['message' => 'Contraseña restablecida a 123456']);
     }
 
@@ -156,12 +164,14 @@ class UserController extends Controller
         $user = User::findOrFail($id);
 
         if ($user->avatar) {
-            $old = public_path('images/' . $user->avatar);
-            if (file_exists($old)) @unlink($old);
+            $old = public_path('images/'.$user->avatar);
+            if (file_exists($old)) {
+                @unlink($old);
+            }
         }
 
         $file = $request->file('avatar');
-        $src  = $this->gdLoad($file);
+        $src = $this->gdLoad($file);
 
         $ow = imagesx($src);
         $oh = imagesy($src);
@@ -177,10 +187,12 @@ class UserController extends Controller
         imagedestroy($src);
 
         $dir = public_path('images');
-        if (!is_dir($dir)) mkdir($dir, 0755, true);
+        if (! is_dir($dir)) {
+            mkdir($dir, 0755, true);
+        }
 
-        $filename = 'avatar_' . $id . '_' . time() . '.webp';
-        imagewebp($dst, $dir . '/' . $filename, 85);
+        $filename = 'avatar_'.$id.'_'.time().'.webp';
+        imagewebp($dst, $dir.'/'.$filename, 85);
         imagedestroy($dst);
 
         $user->update(['avatar' => $filename]);
@@ -193,12 +205,12 @@ class UserController extends Controller
         $mime = $file->getMimeType();
         $path = $file->getPathname();
 
-        return match(true) {
+        return match (true) {
             str_contains($mime, 'jpeg') => imagecreatefromjpeg($path),
-            str_contains($mime, 'png')  => imagecreatefrompng($path),
+            str_contains($mime, 'png') => imagecreatefrompng($path),
             str_contains($mime, 'webp') => imagecreatefromwebp($path),
-            str_contains($mime, 'gif')  => imagecreatefromgif($path),
-            default                     => imagecreatefromstring(file_get_contents($path)),
+            str_contains($mime, 'gif') => imagecreatefromgif($path),
+            default => imagecreatefromstring(file_get_contents($path)),
         };
     }
 
@@ -208,7 +220,9 @@ class UserController extends Controller
     {
         $this->requirePermission($request, ['Crear Usuarios', 'Editar Usuarios', 'Gestionar Permisos']);
 
-        return response()->json(Permission::orderBy('name')->get());
+        return response()->json(
+            Permission::orderByRaw('COALESCE(modulo, "Otros")')->orderBy('name')->get()
+        );
     }
 
     public function userPermissions(Request $request, $id)
@@ -216,6 +230,7 @@ class UserController extends Controller
         $this->requirePermission($request, ['Editar Usuarios', 'Gestionar Permisos']);
 
         $user = User::findOrFail($id);
+
         return response()->json($user->permissions()->pluck('id'));
     }
 
@@ -223,9 +238,10 @@ class UserController extends Controller
     {
         $this->requirePermission($request, 'Gestionar Permisos');
 
-        $user  = User::findOrFail($id);
+        $user = User::findOrFail($id);
         $perms = Permission::whereIn('id', $request->permissions ?? [])->get();
         $user->syncPermissions($perms);
+
         return response()->json($user->permissions()->pluck('name'));
     }
 
@@ -237,7 +253,9 @@ class UserController extends Controller
         $perms = is_array($permission) ? $permission : [$permission];
 
         foreach ($perms as $p) {
-            if ($user->hasPermissionTo($p)) return;
+            if ($user->hasPermissionTo($p)) {
+                return;
+            }
         }
 
         abort(403, 'No tiene permiso para realizar esta acción');

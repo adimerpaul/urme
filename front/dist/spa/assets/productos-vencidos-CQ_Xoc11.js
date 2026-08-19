@@ -1,1 +1,0 @@
-import{Tt as e,it as t}from"./QBtn-CD3BGnq2.js";import{t as n}from"./ProductosVencimiento-wqkoyRdX.js";var r={__name:`index`,setup(r){return(r,i)=>(e(),t(n,{tipo:`vencidos`}))}};export{r as default};

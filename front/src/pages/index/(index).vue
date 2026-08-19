@@ -1,6 +1,20 @@
 <template>
   <q-page class="q-pa-sm dashboard">
 
+    <!-- Sin permiso de panel: solo la bienvenida y el acceso a ventas -->
+    <div v-if="!canDashboard" class="column items-center justify-center q-gutter-md"
+         style="min-height:78vh">
+      <img src="/logo.png" alt="Clínica URME" class="bienvenida__logo" />
+      <div class="text-h6 text-weight-bold text-center">Clínica URME</div>
+      <div class="text-body2 text-grey-6 text-center">
+        Bienvenido, {{ proxy.$store.user.name || proxy.$store.user.username }}
+      </div>
+      <q-btn unelevated no-caps rounded size="lg" color="primary" icon="point_of_sale"
+             label="Ir a ventas" to="/ventas" />
+    </div>
+
+    <template v-else>
+
     <!-- ── Encabezado ────────────────────────────────────────────── -->
     <div class="row items-end q-col-gutter-sm q-mb-sm">
       <div class="col">
@@ -31,6 +45,10 @@
         <q-btn flat dense round icon="refresh" color="grey-7" :loading="loading" @click="cargar">
           <q-tooltip>Actualizar</q-tooltip>
         </q-btn>
+      </div>
+      <div class="col-auto">
+        <q-btn unelevated no-caps rounded color="primary" icon="point_of_sale"
+               label="Ir a ventas" to="/ventas" />
       </div>
     </div>
 
@@ -278,11 +296,13 @@
       </div>
     </div>
 
+    </template>
+
   </q-page>
 </template>
 
 <script setup>
-import { computed, getCurrentInstance, onMounted, ref } from 'vue'
+import { computed, getCurrentInstance, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
 const { proxy } = getCurrentInstance()
@@ -318,6 +338,10 @@ const data = ref({
   stock_critico: [],
 })
 
+// Sin 'Ver Dashboard' la página sigue siendo accesible, pero solo muestra
+// la bienvenida con el acceso a ventas — no se consulta el endpoint.
+const canDashboard = computed(() => proxy.$store.hasPermission('Ver Dashboard'))
+
 const resumen = computed(() => data.value.resumen || {})
 const permisos = computed(() => data.value.permisos || {})
 const hayModulos = computed(() => Object.values(permisos.value).some(Boolean))
@@ -334,7 +358,12 @@ async function cargar () {
   }
 }
 
-onMounted(cargar)
+// Los permisos pueden llegar después del montaje (respuesta de /me),
+// por eso se espera a que estén resueltos antes de pedir los datos.
+let cargado = false
+watch(canDashboard, (puede) => {
+  if (puede && !cargado) { cargado = true; cargar() }
+}, { immediate: true })
 
 /* ── Formatos ─────────────────────────────────────────────────── */
 function money (v) {
@@ -733,6 +762,14 @@ const opcionesVencimientos = computed(() => ({
 <style scoped>
 .dashboard {
   background: #f9f9f7;
+}
+
+/* ── Bienvenida sin permiso de panel ───────────────────────── */
+.bienvenida__logo {
+  width: 100%;
+  max-width: 220px;
+  height: auto;
+  object-fit: contain;
 }
 
 /* ── Indicadores ───────────────────────────────────────────── */

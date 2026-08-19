@@ -82,67 +82,65 @@
           </q-btn>
         </div>
 
-        <q-markup-table dense flat bordered separator="cell" class="full-width">
-          <thead>
-            <tr class="bg-grey-2">
-              <th class="text-left" style="width:64px"></th>
-              <th class="text-left">Nombre</th>
-              <th class="text-left">Tipo</th>
-              <th class="text-right">Precio (Bs.)</th>
-              <th class="text-right">Stock</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-if="loadingProd">
-              <td colspan="5" class="text-center q-pa-md">
-                <q-spinner color="primary" size="24px" />
-              </td>
-            </tr>
-            <tr v-else-if="!productos.length">
-              <td colspan="5" class="text-center text-grey-5 q-pa-md">Sin datos</td>
-            </tr>
-            <tr v-else v-for="row in productos" :key="row.id">
-              <td class="q-pa-xs">
-                <q-btn-dropdown
-                  label="Opciones"
-                  no-caps
-                  size="10px"
-                  dense
-                  color="primary"
-                >
-                  <q-list>
-                    <q-item clickable v-close-popup @click="prodHistorial(row)">
-                      <q-item-section avatar><q-icon name="history" color="teal" /></q-item-section>
-                      <q-item-section><q-item-label>Historial de compras y ventas</q-item-label></q-item-section>
-                    </q-item>
-                    <q-separator />
-                    <q-item v-if="canEditar" clickable v-close-popup @click="prodEdit(row)">
-                      <q-item-section avatar><q-icon name="edit" /></q-item-section>
-                      <q-item-section><q-item-label>Editar</q-item-label></q-item-section>
-                    </q-item>
-                    <q-item v-if="canEliminar" clickable v-close-popup @click="prodDelete(row.id)">
-                      <q-item-section avatar><q-icon name="delete" color="negative" /></q-item-section>
-                      <q-item-section><q-item-label class="text-negative">Eliminar</q-item-label></q-item-section>
-                    </q-item>
-                  </q-list>
-                </q-btn-dropdown>
-              </td>
-              <td>{{ row.nombre }}</td>
-              <td>
-                <q-badge v-if="row.tipo_producto" :color="row.tipo_producto.color || 'primary'">
-                  {{ row.tipo_producto.nombre }}
-                </q-badge>
-                <span v-else>—</span>
-              </td>
-              <td class="text-right">{{ row.precio ? Number(row.precio).toFixed(2) : '—' }}</td>
-              <td class="text-right">
-                <span :class="Number(row.stock) > 0 ? 'text-green-8 text-weight-bold' : 'text-grey-6'">
-                  {{ row.stock ? Number(row.stock).toFixed(0) : '0' }}
-                </span>
-              </td>
-            </tr>
-          </tbody>
-        </q-markup-table>
+        <div class="tabla-wrap">
+          <q-markup-table dense flat bordered separator="cell" class="tabla-fija full-width">
+            <thead>
+              <tr class="bg-grey-2">
+                <th class="text-left" style="width:64px"></th>
+                <th class="text-left">Nombre</th>
+                <th class="text-left">Tipo</th>
+                <th class="text-right">Precio (Bs.)</th>
+                <th class="text-right">Stock</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-if="!productos.length && !loadingProd">
+                <td colspan="5" class="text-center text-grey-5 q-pa-md">Sin datos</td>
+              </tr>
+              <tr v-for="row in productos" :key="row.id">
+                <td class="q-pa-xs">
+                  <q-btn-dropdown
+                    label="Opciones"
+                    no-caps
+                    size="10px"
+                    dense
+                    color="primary"
+                  >
+                    <q-list>
+                      <q-item clickable v-close-popup @click="prodHistorial(row)">
+                        <q-item-section avatar><q-icon name="history" color="teal" /></q-item-section>
+                        <q-item-section><q-item-label>Historial de compras y ventas</q-item-label></q-item-section>
+                      </q-item>
+                      <q-separator />
+                      <q-item v-if="canEditar" clickable v-close-popup @click="prodEdit(row)">
+                        <q-item-section avatar><q-icon name="edit" /></q-item-section>
+                        <q-item-section><q-item-label>Editar</q-item-label></q-item-section>
+                      </q-item>
+                      <q-item v-if="canEliminar" clickable v-close-popup @click="prodDelete(row.id)">
+                        <q-item-section avatar><q-icon name="delete" color="negative" /></q-item-section>
+                        <q-item-section><q-item-label class="text-negative">Eliminar</q-item-label></q-item-section>
+                      </q-item>
+                    </q-list>
+                  </q-btn-dropdown>
+                </td>
+                <td>{{ row.nombre }}</td>
+                <td>
+                  <q-badge v-if="row.tipo_producto" :color="row.tipo_producto.color || 'primary'">
+                    {{ row.tipo_producto.nombre }}
+                  </q-badge>
+                  <span v-else>—</span>
+                </td>
+                <td class="text-right">{{ row.precio ? Number(row.precio).toFixed(2) : '—' }}</td>
+                <td class="text-right">
+                  <span :class="Number(row.stock) > 0 ? 'text-green-8 text-weight-bold' : 'text-grey-6'">
+                    {{ row.stock ? Number(row.stock).toFixed(0) : '0' }}
+                  </span>
+                </td>
+              </tr>
+            </tbody>
+          </q-markup-table>
+          <q-inner-loading :showing="loadingProd" color="primary" />
+        </div>
 
         <div class="row items-center justify-between q-mt-xs q-px-xs">
           <div class="text-caption text-grey-6">
@@ -175,50 +173,48 @@
           </q-btn>
         </div>
 
-        <q-markup-table dense flat bordered separator="cell" class="full-width">
-          <thead>
-            <tr class="bg-grey-2">
-              <th class="text-left" style="width:64px"></th>
-              <th class="text-left">Nombre</th>
-              <th class="text-left">País</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-if="loadingFab">
-              <td colspan="3" class="text-center q-pa-md">
-                <q-spinner color="deep-orange" size="24px" />
-              </td>
-            </tr>
-            <tr v-else-if="!fabricantes.length">
-              <td colspan="3" class="text-center text-grey-5 q-pa-md">Sin datos</td>
-            </tr>
-            <tr v-else v-for="row in fabricantes" :key="row.id">
-              <td class="q-pa-xs">
-                <q-btn-dropdown
-                  v-if="canEditar || canEliminar"
-                  label="Opciones"
-                  no-caps
-                  size="10px"
-                  dense
-                  color="primary"
-                >
-                  <q-list>
-                    <q-item v-if="canEditar" clickable v-close-popup @click="fabEdit(row)">
-                      <q-item-section avatar><q-icon name="edit" /></q-item-section>
-                      <q-item-section><q-item-label>Editar</q-item-label></q-item-section>
-                    </q-item>
-                    <q-item v-if="canEliminar" clickable v-close-popup @click="fabDelete(row.id)">
-                      <q-item-section avatar><q-icon name="delete" color="negative" /></q-item-section>
-                      <q-item-section><q-item-label class="text-negative">Eliminar</q-item-label></q-item-section>
-                    </q-item>
-                  </q-list>
-                </q-btn-dropdown>
-              </td>
-              <td>{{ row.nombre }}</td>
-              <td>{{ row.pais || '—' }}</td>
-            </tr>
-          </tbody>
-        </q-markup-table>
+        <div class="tabla-wrap">
+          <q-markup-table dense flat bordered separator="cell" class="tabla-fija full-width">
+            <thead>
+              <tr class="bg-grey-2">
+                <th class="text-left" style="width:64px"></th>
+                <th class="text-left">Nombre</th>
+                <th class="text-left">País</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-if="!fabricantes.length && !loadingFab">
+                <td colspan="3" class="text-center text-grey-5 q-pa-md">Sin datos</td>
+              </tr>
+              <tr v-for="row in fabricantes" :key="row.id">
+                <td class="q-pa-xs">
+                  <q-btn-dropdown
+                    v-if="canEditar || canEliminar"
+                    label="Opciones"
+                    no-caps
+                    size="10px"
+                    dense
+                    color="primary"
+                  >
+                    <q-list>
+                      <q-item v-if="canEditar" clickable v-close-popup @click="fabEdit(row)">
+                        <q-item-section avatar><q-icon name="edit" /></q-item-section>
+                        <q-item-section><q-item-label>Editar</q-item-label></q-item-section>
+                      </q-item>
+                      <q-item v-if="canEliminar" clickable v-close-popup @click="fabDelete(row.id)">
+                        <q-item-section avatar><q-icon name="delete" color="negative" /></q-item-section>
+                        <q-item-section><q-item-label class="text-negative">Eliminar</q-item-label></q-item-section>
+                      </q-item>
+                    </q-list>
+                  </q-btn-dropdown>
+                </td>
+                <td>{{ row.nombre }}</td>
+                <td>{{ row.pais || '—' }}</td>
+              </tr>
+            </tbody>
+          </q-markup-table>
+          <q-inner-loading :showing="loadingFab" color="deep-orange" />
+        </div>
 
         <div class="row items-center justify-between q-mt-xs q-px-xs">
           <div class="text-caption text-grey-6">
@@ -251,50 +247,48 @@
           </q-btn>
         </div>
 
-        <q-markup-table dense flat bordered separator="cell" class="full-width">
-          <thead>
-            <tr class="bg-grey-2">
-              <th class="text-left" style="width:64px"></th>
-              <th class="text-left">Nombre</th>
-              <th class="text-left">Abreviatura</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-if="loadingUnid">
-              <td colspan="3" class="text-center q-pa-md">
-                <q-spinner color="purple" size="24px" />
-              </td>
-            </tr>
-            <tr v-else-if="!unidades.length">
-              <td colspan="3" class="text-center text-grey-5 q-pa-md">Sin datos</td>
-            </tr>
-            <tr v-else v-for="row in unidades" :key="row.id">
-              <td class="q-pa-xs">
-                <q-btn-dropdown
-                  v-if="canEditar || canEliminar"
-                  label="Opciones"
-                  no-caps
-                  size="10px"
-                  dense
-                  color="primary"
-                >
-                  <q-list>
-                    <q-item v-if="canEditar" clickable v-close-popup @click="unidEdit(row)">
-                      <q-item-section avatar><q-icon name="edit" /></q-item-section>
-                      <q-item-section><q-item-label>Editar</q-item-label></q-item-section>
-                    </q-item>
-                    <q-item v-if="canEliminar" clickable v-close-popup @click="unidDelete(row.id)">
-                      <q-item-section avatar><q-icon name="delete" color="negative" /></q-item-section>
-                      <q-item-section><q-item-label class="text-negative">Eliminar</q-item-label></q-item-section>
-                    </q-item>
-                  </q-list>
-                </q-btn-dropdown>
-              </td>
-              <td>{{ row.nombre }}</td>
-              <td>{{ row.abreviatura || '—' }}</td>
-            </tr>
-          </tbody>
-        </q-markup-table>
+        <div class="tabla-wrap">
+          <q-markup-table dense flat bordered separator="cell" class="tabla-fija full-width">
+            <thead>
+              <tr class="bg-grey-2">
+                <th class="text-left" style="width:64px"></th>
+                <th class="text-left">Nombre</th>
+                <th class="text-left">Abreviatura</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-if="!unidades.length && !loadingUnid">
+                <td colspan="3" class="text-center text-grey-5 q-pa-md">Sin datos</td>
+              </tr>
+              <tr v-for="row in unidades" :key="row.id">
+                <td class="q-pa-xs">
+                  <q-btn-dropdown
+                    v-if="canEditar || canEliminar"
+                    label="Opciones"
+                    no-caps
+                    size="10px"
+                    dense
+                    color="primary"
+                  >
+                    <q-list>
+                      <q-item v-if="canEditar" clickable v-close-popup @click="unidEdit(row)">
+                        <q-item-section avatar><q-icon name="edit" /></q-item-section>
+                        <q-item-section><q-item-label>Editar</q-item-label></q-item-section>
+                      </q-item>
+                      <q-item v-if="canEliminar" clickable v-close-popup @click="unidDelete(row.id)">
+                        <q-item-section avatar><q-icon name="delete" color="negative" /></q-item-section>
+                        <q-item-section><q-item-label class="text-negative">Eliminar</q-item-label></q-item-section>
+                      </q-item>
+                    </q-list>
+                  </q-btn-dropdown>
+                </td>
+                <td>{{ row.nombre }}</td>
+                <td>{{ row.abreviatura || '—' }}</td>
+              </tr>
+            </tbody>
+          </q-markup-table>
+          <q-inner-loading :showing="loadingUnid" color="purple" />
+        </div>
 
         <div class="row items-center justify-between q-mt-xs q-px-xs">
           <div class="text-caption text-grey-6">
@@ -319,50 +313,48 @@
                  no-caps dense @click="tipoNew" />
         </div>
 
-        <q-markup-table dense flat bordered separator="cell" class="full-width">
-          <thead>
-            <tr class="bg-grey-2">
-              <th class="text-left" style="width:64px"></th>
-              <th class="text-left">Nombre</th>
-              <th class="text-left">Tipo</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-if="loadingTipo">
-              <td colspan="3" class="text-center q-pa-md">
-                <q-spinner color="indigo" size="24px" />
-              </td>
-            </tr>
-            <tr v-else-if="!tipos.length">
-              <td colspan="3" class="text-center text-grey-5 q-pa-md">Sin datos</td>
-            </tr>
-            <tr v-else v-for="row in tipos" :key="row.id">
-              <td class="q-pa-xs">
-                <q-btn-dropdown
-                  v-if="canEditar || canEliminar"
-                  label="Opciones"
-                  no-caps
-                  size="10px"
-                  dense
-                  color="primary"
-                >
-                  <q-list>
-                    <q-item v-if="canEditar" clickable v-close-popup @click="tipoEdit(row)">
-                      <q-item-section avatar><q-icon name="edit" /></q-item-section>
-                      <q-item-section><q-item-label>Editar</q-item-label></q-item-section>
-                    </q-item>
-                    <q-item v-if="canEliminar" clickable v-close-popup @click="tipoDelete(row.id)">
-                      <q-item-section avatar><q-icon name="delete" color="negative" /></q-item-section>
-                      <q-item-section><q-item-label class="text-negative">Eliminar</q-item-label></q-item-section>
-                    </q-item>
-                  </q-list>
-                </q-btn-dropdown>
-              </td>
-              <td>{{ row.nombre }}</td>
-              <td><q-badge :color="row.color || 'primary'">{{ row.nombre }}</q-badge></td>
-            </tr>
-          </tbody>
-        </q-markup-table>
+        <div class="tabla-wrap">
+          <q-markup-table dense flat bordered separator="cell" class="tabla-fija full-width">
+            <thead>
+              <tr class="bg-grey-2">
+                <th class="text-left" style="width:64px"></th>
+                <th class="text-left">Nombre</th>
+                <th class="text-left">Tipo</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-if="!tipos.length && !loadingTipo">
+                <td colspan="3" class="text-center text-grey-5 q-pa-md">Sin datos</td>
+              </tr>
+              <tr v-for="row in tipos" :key="row.id">
+                <td class="q-pa-xs">
+                  <q-btn-dropdown
+                    v-if="canEditar || canEliminar"
+                    label="Opciones"
+                    no-caps
+                    size="10px"
+                    dense
+                    color="primary"
+                  >
+                    <q-list>
+                      <q-item v-if="canEditar" clickable v-close-popup @click="tipoEdit(row)">
+                        <q-item-section avatar><q-icon name="edit" /></q-item-section>
+                        <q-item-section><q-item-label>Editar</q-item-label></q-item-section>
+                      </q-item>
+                      <q-item v-if="canEliminar" clickable v-close-popup @click="tipoDelete(row.id)">
+                        <q-item-section avatar><q-icon name="delete" color="negative" /></q-item-section>
+                        <q-item-section><q-item-label class="text-negative">Eliminar</q-item-label></q-item-section>
+                      </q-item>
+                    </q-list>
+                  </q-btn-dropdown>
+                </td>
+                <td>{{ row.nombre }}</td>
+                <td><q-badge :color="row.color || 'primary'">{{ row.nombre }}</q-badge></td>
+              </tr>
+            </tbody>
+          </q-markup-table>
+          <q-inner-loading :showing="loadingTipo" color="indigo" />
+        </div>
 
         <div class="row items-center justify-between q-mt-xs q-px-xs">
           <div class="text-caption text-grey-6">
@@ -497,59 +489,57 @@
           </q-tabs>
           <q-separator class="q-mb-sm" />
 
-          <q-markup-table dense flat bordered separator="cell">
-            <thead>
-              <tr class="bg-grey-2">
-                <th class="text-left">Fecha</th>
-                <th class="text-left">Documento</th>
-                <th class="text-left">{{ tabHistorial === 'compras' ? 'Proveedor' : 'Cliente' }}</th>
-                <th class="text-left">Lote</th>
-                <th class="text-left">Vencimiento</th>
-                <th class="text-right">{{ tabHistorial === 'compras' ? 'Comprada' : 'Cantidad' }}</th>
-                <th v-if="tabHistorial === 'compras'" class="text-right">Vendida</th>
-                <th v-if="tabHistorial === 'compras'" class="text-right">Saldo</th>
-                <th class="text-right">Precio (Bs.)</th>
-                <th class="text-right">Total (Bs.)</th>
-                <th class="text-center">Estado</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-if="loadingHistorial">
-                <td :colspan="tabHistorial === 'compras' ? 11 : 9" class="text-center q-pa-lg">
-                  <q-spinner color="teal" size="28px" />
-                </td>
-              </tr>
-              <tr v-else-if="!movimientosTabHistorial.length">
-                <td :colspan="tabHistorial === 'compras' ? 11 : 9" class="text-center text-grey-6 q-pa-lg">
-                  No hay {{ tabHistorial }} registradas para este producto.
-                </td>
-              </tr>
-              <tr v-else v-for="(mov, index) in movimientosTabHistorial" :key="mov.tipo + '-' + mov.id + '-' + index">
-                <td>{{ formatFechaHistorial(mov.fecha_hora) }}</td>
-                <td>{{ mov.documento }}</td>
-                <td>{{ mov.tercero }}</td>
-                <td>{{ mov.lote || 'SIN LOTE' }}</td>
-                <td>{{ mov.fecha_vencimiento || 'SIN FECHA' }}</td>
-                <td class="text-right">{{ Number(mov.cantidad).toFixed(2) }}</td>
-                <td v-if="tabHistorial === 'compras'" class="text-right text-teal-8 text-weight-bold">
-                  {{ Number(mov.cantidad_vendida || 0).toFixed(2) }}
-                </td>
-                <td v-if="tabHistorial === 'compras'" class="text-right">
-                  <q-badge :color="Number(mov.saldo) > 0 ? 'green-1' : 'red-1'"
-                           :text-color="Number(mov.saldo) > 0 ? 'green-9' : 'negative'">
-                    {{ Number(mov.saldo || 0).toFixed(2) }}
-                  </q-badge>
-                </td>
-                <td class="text-right">{{ Number(mov.precio).toFixed(2) }}</td>
-                <td class="text-right text-weight-bold">{{ Number(mov.total).toFixed(2) }}</td>
-                <td class="text-center">
-                  <q-badge :color="mov.estado === 'ANULADO' ? 'negative' : (mov.estado === 'PENDIENTE' ? 'warning' : 'positive')">
-                    {{ mov.estado }}
-                  </q-badge>
-                </td>
-              </tr>
-            </tbody>
-          </q-markup-table>
+          <div class="tabla-wrap">
+            <q-markup-table class="tabla-fija tabla-fija-sm" dense flat bordered separator="cell">
+              <thead>
+                <tr class="bg-grey-2">
+                  <th class="text-left">Fecha</th>
+                  <th class="text-left">Documento</th>
+                  <th class="text-left">{{ tabHistorial === 'compras' ? 'Proveedor' : 'Cliente' }}</th>
+                  <th class="text-left">Lote</th>
+                  <th class="text-left">Vencimiento</th>
+                  <th class="text-right">{{ tabHistorial === 'compras' ? 'Comprada' : 'Cantidad' }}</th>
+                  <th v-if="tabHistorial === 'compras'" class="text-right">Vendida</th>
+                  <th v-if="tabHistorial === 'compras'" class="text-right">Saldo</th>
+                  <th class="text-right">Precio (Bs.)</th>
+                  <th class="text-right">Total (Bs.)</th>
+                  <th class="text-center">Estado</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-if="!movimientosTabHistorial.length && !loadingHistorial">
+                  <td :colspan="tabHistorial === 'compras' ? 11 : 9" class="text-center text-grey-6 q-pa-lg">
+                    No hay {{ tabHistorial }} registradas para este producto.
+                  </td>
+                </tr>
+                <tr v-for="(mov, index) in movimientosTabHistorial" :key="mov.tipo + '-' + mov.id + '-' + index">
+                  <td>{{ formatFechaHistorial(mov.fecha_hora) }}</td>
+                  <td>{{ mov.documento }}</td>
+                  <td>{{ mov.tercero }}</td>
+                  <td>{{ mov.lote || 'SIN LOTE' }}</td>
+                  <td>{{ mov.fecha_vencimiento || 'SIN FECHA' }}</td>
+                  <td class="text-right">{{ Number(mov.cantidad).toFixed(2) }}</td>
+                  <td v-if="tabHistorial === 'compras'" class="text-right text-teal-8 text-weight-bold">
+                    {{ Number(mov.cantidad_vendida || 0).toFixed(2) }}
+                  </td>
+                  <td v-if="tabHistorial === 'compras'" class="text-right">
+                    <q-badge :color="Number(mov.saldo) > 0 ? 'green-1' : 'red-1'"
+                             :text-color="Number(mov.saldo) > 0 ? 'green-9' : 'negative'">
+                      {{ Number(mov.saldo || 0).toFixed(2) }}
+                    </q-badge>
+                  </td>
+                  <td class="text-right">{{ Number(mov.precio).toFixed(2) }}</td>
+                  <td class="text-right text-weight-bold">{{ Number(mov.total).toFixed(2) }}</td>
+                  <td class="text-center">
+                    <q-badge :color="mov.estado === 'ANULADO' ? 'negative' : (mov.estado === 'PENDIENTE' ? 'warning' : 'positive')">
+                      {{ mov.estado }}
+                    </q-badge>
+                  </td>
+                </tr>
+              </tbody>
+            </q-markup-table>
+            <q-inner-loading :showing="loadingHistorial" color="teal" />
+          </div>
         </q-card-section>
       </q-card>
     </q-dialog>
@@ -1165,3 +1155,33 @@ async function exportExcel (recurso) {
   }
 }
 </script>
+
+<style scoped>
+/* Contenedor de la tabla: el spinner se superpone en vez de reemplazar las filas */
+.tabla-wrap {
+  position: relative;
+}
+
+/* Altura fija: la tabla ya no crece ni se encoge al cargar/filtrar/paginar */
+.tabla-fija {
+  height: calc(100vh - 330px);
+  min-height: 260px;
+}
+
+.tabla-fija-sm {
+  height: 46vh;
+  min-height: 220px;
+}
+
+/* Cabecera fija al hacer scroll dentro de la tabla */
+.tabla-fija :deep(thead tr) {
+  background-color: #eeeeee;
+}
+
+.tabla-fija :deep(thead tr th) {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background-color: inherit;
+}
+</style>

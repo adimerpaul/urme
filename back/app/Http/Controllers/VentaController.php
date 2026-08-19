@@ -17,6 +17,8 @@ class VentaController extends Controller
 
         $fechaInicio = $request->input('fecha_inicio', '');
         $fechaFin = $request->input('fecha_fin', '');
+        $horaInicio = $request->input('hora_inicio', '');
+        $horaFin = $request->input('hora_fin', '');
         $pacienteId = $request->input('paciente_id', '');
         $userId = $request->input('user_id', '');
         $estado = $request->input('estado', '');
@@ -27,23 +29,32 @@ class VentaController extends Controller
             'doctor:id,nombre',
             'seguro:id,nombre',
             'user:id,name',
+            'cobradoPor:id,name',
             'detalles:id,venta_id,nombre,lote,precio,cantidad,total',
         ])
             ->withCount('detalles')
             ->orderByDesc('fecha_hora');
 
-        $this->applyFiltros($query, $fechaInicio, $fechaFin, $pacienteId, $userId, $estado);
+        $this->applyFiltros($query, $fechaInicio, $fechaFin, $pacienteId, $userId, $estado, $horaInicio, $horaFin);
 
         $resumenQuery = Venta::query();
-        $this->applyFiltros($resumenQuery, $fechaInicio, $fechaFin, $pacienteId, $userId, '');
+        $this->applyFiltros($resumenQuery, $fechaInicio, $fechaFin, $pacienteId, $userId, '', $horaInicio, $horaFin);
+
+        // Los montos acumulados de caja solo se envían a quien tiene el permiso.
+        $verMontos = $request->user()->can('Ver Montos Caja');
 
         return response()->json([
-            'resumen' => [
-                'total_ventas' => (clone $resumenQuery)->where('estado', 'ACTIVO')->sum('total'),
-                'total_pendientes' => (clone $resumenQuery)->where('estado', 'PENDIENTE')->sum('total'),
+            'ver_montos' => $verMontos,
+            'resumen' => $verMontos ? [
+                'total_ventas' => (clone $resumenQuery)->where(function ($query) {
+                    $query->where('estado', 'ACTIVO')
+                        ->orWhere(fn ($pendiente) => $pendiente->where('estado', 'PENDIENTE')->whereNotNull('fecha_hora_cobro'));
+                })->sum('total'),
+                'total_pendientes' => (clone $resumenQuery)->where('estado', 'PENDIENTE')->whereNull('fecha_hora_cobro')->sum('total'),
                 'total_anuladas' => (clone $resumenQuery)->where('estado', 'ANULADO')->sum('total'),
                 'cantidad' => (clone $resumenQuery)->count(),
-            ],
+                'cantidad_pendientes' => (clone $resumenQuery)->where('estado', 'PENDIENTE')->whereNull('fecha_hora_cobro')->count(),
+            ] : null,
             'ventas' => $query->paginate($perPage),
         ]);
     }
@@ -51,7 +62,7 @@ class VentaController extends Controller
     public function show(Request $request, $id)
     {
         $this->req($request, 'Ver Ventas');
-        $venta = Venta::with(['paciente:id,nombre_completo,ci', 'doctor:id,nombre', 'seguro:id,nombre', 'user:id,name', 'detalles.producto:id,nombre,codigo'])
+        $venta = Venta::with(['paciente:id,nombre_completo,ci', 'doctor:id,nombre', 'seguro:id,nombre', 'user:id,name', 'cobradoPor:id,name', 'detalles.producto:id,nombre,codigo'])
             ->findOrFail($id);
 
         return response()->json($venta);
@@ -61,12 +72,16 @@ class VentaController extends Controller
     {
         $this->req($request, 'Crear Ventas');
 
+        // Con la caja del día ya cerrada, este usuario no registra más ventas.
+        if (CierreCajaController::cierreDelDia($request->user()->id, now()->toDateString())) {
+            abort(422, 'Su caja de hoy ya fue cerrada: no puede registrar más ventas hasta mañana');
+        }
+
         $request->validate([
             'paciente_id' => 'nullable|exists:pacientes,id',
             'doctor_id' => 'nullable|exists:doctores,id',
             'seguro_id' => 'nullable|exists:seguros,id',
             'cliente' => 'nullable|string|max:255',
-            'fecha_hora' => 'required|date',
             'tipo_pago' => 'nullable|string|max:50',
             'comentario' => 'nullable|string|max:500',
             'pago' => 'nullable|numeric|min:0',
@@ -89,7 +104,8 @@ class VentaController extends Controller
                 'doctor_id' => $request->doctor_id ?: null,
                 'seguro_id' => $request->seguro_id ?: null,
                 'cliente' => $request->cliente ?: null,
-                'fecha_hora' => $request->fecha_hora,
+                // La fecha la pone el servidor (zona America/La_Paz): el front no la envía.
+                'fecha_hora' => now(),
                 'tipo_pago' => $request->tipo_pago ? mb_strtoupper($request->tipo_pago) : 'EFECTIVO',
                 'comentario' => $request->comentario ?: null,
                 'estado' => $estado,
@@ -179,27 +195,40 @@ class VentaController extends Controller
     {
         $this->req($request, 'Crear Ventas');
 
+        // Cobrar una pendiente también mueve dinero: se bloquea igual que una venta nueva.
+        if (CierreCajaController::cierreDelDia($request->user()->id, now()->toDateString())) {
+            abort(422, 'Su caja de hoy ya fue cerrada: no puede cobrar ventas hasta mañana');
+        }
+
         $request->validate(['pago' => 'nullable|numeric|min:0']);
 
-        $venta = Venta::findOrFail($id);
+        $venta = DB::transaction(function () use ($request, $id) {
+            $venta = Venta::lockForUpdate()->findOrFail($id);
 
-        if ($venta->estado !== 'PENDIENTE') {
-            abort(422, 'Solo se pueden cobrar ventas pendientes');
-        }
+            if ($venta->estado !== 'PENDIENTE') {
+                abort(422, 'Solo se pueden cobrar ventas pendientes');
+            }
+            if ($venta->fecha_hora_cobro) {
+                abort(422, 'Esta venta pendiente ya fue cobrada');
+            }
 
-        $pago = (float) ($request->pago ?: $venta->total);
-        if ($pago < (float) $venta->total) {
-            abort(422, 'El pago no puede ser menor al total de la venta');
-        }
+            $pago = (float) ($request->pago ?: $venta->total);
+            if ($pago < (float) $venta->total) {
+                abort(422, 'El pago no puede ser menor al total de la venta');
+            }
 
-        $venta->update([
-            'estado' => 'ACTIVO',
-            'pago' => $pago,
-            'cambio' => round($pago - (float) $venta->total, 2),
-        ]);
+            $venta->update([
+                'cobrado_por_id' => $request->user()->id,
+                'fecha_hora_cobro' => now(),
+                'pago' => $pago,
+                'cambio' => round($pago - (float) $venta->total, 2),
+            ]);
+
+            return $venta;
+        });
 
         return response()->json(
-            $venta->load(['paciente:id,nombre_completo,ci', 'doctor:id,nombre', 'seguro:id,nombre', 'user:id,name', 'detalles.producto:id,nombre,codigo'])
+            $venta->load(['paciente:id,nombre_completo,ci', 'doctor:id,nombre', 'seguro:id,nombre', 'user:id,name', 'cobradoPor:id,name', 'detalles.producto:id,nombre,codigo'])
         );
     }
 
@@ -219,13 +248,13 @@ class VentaController extends Controller
 
     // ── Helpers ───────────────────────────────────────────────────
 
-    private function applyFiltros($query, $fechaInicio, $fechaFin, $pacienteId, $userId, $estado): void
+    private function applyFiltros($query, $fechaInicio, $fechaFin, $pacienteId, $userId, $estado, $horaInicio = '', $horaFin = ''): void
     {
         if ($fechaInicio) {
-            $query->whereDate('fecha_hora', '>=', $fechaInicio);
+            $query->where('fecha_hora', '>=', $fechaInicio.' '.($horaInicio ?: '00:00').':00');
         }
         if ($fechaFin) {
-            $query->whereDate('fecha_hora', '<=', $fechaFin);
+            $query->where('fecha_hora', '<=', $fechaFin.' '.($horaFin ?: '23:59').':59');
         }
         if ($pacienteId) {
             $query->where('paciente_id', $pacienteId);

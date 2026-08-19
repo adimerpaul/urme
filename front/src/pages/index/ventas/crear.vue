@@ -22,6 +22,14 @@
       </div>
       <q-separator class="q-mb-sm" />
 
+      <q-banner v-if="cajaCerrada" dense rounded class="bg-orange-1 text-orange-10 q-mb-sm">
+        <template v-slot:avatar><q-icon name="lock" color="orange-9" /></template>
+        Su caja de hoy ya fue cerrada: no puede registrar más ventas hasta mañana.
+        <template v-slot:action>
+          <q-btn flat dense no-caps color="orange-10" label="Ir a ventas" to="/ventas" />
+        </template>
+      </q-banner>
+
       <div class="row q-col-gutter-md">
 
         <!-- Productos -->
@@ -42,56 +50,56 @@
             </q-input>
           </div>
 
-          <q-markup-table dense flat bordered separator="horizontal" class="full-width rounded-borders tabla-compacta">
-            <thead>
-              <tr class="bg-grey-1 text-grey-7 text-uppercase">
-                <th style="width:44px"></th>
-                <th class="text-left">Código</th>
-                <th class="text-left">Producto</th>
-                <th class="text-left">Tipo</th>
-                <th class="text-right">Cantidad</th>
-                <th class="text-right">Precio</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-if="loadingProductos">
-                <td colspan="6" class="text-center q-pa-md"><q-spinner color="primary" size="24px" /></td>
-              </tr>
-              <tr v-else-if="!productos.length">
-                <td colspan="6" class="text-center text-grey-5 q-pa-md">Sin productos</td>
-              </tr>
-              <tr v-else v-for="p in productos" :key="p.id">
-                <td class="text-center">
-                  <q-btn dense round unelevated size="sm" color="primary" icon="add"
-                         :disable="esProductoFarmacia(p) && cantidadDisponibleProducto(p) <= 0"
-                         @click="agregarProducto(p)">
-                    <q-tooltip>
-                      {{ !esProductoFarmacia(p) || cantidadDisponibleProducto(p) > 0 ? 'Agregar a la venta' : 'Sin lote disponible' }}
-                    </q-tooltip>
-                  </q-btn>
-                </td>
-                <td>{{ p.codigo || '—' }}</td>
-                <td>{{ p.nombre }}</td>
-                <td>
-                  <q-badge v-if="p.tipo_producto" rounded :style="{ background: p.tipo_producto.color || '#607d8b' }">
-                    {{ p.tipo_producto.nombre }}
-                  </q-badge>
-                  <span v-else>—</span>
-                </td>
-                <td class="text-right">
-                  <q-badge v-if="esProductoFarmacia(p)"
-                           :color="cantidadDisponibleProducto(p) > 0 ? 'green-1' : 'red-1'"
-                           :text-color="cantidadDisponibleProducto(p) > 0 ? 'green-9' : 'negative'">
-                    {{ cantidadDisponibleProducto(p).toFixed(2) }}
-                  </q-badge>
-                  <q-badge v-else color="blue-grey-1" text-color="blue-grey-8">
-                    LIBRE
-                  </q-badge>
-                </td>
-                <td class="text-right">{{ money(p.precio) }}</td>
-              </tr>
-            </tbody>
-          </q-markup-table>
+          <div class="tabla-wrap">
+            <q-markup-table dense flat bordered separator="horizontal" class="tabla-fija full-width rounded-borders tabla-compacta">
+              <thead>
+                <tr class="bg-grey-1 text-grey-7 text-uppercase">
+                  <th style="width:44px"></th>
+                  <th class="text-left">Código</th>
+                  <th class="text-left">Producto</th>
+                  <th class="text-left">Tipo</th>
+                  <th class="text-right">Cantidad</th>
+                  <th class="text-right">Precio</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-if="!productos.length && !loadingProductos">
+                  <td colspan="6" class="text-center text-grey-5 q-pa-md">Sin productos</td>
+                </tr>
+                <tr v-for="p in productos" :key="p.id">
+                  <td class="text-center">
+                    <q-btn dense round unelevated size="sm" color="primary" icon="add"
+                           :disable="esProductoFarmacia(p) && cantidadDisponibleProducto(p) <= 0"
+                           @click="agregarProducto(p)">
+                      <q-tooltip>
+                        {{ !esProductoFarmacia(p) || cantidadDisponibleProducto(p) > 0 ? 'Agregar a la venta' : 'Sin lote disponible' }}
+                      </q-tooltip>
+                    </q-btn>
+                  </td>
+                  <td>{{ p.codigo || '—' }}</td>
+                  <td>{{ p.nombre }}</td>
+                  <td>
+                    <q-badge v-if="p.tipo_producto" rounded :style="{ background: p.tipo_producto.color || '#607d8b' }">
+                      {{ p.tipo_producto.nombre }}
+                    </q-badge>
+                    <span v-else>—</span>
+                  </td>
+                  <td class="text-right">
+                    <q-badge v-if="esProductoFarmacia(p)"
+                             :color="cantidadDisponibleProducto(p) > 0 ? 'green-1' : 'red-1'"
+                             :text-color="cantidadDisponibleProducto(p) > 0 ? 'green-9' : 'negative'">
+                      {{ cantidadDisponibleProducto(p).toFixed(2) }}
+                    </q-badge>
+                    <q-badge v-else color="blue-grey-1" text-color="blue-grey-8">
+                      LIBRE
+                    </q-badge>
+                  </td>
+                  <td class="text-right">{{ money(p.precio) }}</td>
+                </tr>
+              </tbody>
+            </q-markup-table>
+            <q-inner-loading :showing="loadingProductos" color="primary" />
+          </div>
 
           <div class="row items-center justify-between q-mt-xs q-px-xs">
             <div class="text-caption text-grey-6">
@@ -139,10 +147,12 @@
                       </div>
                       <div v-else class="text-caption text-blue-grey-7">Sin control de lote</div>
                     </td>
-                    <td><q-input v-model.number="linea.cantidad" dense outlined type="number" step="1" min="0"
+                    <td class="celda-num"><q-input v-model.number="linea.cantidad" dense outlined type="number" step="1" min="0"
+                                 input-class="text-right"
                                  :max="linea.requiere_lote ? linea.cantidad_disponible : undefined"
                                  @update:model-value="recalcularLinea(linea)" /></td>
-                    <td><q-input v-model.number="linea.precio" dense outlined type="number" step="0.01" min="0"
+                    <td class="celda-num"><q-input v-model.number="linea.precio" dense outlined type="number" step="0.01" min="0"
+                                 input-class="text-right"
                                  @update:model-value="recalcularLinea(linea)" /></td>
                     <td class="text-right">{{ money(linea.total) }}</td>
                   </tr>
@@ -152,10 +162,11 @@
               <div class="row items-center justify-between q-gutter-sm">
                 <div class="text-h6">Total: <span class="text-primary text-weight-bold">{{ money(totalNueva) }} Bs</span></div>
                 <div class="q-gutter-sm">
-                  <q-btn rounded outline color="orange-8" label="Vender luego" icon-right="schedule" no-caps
-                         :loading="registrando" :disable="!nueva.detalles.length" @click="abrirDatosVenta('PENDIENTE')" />
                   <q-btn rounded unelevated color="primary" label="Registrar venta" icon-right="save" no-caps
-                         :loading="registrando" :disable="!nueva.detalles.length" @click="abrirDatosVenta('ACTIVO')" />
+                         :loading="registrando" :disable="!nueva.detalles.length || cajaCerrada"
+                         @click="abrirDatosVenta()">
+                    <q-tooltip v-if="cajaCerrada">Su caja de hoy ya fue cerrada</q-tooltip>
+                  </q-btn>
                 </div>
               </div>
             </div>
@@ -169,10 +180,10 @@
     <q-dialog v-model="dialogDatos" persistent>
       <q-card style="width:min(96vw,560px)">
         <q-card-section class="row items-center bg-primary text-white q-py-sm">
-          <q-icon :name="estadoRegistro === 'PENDIENTE' ? 'schedule' : 'point_of_sale'" size="20px" class="q-mr-sm" />
+          <q-icon :name="cobrarLuego ? 'schedule' : 'point_of_sale'" size="20px" class="q-mr-sm" />
           <div>
             <div class="text-subtitle2 text-weight-bold">
-              {{ estadoRegistro === 'PENDIENTE' ? 'Guardar venta pendiente' : 'Registrar venta' }}
+              {{ cobrarLuego ? 'Venta para cobrar luego' : 'Registrar venta' }}
             </div>
             <div class="text-caption">{{ nueva.detalles.length }} producto(s) · Total {{ money(totalNueva) }} Bs</div>
           </div>
@@ -191,6 +202,18 @@
                   <template v-slot:no-option>
                     <q-item><q-item-section class="text-grey">Sin resultados</q-item-section></q-item>
                   </template>
+                  <!-- Cada opción muestra CI y fecha de nacimiento del paciente -->
+                  <template v-slot:option="scope">
+                    <q-item v-bind="scope.itemProps" dense>
+                      <q-item-section>
+                        <q-item-label>{{ scope.opt.nombre_completo }}</q-item-label>
+                        <q-item-label caption>
+                          CI: {{ scope.opt.ci || '—' }} ·
+                          F. Nac: {{ fechaCorta(scope.opt.fecha_nacimiento) }} ({{ edadTexto(scope.opt.fecha_nacimiento) }})
+                        </q-item-label>
+                      </q-item-section>
+                    </q-item>
+                  </template>
                   <template v-slot:after>
                     <q-btn flat round dense icon="add" color="primary" @click="pacQuick = true">
                       <q-tooltip>Nuevo paciente</q-tooltip>
@@ -198,6 +221,64 @@
                   </template>
                 </q-select>
               </div>
+
+              <!-- Datos del paciente elegido -->
+              <template v-if="pacienteElegido">
+                <div class="col-4">
+                  <q-input :model-value="pacienteElegido.ci || '—'" label="CI" dense outlined readonly />
+                </div>
+                <div class="col-4">
+                  <q-input :model-value="fechaCorta(pacienteElegido.fecha_nacimiento)"
+                           label="Fecha de nacimiento" dense outlined readonly />
+                </div>
+                <div class="col-4">
+                  <q-input :model-value="edadTexto(pacienteElegido.fecha_nacimiento)"
+                           label="Edad" dense outlined readonly />
+                </div>
+
+                <!-- Internaciones sin alta del paciente -->
+                <div class="col-12">
+                  <div class="internaciones-box">
+                    <div class="row items-center no-wrap q-mb-xs">
+                      <q-icon name="local_hotel" size="16px" color="teal-8" class="q-mr-xs" />
+                      <span class="text-caption text-weight-bold text-grey-8">Internaciones sin alta</span>
+                      <q-spinner v-if="loadingInternaciones" color="primary" size="14px" class="q-ml-sm" />
+                      <q-space />
+                      <q-btn v-if="canCrearInternacion && !internacionesAbiertas.length && !loadingInternaciones"
+                             dense unelevated no-caps rounded size="sm" color="teal-8"
+                             icon="add" label="Crear internación" @click="abrirIntQuick" />
+                    </div>
+
+                    <div v-if="!loadingInternaciones && !internacionesAbiertas.length"
+                         class="text-caption text-grey-6">
+                      El paciente no tiene ninguna internación abierta.
+                    </div>
+
+                    <q-list v-else dense separator class="rounded-borders bg-white">
+                      <q-item v-for="int in internacionesAbiertas" :key="int.id" dense>
+                        <q-item-section avatar style="min-width:28px">
+                          <q-icon name="local_hotel" size="16px" color="teal-8" />
+                        </q-item-section>
+                        <q-item-section>
+                          <q-item-label class="text-caption text-weight-bold">
+                            Ingreso: {{ fechaCorta(int.fecha_ingreso) }}
+                            <span v-if="int.tipo_paciente"> · {{ int.tipo_paciente }}</span>
+                          </q-item-label>
+                          <q-item-label caption>
+                            Sala: {{ int.sala || '—' }} · H.C.: {{ int.codigo_hc || '—' }}
+                            <span v-if="int.dias_internado"> · {{ int.dias_internado }} día(s)</span>
+                          </q-item-label>
+                        </q-item-section>
+                        <q-item-section side>
+                          <q-badge rounded color="orange-1" text-color="orange-9" class="text-weight-bold">
+                            SIN ALTA
+                          </q-badge>
+                        </q-item-section>
+                      </q-item>
+                    </q-list>
+                  </div>
+                </div>
+              </template>
               <div class="col-12" v-if="!nueva.paciente_id">
                 <q-input v-model="nueva.cliente" label="Cliente (si no es paciente)" dense outlined v-uppercase />
               </div>
@@ -222,11 +303,7 @@
                           :options="allSeguros" option-value="id" option-label="nombre"
                           emit-value map-options hint="Vacío = PARTICULAR" />
               </div>
-              <div class="col-6">
-                <q-input v-model="nueva.fecha_hora" label="Fecha y hora *" dense outlined type="datetime-local"
-                         :rules="[v => !!v || 'Requerido']" />
-              </div>
-              <div class="col-6">
+              <div class="col-12">
                 <q-select v-model="nueva.tipo_pago" label="Tipo de pago" dense outlined
                           :options="['EFECTIVO', 'TRANSFERENCIA', 'TARJETA', 'QR']" />
               </div>
@@ -234,16 +311,26 @@
 
             <q-separator class="q-mb-sm" />
 
+            <!-- Cobrar luego: la venta queda PENDIENTE, sin registrar el pago -->
+            <q-checkbox v-model="cobrarLuego" dense color="orange-8" class="q-mb-xs">
+              <span class="text-weight-medium">Cobrar luego</span>
+            </q-checkbox>
+            <q-banner v-if="cobrarLuego" dense class="bg-orange-1 text-orange-9 q-mb-sm rounded-borders">
+              <template v-slot:avatar><q-icon name="schedule" color="orange-8" /></template>
+              La venta se guarda <b>pendiente de cobro</b> por {{ money(totalNueva) }} Bs.
+              Se cobra después desde la lista de ventas, con la opción <b>Cobrar venta</b>.
+            </q-banner>
+
             <div class="row q-col-gutter-sm items-center q-mb-sm">
-              <div class="col-4">
+              <div :class="cobrarLuego ? 'col-12' : 'col-4'">
                 <q-input :model-value="money(totalNueva)" label="Total Bs" dense outlined readonly
                          input-class="text-right text-weight-bold" />
               </div>
-              <div class="col-4">
+              <div class="col-4" v-if="!cobrarLuego">
                 <q-input v-model.number="nueva.pago" label="Pago Bs" dense outlined type="number" step="0.01" min="0"
                          input-class="text-right" />
               </div>
-              <div class="col-4">
+              <div class="col-4" v-if="!cobrarLuego">
                 <q-input :model-value="money(cambioNueva)" label="Cambio Bs" dense outlined readonly
                          :input-class="'text-right ' + (cambioNueva < 0 ? 'text-negative' : '')" />
               </div>
@@ -257,9 +344,9 @@
               <div class="q-gutter-sm">
                 <q-btn flat color="grey-7" label="Cancelar" no-caps @click="dialogDatos = false" />
                 <q-btn rounded unelevated
-                       :color="estadoRegistro === 'PENDIENTE' ? 'orange-8' : 'primary'"
-                       :label="estadoRegistro === 'PENDIENTE' ? 'Guardar pendiente' : 'Registrar venta'"
-                       :icon-right="estadoRegistro === 'PENDIENTE' ? 'schedule' : 'save'"
+                       :color="cobrarLuego ? 'orange-8' : 'primary'"
+                       :label="cobrarLuego ? 'Guardar para cobrar luego' : 'Registrar venta'"
+                       :icon-right="cobrarLuego ? 'schedule' : 'save'"
                        no-caps type="submit" :loading="registrando" />
               </div>
             </div>
@@ -323,13 +410,50 @@
                           :options="[{label:'Masculino',value:'M'},{label:'Femenino',value:'F'}]"
                           emit-value map-options />
               </div>
-              <div class="col-12">
+              <div class="col-6">
+                <q-input v-model="pacQ.fecha_nacimiento" label="Fecha de nacimiento" dense outlined
+                         type="date" clearable :max="hoyFecha" />
+              </div>
+              <div class="col-6">
                 <q-input v-model="pacQ.telefono" label="Teléfono" dense outlined />
               </div>
             </div>
             <div class="row justify-end q-gutter-sm">
               <q-btn flat color="grey-7" label="Cancelar" no-caps @click="pacQuick = false" />
               <q-btn color="primary" label="Crear" type="submit" no-caps :loading="savingQuick" />
+            </div>
+          </q-form>
+        </q-card-section>
+      </q-card>
+    </q-dialog>
+
+    <!-- DIALOG INTERNACIÓN RÁPIDA -->
+    <q-dialog v-model="intQuick" persistent>
+      <q-card style="width:min(96vw,440px)">
+        <q-card-section class="bg-teal-8 text-white q-py-sm">
+          <span class="text-subtitle2 text-weight-bold">Nueva internación</span>
+          <div class="text-caption">{{ pacienteElegido?.nombre_completo }}</div>
+        </q-card-section>
+        <q-card-section>
+          <q-form @submit.prevent="intQuickSave">
+            <div class="row q-col-gutter-sm q-mb-md">
+              <div class="col-6">
+                <q-input v-model="intQ.fecha_ingreso" label="Fecha de ingreso *" dense outlined type="date"
+                         :rules="[v => !!v || 'Requerido']" />
+              </div>
+              <div class="col-6">
+                <q-input v-model="intQ.tipo_paciente" label="Tipo de paciente" dense outlined v-uppercase />
+              </div>
+              <div class="col-6">
+                <q-input v-model="intQ.sala" label="Sala" dense outlined v-uppercase />
+              </div>
+              <div class="col-6">
+                <q-input v-model="intQ.codigo_hc" label="Código H.C." dense outlined v-uppercase />
+              </div>
+            </div>
+            <div class="row justify-end q-gutter-sm">
+              <q-btn flat color="grey-7" label="Cancelar" no-caps @click="intQuick = false" />
+              <q-btn color="teal-8" label="Crear internación" type="submit" no-caps :loading="savingQuick" />
             </div>
           </q-form>
         </q-card-section>
@@ -365,7 +489,6 @@
 import { ref, computed, watch, getCurrentInstance } from 'vue'
 import { useRouter } from 'vue-router'
 import { imprimirVenta } from '../../../addons/ventaPrint'
-import { nowBoliviaDateTimeInput } from '../../../addons/dateTime'
 
 const { proxy } = getCurrentInstance()
 const router = useRouter()
@@ -375,8 +498,50 @@ const canCrear = computed(() => proxy.$store.hasPermission('Crear Ventas'))
 
 function money (v) { return Number(v || 0).toFixed(2) }
 
+function fechaCorta (fecha) {
+  return fecha ? proxy.$filters.date(String(fecha).slice(0, 10)) : '—'
+}
+
+// Años cumplidos según la fecha de nacimiento del paciente.
+function edadTexto (fecha) {
+  if (!fecha) return '—'
+  const nac = new Date(String(fecha).slice(0, 10) + 'T00:00:00')
+  if (isNaN(nac)) return '—'
+  const hoy = new Date()
+  let edad = hoy.getFullYear() - nac.getFullYear()
+  const meses = hoy.getMonth() - nac.getMonth()
+  if (meses < 0 || (meses === 0 && hoy.getDate() < nac.getDate())) edad--
+  return edad >= 0 ? edad + ' años' : '—'
+}
+
 // ── Pacientes (select con filtro) ──────────────────────────────
 const opcionesPaciente = ref([])
+const pacienteElegido = computed(() =>
+  opcionesPaciente.value.find(p => p.id === nueva.value.paciente_id) || null
+)
+
+// ── Internaciones del paciente elegido ─────────────────────────
+const canCrearInternacion = computed(() => proxy.$store.hasPermission('Crear Internaciones'))
+const internaciones        = ref([])
+const loadingInternaciones = ref(false)
+const internacionesAbiertas = computed(() => internaciones.value.filter(i => !i.fecha_alta))
+
+async function cargarInternaciones (pacienteId) {
+  internaciones.value = []
+  if (!pacienteId) return
+  loadingInternaciones.value = true
+  try {
+    const res = await proxy.$axios.get('pacientes/' + pacienteId + '/internaciones', {
+      params: { abiertas: 1 },
+    })
+    internaciones.value = res.data || []
+  } catch (e) {
+    internaciones.value = []
+  } finally {
+    loadingInternaciones.value = false
+  }
+}
+
 async function filtrarPacientes (val, update) {
   try {
     const res = await proxy.$axios.get('pacientes', { params: { q: val, per_page: 20 } })
@@ -489,7 +654,6 @@ function nuevaVentaVacia () {
     doctor_id: null,
     seguro_id: null,
     cliente: '',
-    fecha_hora: nowBoliviaDateTimeInput(),
     tipo_pago: 'EFECTIVO',
     comentario: '',
     pago: null,
@@ -497,6 +661,9 @@ function nuevaVentaVacia () {
   }
 }
 const nueva = ref(nuevaVentaVacia())
+
+// Al cambiar de paciente se recargan sus internaciones sin alta.
+watch(() => nueva.value.paciente_id, (id) => cargarInternaciones(id))
 
 const totalNueva  = computed(() => nueva.value.detalles.reduce((acc, l) => acc + (Number(l.total) || 0), 0))
 const cambioNueva = computed(() => {
@@ -599,8 +766,9 @@ function recalcularLinea (linea) {
 }
 
 // ── Diálogo de datos de la venta ───────────────────────────────
-const dialogDatos    = ref(false)
-const estadoRegistro = ref('ACTIVO')
+const dialogDatos = ref(false)
+// Marcado: la venta se guarda PENDIENTE y se cobra después desde /ventas.
+const cobrarLuego = ref(false)
 
 function detallesValidos () {
   if (!nueva.value.detalles.length) {
@@ -629,20 +797,19 @@ function detallesValidos () {
   return true
 }
 
-function abrirDatosVenta (estado) {
+function abrirDatosVenta () {
   if (!detallesValidos()) return
-  estadoRegistro.value = estado
-  if (!nueva.value.fecha_hora) nueva.value.fecha_hora = nowBoliviaDateTimeInput()
+  cobrarLuego.value = false
   dialogDatos.value = true
 }
 
 function confirmarVenta () {
-  registrarVenta(estadoRegistro.value)
+  registrarVenta(cobrarLuego.value ? 'PENDIENTE' : 'ACTIVO')
 }
 
 async function registrarVenta (estado = 'ACTIVO') {
   if (!detallesValidos()) return
-  const pago = Number(nueva.value.pago) || totalNueva.value
+  const pago = estado === 'PENDIENTE' ? 0 : (Number(nueva.value.pago) || totalNueva.value)
   if (estado !== 'PENDIENTE' && pago < totalNueva.value) {
     proxy.$alert.error('El pago no puede ser menor al total')
     return
@@ -654,7 +821,6 @@ async function registrarVenta (estado = 'ACTIVO') {
       doctor_id: nueva.value.doctor_id,
       seguro_id: nueva.value.seguro_id,
       cliente: nueva.value.paciente_id ? null : nueva.value.cliente,
-      fecha_hora: nueva.value.fecha_hora.replace('T', ' '),
       tipo_pago: nueva.value.tipo_pago,
       comentario: nueva.value.comentario,
       pago,
@@ -669,8 +835,13 @@ async function registrarVenta (estado = 'ACTIVO') {
       })),
     }
     const res = await proxy.$axios.post('ventas', payload)
-    proxy.$alert.success(estado === 'PENDIENTE' ? 'Venta guardada como pendiente' : 'Venta registrada')
+    proxy.$alert.success(
+      estado === 'PENDIENTE'
+        ? 'Venta guardada — se cobra luego desde la lista de ventas'
+        : 'Venta registrada',
+    )
     dialogDatos.value = false
+    cobrarLuego.value = false
     nueva.value = nuevaVentaVacia()
     if (estado !== 'PENDIENTE') {
       imprimirVenta(res.data)
@@ -686,9 +857,35 @@ async function registrarVenta (estado = 'ACTIVO') {
 // ── Paciente / Doctor rápido ───────────────────────────────────
 const savingQuick = ref(false)
 const pacQuick = ref(false)
-const pacQ = ref({ nombre_completo: '', ci: '', sexo: null, telefono: '' })
+const hoyFecha = new Date().toISOString().slice(0, 10)
+const pacQ = ref({ nombre_completo: '', ci: '', sexo: null, fecha_nacimiento: null, telefono: '' })
 const docQuick = ref(false)
 const docQ = ref({ nombre: '', especialidad_ids: [] })
+
+const intQuick = ref(false)
+const intQ = ref({ fecha_ingreso: '', tipo_paciente: '', sala: '', codigo_hc: '' })
+
+function abrirIntQuick () {
+  intQ.value = { fecha_ingreso: hoyFecha, tipo_paciente: '', sala: '', codigo_hc: '' }
+  intQuick.value = true
+}
+
+async function intQuickSave () {
+  savingQuick.value = true
+  try {
+    await proxy.$axios.post('internaciones', {
+      paciente_id: nueva.value.paciente_id,
+      ...intQ.value,
+    })
+    intQuick.value = false
+    await cargarInternaciones(nueva.value.paciente_id)
+    proxy.$alert.success('Internación creada')
+  } catch (e) {
+    proxy.$alert.error(e.response?.data?.message || 'Error al crear la internación')
+  } finally {
+    savingQuick.value = false
+  }
+}
 
 async function pacQuickSave () {
   savingQuick.value = true
@@ -697,7 +894,7 @@ async function pacQuickSave () {
     opcionesPaciente.value = [res.data, ...opcionesPaciente.value]
     nueva.value.paciente_id = res.data.id
     pacQuick.value = false
-    pacQ.value = { nombre_completo: '', ci: '', sexo: null, telefono: '' }
+    pacQ.value = { nombre_completo: '', ci: '', sexo: null, fecha_nacimiento: null, telefono: '' }
     proxy.$alert.success('Paciente creado')
   } catch (e) {
     proxy.$alert.error(e.response?.data?.message || 'Error al crear paciente')
@@ -727,12 +924,27 @@ async function docQuickSave () {
   }
 }
 
+// ── Cierre de caja ─────────────────────────────────────────────
+// Con la caja del día cerrada el backend rechaza la venta; aquí se avisa antes.
+const cajaCerrada = ref(false)
+
+async function cargarEstadoCaja () {
+  if (!proxy.$store.hasPermission('Cerrar Caja')) return
+  try {
+    const { data } = await proxy.$axios.get('cierres-caja/estado')
+    cajaCerrada.value = !!data.cerrada
+  } catch {
+    cajaCerrada.value = false
+  }
+}
+
 // ── Init ───────────────────────────────────────────────────────
 function init () {
   loadProductos()
   loadTiposProducto()
   loadSeguros()
   loadEspecialidades()
+  cargarEstadoCaja()
 }
 
 watch(() => proxy.$store.isLogged, (val) => { if (val) init() }, { immediate: true })
@@ -770,5 +982,63 @@ watch(() => proxy.$store.isLogged, (val) => { if (val) init() }, { immediate: tr
 .tabla-compacta :deep(td) {
   font-size: 11px;
   padding: 3px 8px;
+}
+
+/* Celdas de Cant. y Precio: el input aprovecha todo el ancho de la columna. */
+.celda-num {
+  padding: 2px 4px !important;
+}
+
+.celda-num :deep(.q-field__control),
+.celda-num :deep(.q-field__native) {
+  padding: 0 6px;
+}
+
+.celda-num :deep(.q-field--dense .q-field__native) {
+  font-size: 12px;
+}
+
+/* Las flechitas del type="number" se comían el último dígito al escribir. */
+.celda-num :deep(input[type='number']) {
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+.celda-num :deep(input[type='number']::-webkit-outer-spin-button),
+.celda-num :deep(input[type='number']::-webkit-inner-spin-button) {
+  appearance: none;
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* Contenedor de la tabla: el spinner se superpone en vez de reemplazar las filas */
+.tabla-wrap {
+  position: relative;
+}
+
+/* Bloque de internaciones del paciente dentro del diálogo de la venta */
+.internaciones-box {
+  border: 1px solid #e0e6e4;
+  border-radius: 8px;
+  background: #f6f9f8;
+  padding: 6px 8px;
+}
+
+/* Altura fija: la tabla ya no crece ni se encoge al cargar/filtrar/paginar */
+.tabla-fija {
+  height: calc(100vh - 300px);
+  min-height: 260px;
+}
+
+/* Cabecera fija al hacer scroll dentro de la tabla */
+.tabla-fija :deep(thead tr) {
+  background-color: #fafafa;
+}
+
+.tabla-fija :deep(thead tr th) {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background-color: inherit;
 }
 </style>

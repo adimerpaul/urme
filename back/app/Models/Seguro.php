@@ -9,11 +9,16 @@ use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
 
 class Seguro extends Model implements AuditableContract
 {
-    use SoftDeletes, AuditableTrait;
+    use AuditableTrait, SoftDeletes;
 
     protected $table = 'seguros';
 
     protected $fillable = ['nombre', 'nit'];
 
     protected $hidden = ['created_at', 'updated_at', 'deleted_at'];
+
+    public function pacientes()
+    {
+        return $this->hasMany(Paciente::class);
+    }
 }

@@ -118,6 +118,18 @@
                 <div class="col-6">
                   <q-input v-model="pac.ci" label="CI" dense outlined v-uppercase />
                 </div>
+                <div class="col-6">
+                  <q-input v-model="pac.fecha_nacimiento" label="Fecha de nacimiento" dense outlined
+                           type="date" clearable :max="hoy" />
+                </div>
+                <div class="col-6">
+                  <q-input :model-value="edadTexto(pac.fecha_nacimiento)" label="Edad" dense outlined readonly />
+                </div>
+                <div class="col-12">
+                  <q-select v-model="pac.seguro_id" label="Seguro" dense outlined clearable
+                            :options="seguros" option-label="nombre" option-value="id"
+                            emit-value map-options />
+                </div>
               </div>
               <q-input v-model="pac.estado" label="Estado" dense outlined class="q-mb-sm" v-uppercase />
               <q-input v-model="pac.direccion" label="Dirección" dense outlined class="q-mb-sm" v-uppercase />
@@ -241,6 +253,7 @@ const canEliminar = computed(() => proxy.$store.hasPermission('Eliminar Paciente
 const canVerVentas = computed(() => proxy.$store.hasPermission('Ver Ventas'))
 
 const pacientes = ref([])
+const seguros   = ref([])
 const loading   = ref(false)
 const filter    = ref('')
 const estadoInternacion = ref(null)
@@ -258,9 +271,14 @@ const paginationVentas = ref({ page: 1, rowsPerPage: 10, rowsNumber: 0 })
 const columns = [
   { name: 'actions',            label: 'Acciones',          align: 'center' },
   { name: 'nombre_completo',    label: 'Nombre',            align: 'left', field: 'nombre_completo', sortable: true },
+  { name: 'seguro',             label: 'Seguro',            align: 'left', field: row => row.seguro?.nombre || 'PARTICULAR' },
   { name: 'tipo_paciente',      label: 'Tipo paciente',     align: 'left' },
   { name: 'estado_internacion', label: 'Estado internación', align: 'left' },
   { name: 'ci',                 label: 'CI',                align: 'left', field: 'ci' },
+  { name: 'fecha_nacimiento',   label: 'F. nacimiento',     align: 'left',
+    field: row => row.fecha_nacimiento ? proxy.$filters.date(row.fecha_nacimiento) : '—' },
+  { name: 'edad',               label: 'Edad',              align: 'right',
+    field: row => row.edad !== null && row.edad !== undefined ? row.edad + ' años' : '—' },
   { name: 'sexo',               label: 'Sexo',              align: 'left', field: 'sexo' },
   { name: 'telefono',           label: 'Teléfono',          align: 'left', field: 'telefono' },
   { name: 'fecha_alta',         label: 'Fecha alta',        align: 'left' },
@@ -332,6 +350,15 @@ function fetchPacientes () {
   }).finally(() => { loading.value = false })
 }
 
+async function fetchSeguros () {
+  try {
+    const res = await proxy.$axios.get('seguros')
+    seguros.value = Array.isArray(res.data) ? res.data : (res.data?.data || [])
+  } catch (err) {
+    proxy.$alert.error(err.response?.data?.message || 'Error al cargar los seguros')
+  }
+}
+
 function verVentas (row) {
   pacienteVentas.value = { ...row }
   ventasPaciente.value = []
@@ -368,7 +395,7 @@ function fetchVentasPaciente () {
 
 let fetched = false
 watch(() => proxy.$store.isLogged, (val) => {
-  if (val && !fetched) { fetched = true; fetchPacientes() }
+  if (val && !fetched) { fetched = true; fetchPacientes(); fetchSeguros() }
 }, { immediate: true })
 
 // ── CRUD Paciente (alta/edición rápida) ───────────────────────
@@ -377,7 +404,21 @@ const savingPac = ref(false)
 const actionPac = ref('Nuevo')
 const pac       = ref({})
 
-function pacNew ()     { pac.value = { nombre_completo: '', sexo: null, ci: '', estado: '', direccion: '', telefono: '' }; actionPac.value = 'Nuevo';  dialogPac.value = true }
+const hoy = new Date().toISOString().slice(0, 10)
+
+// Años cumplidos a partir de la fecha de nacimiento (el backend la envía como YYYY-MM-DD).
+function edadTexto (fecha) {
+  if (!fecha) return '—'
+  const nac = new Date(String(fecha).slice(0, 10) + 'T00:00:00')
+  if (isNaN(nac)) return '—'
+  const hoyFecha = new Date()
+  let edad = hoyFecha.getFullYear() - nac.getFullYear()
+  const meses = hoyFecha.getMonth() - nac.getMonth()
+  if (meses < 0 || (meses === 0 && hoyFecha.getDate() < nac.getDate())) edad--
+  return edad >= 0 ? edad + ' años' : '—'
+}
+
+function pacNew ()     { pac.value = { seguro_id: null, nombre_completo: '', sexo: null, fecha_nacimiento: null, ci: '', estado: '', direccion: '', telefono: '' }; actionPac.value = 'Nuevo';  dialogPac.value = true }
 function pacEdit (row) { pac.value = { ...row }; actionPac.value = 'Editar'; dialogPac.value = true }
 
 async function pacSave () {

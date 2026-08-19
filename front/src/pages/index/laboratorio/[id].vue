@@ -41,6 +41,8 @@
               <th class="text-left">Nombre</th>
               <th class="text-left">Variable</th>
               <th class="text-left">Unidad</th>
+              <th class="text-left">Método</th>
+              <th class="text-left">Muestra</th>
               <th class="text-left">Valores posibles</th>
               <th class="text-left">Rangos de referencia</th>
               <th class="text-left">Fórmula aplicada</th>
@@ -49,10 +51,10 @@
           </thead>
           <tbody>
             <tr v-if="adminLoading">
-              <td colspan="9" class="text-center q-pa-md"><q-spinner color="primary" size="24px" /></td>
+              <td colspan="11" class="text-center q-pa-md"><q-spinner color="primary" size="24px" /></td>
             </tr>
             <tr v-else-if="!datos.length">
-              <td colspan="9" class="text-center text-grey-5 q-pa-md">
+              <td colspan="11" class="text-center text-grey-5 q-pa-md">
                 Sin datos configurados. Use «Nuevo dato» para agregar el primero.
               </td>
             </tr>
@@ -95,6 +97,8 @@
               <td class="text-weight-medium">{{ dato.nombre }}</td>
               <td><q-badge outline color="primary">{{ dato.nombre_variable }}</q-badge></td>
               <td>{{ dato.unidad || '—' }}</td>
+              <td>{{ dato.metodo || '—' }}</td>
+              <td>{{ dato.muestra || '—' }}</td>
               <td class="lab-opciones">
                 <template v-if="dato.opciones?.length">
                   <q-badge v-for="opcion in dato.opciones" :key="opcion.id" class="q-mr-xs q-mb-xs"
@@ -206,6 +210,14 @@
               <q-input v-model="datoForm.unidad" dense outlined label="Unidad" hint="mg/dL, %, U/L..." />
             </div>
             <div class="col-4 col-sm-4"><q-toggle v-model="datoForm.visible" dense label="Visible" /></div>
+            <div class="col-12 col-sm-6">
+              <q-input v-model="datoForm.metodo" v-uppercase dense outlined label="Método"
+                       hint="Ej.: ELISA, CLIA, COLORIMÉTRICO" />
+            </div>
+            <div class="col-12 col-sm-6">
+              <q-input v-model="datoForm.muestra" v-uppercase dense outlined label="Muestra"
+                       hint="Ej.: SUERO, PLASMA, ORINA" />
+            </div>
             <div class="col-12">
               <q-input v-model="datoForm.rango_referencia" v-uppercase dense outlined type="textarea" rows="2"
                        label="Rangos de referencia" hint="Ej.: HOMBRES: 13–17 | MUJERES: 12–15" />
@@ -469,7 +481,7 @@ async function cargarConfiguracion () {
 
 function nuevoDato () {
   datoForm.value = {
-    nombre: '', nombre_variable: '', unidad: '', rango_referencia: '',
+    nombre: '', nombre_variable: '', unidad: '', metodo: '', muestra: '', rango_referencia: '',
     valor_defecto: null, opciones: [], visible: true,
   }
   opcionNueva.value = ''

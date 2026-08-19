@@ -10,6 +10,11 @@
         <div class="text-subtitle1 text-weight-bold">{{ editId ? 'Modificar laboratorio' : 'Crear laboratorio' }}</div>
       </div>
       <q-space />
+      <q-btn v-if="!editId" dense outline no-caps color="primary" icon="receipt_long"
+             label="Cargar venta pagada" class="q-mr-sm" @click="abrirVentasLaboratorio" />
+      <q-btn dense no-caps color="positive" icon="save" class="q-mr-sm"
+             :label="editId ? 'Guardar e imprimir' : 'Crear e imprimir'"
+             :loading="saving" :disable="!form.producto_ids.length" @click="guardar" />
       <div class="text-caption text-grey-7">
         {{ seleccionados.length }} prueba(s) · <b class="text-primary">Bs {{ money(total) }}</b>
       </div>
@@ -27,6 +32,11 @@
                       :loading="pacientesLoading"
                       @filter="filtrarPacientes" @virtual-scroll="cargarMasPacientes">
               <template #prepend><q-icon name="person" size="16px" /></template>
+              <template #after>
+                <q-btn flat round dense icon="person_add" color="primary" size="sm" @click="abrirPacienteNuevo">
+                  <q-tooltip>Crear paciente nuevo</q-tooltip>
+                </q-btn>
+              </template>
             </q-select>
           </div>
           <div class="col-12 col-md-3">
@@ -134,6 +144,8 @@
                 <div class="row q-col-gutter-xs q-mt-none">
                   <div v-for="dato in laboratorio.laboratorio_datos" :key="dato.id"
                        :class="compacto ? 'col-6 col-md-3' : 'col-12 col-md-6'">
+                    <div class="row items-center no-wrap q-gutter-xs">
+                      <div class="col">
                     <!-- Dato con lista cerrada de valores -->
                     <q-select v-if="!dato.formula && dato.opciones?.length"
                               :model-value="valores[dato.id] || ''"
@@ -155,6 +167,11 @@
                       <template #prepend><q-icon name="functions" size="14px" color="deep-purple" /></template>
                       <q-tooltip>Fórmula: {{ dato.formula.formula }}</q-tooltip>
                     </q-input>
+                      </div>
+                      <q-checkbox v-model="visibles[dato.id]" dense size="sm" label="Visible" color="primary">
+                        <q-tooltip>Mostrar este dato en la impresión</q-tooltip>
+                      </q-checkbox>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -177,6 +194,61 @@
                no-caps :loading="saving" :disable="!form.producto_ids.length" />
       </div>
     </q-form>
+
+    <!-- DIALOG VENTAS PAGADAS DE LABORATORIO -->
+    <q-dialog v-model="ventasDialog">
+      <q-card class="column no-wrap" style="width:min(96vw,1050px);max-width:1050px;height:min(82vh,720px)">
+        <q-card-section class="row items-center bg-primary text-white q-py-sm">
+          <q-icon name="payments" size="22px" class="q-mr-sm" />
+          <div>
+            <div class="text-subtitle1 text-weight-bold">Ventas pagadas de laboratorio</div>
+            <div class="text-caption">Seleccione una venta para cargar al paciente y sus análisis</div>
+          </div>
+          <q-space />
+          <q-btn icon="close" flat round dense color="white" @click="ventasDialog = false" />
+        </q-card-section>
+        <q-card-section class="col column no-wrap q-pa-sm">
+          <q-table ref="ventasTable" class="col" dense flat bordered row-key="id"
+                   :rows="ventasLaboratorio" :columns="ventasColumns" :loading="ventasLoading"
+                   v-model:pagination="ventasPagination" :rows-per-page-options="[10, 15, 25, 50]"
+                   @request="cargarVentasLaboratorio" no-data-label="No hay ventas pagadas de laboratorio">
+            <template #top-right>
+              <div class="row items-center q-gutter-sm">
+                <q-input v-model="ventasFecha" dense outlined type="date" label="Día de pago"
+                         @update:model-value="recargarVentas" />
+                <q-input v-model="ventasBuscar" dense outlined clearable debounce="300"
+                       placeholder="Paciente, CI, análisis o venta…" style="width:300px"
+                       @update:model-value="recargarVentas">
+                  <template #prepend><q-icon name="search" /></template>
+                </q-input>
+              </div>
+            </template>
+            <template #body-cell-pago="props">
+              <q-td :props="props">
+                <div>{{ formatoFechaHora(props.row.fecha_hora_cobro || props.row.fecha_hora) }}</div>
+                <div class="text-caption text-grey-6">
+                  {{ props.row.cobrado_por?.name || props.row.user?.name || '—' }}
+                </div>
+              </q-td>
+            </template>
+            <template #body-cell-laboratorios="props">
+              <q-td :props="props">
+                <q-chip v-for="detalle in props.row.detalles" :key="detalle.id" dense square
+                        color="green-1" text-color="green-9" class="q-ma-xs">
+                  {{ detalle.producto?.nombre || detalle.nombre }}
+                </q-chip>
+              </q-td>
+            </template>
+            <template #body-cell-accion="props">
+              <q-td :props="props">
+                <q-btn dense unelevated no-caps color="positive" icon="check_circle"
+                       label="Seleccionar" @click="aplicarVentaLaboratorio(props.row)" />
+              </q-td>
+            </template>
+          </q-table>
+        </q-card-section>
+      </q-card>
+    </q-dialog>
 
     <!-- DIALOG MENSAJES DE VALIDACIÓN -->
     <q-dialog v-model="alertasDialog">
@@ -204,6 +276,46 @@
           <q-btn v-if="confirmandoGuardado" dense padding="4px 14px" color="orange-9" no-caps
                  label="Guardar de todos modos" icon-right="save" @click="continuarGuardado" />
         </q-card-actions>
+      </q-card>
+    </q-dialog>
+
+    <!-- DIALOG NUEVO PACIENTE -->
+    <q-dialog v-model="pacienteDialog" persistent>
+      <q-card style="width:min(96vw,460px)">
+        <q-card-section class="row items-center bg-primary text-white q-py-sm">
+          <q-icon name="person_add" class="q-mr-sm" />
+          <span class="text-subtitle2 text-weight-bold">Nuevo paciente</span>
+          <q-space /><q-btn flat round dense icon="close" @click="pacienteDialog = false" />
+        </q-card-section>
+        <q-card-section>
+          <q-form @submit.prevent="guardarPaciente">
+            <q-input v-model="pacienteNuevo.nombre_completo" label="Nombre completo *" dense outlined
+                     class="q-mb-sm" :rules="[required]" v-uppercase autofocus />
+            <div class="row q-col-gutter-sm q-mb-sm">
+              <div class="col-6">
+                <q-input v-model="pacienteNuevo.ci" label="CI" dense outlined v-uppercase />
+              </div>
+              <div class="col-6">
+                <q-select v-model="pacienteNuevo.sexo" label="Sexo" dense outlined clearable
+                          :options="[{ label: 'Masculino', value: 'M' }, { label: 'Femenino', value: 'F' }]"
+                          emit-value map-options />
+              </div>
+              <div class="col-6">
+                <q-input v-model="pacienteNuevo.fecha_nacimiento" label="Fecha de nacimiento"
+                         dense outlined type="date" clearable :max="hoyFecha" />
+              </div>
+              <div class="col-6">
+                <q-input v-model="pacienteNuevo.telefono" label="Teléfono" dense outlined />
+              </div>
+            </div>
+            <q-input v-model="pacienteNuevo.direccion" label="Dirección" dense outlined class="q-mb-md" v-uppercase />
+            <div class="row justify-end q-gutter-sm">
+              <q-btn flat color="grey-7" label="Cancelar" no-caps @click="pacienteDialog = false" />
+              <q-btn color="primary" label="Crear y seleccionar" icon-right="person_add"
+                     type="submit" no-caps :loading="savingPaciente" />
+            </div>
+          </q-form>
+        </q-card-section>
       </q-card>
     </q-dialog>
 
@@ -247,6 +359,9 @@ const especialidades = ref([])
 const doctorDialog = ref(false)
 const savingDoctor = ref(false)
 const doctorNuevo = ref({ nombre: '', especialidad_ids: [] })
+const pacienteDialog = ref(false)
+const savingPaciente = ref(false)
+const pacienteNuevo = ref({})
 const laboratorios = ref([])
 const buscarLaboratorio = ref('')
 const compacto = ref(true)
@@ -254,8 +369,17 @@ const saving = ref(false)
 const alertasDialog = ref(false)
 const confirmandoGuardado = ref(false)
 const valores = ref({})
+const visibles = ref({})
+const ventasDialog = ref(false)
+const ventasTable = ref(null)
+const ventasLaboratorio = ref([])
+const ventasLoading = ref(false)
+const ventasBuscar = ref('')
+const ventasPagination = ref({ page: 1, rowsPerPage: 15, rowsNumber: 0 })
 const editId = ref(proxy.$route.query.id || null)
 const now = new Date()
+const hoyFecha = now.toISOString().slice(0, 10)
+const ventasFecha = ref(hoyFecha)
 const form = ref({
   paciente_id: null,
   doctor_id: null,
@@ -265,6 +389,16 @@ const form = ref({
   observaciones: '',
   producto_ids: [],
 })
+
+const ventasColumns = [
+  { name: 'id', label: 'Venta', align: 'left', field: row => `#${row.id}`, sortable: true },
+  { name: 'paciente', label: 'Paciente', align: 'left', field: row => row.paciente?.nombre_completo || '—', sortable: true },
+  { name: 'ci', label: 'CI', align: 'left', field: row => row.paciente?.ci || '—' },
+  { name: 'pago', label: 'Pago / cobrado por', align: 'left' },
+  { name: 'laboratorios', label: 'Análisis pagados', align: 'left' },
+  { name: 'total', label: 'Total Bs', align: 'right', field: row => (row.detalles || []).reduce((sum, item) => sum + Number(item.total || 0), 0).toFixed(2) },
+  { name: 'accion', label: '', align: 'right' },
+]
 
 const laboratoriosFiltrados = computed(() => {
   const search = buscarLaboratorio.value.toLowerCase().trim()
@@ -282,6 +416,78 @@ const alertas = computed(() => seleccionados.value.flatMap(laboratorio =>
     .map(validacion => evaluarValidacion(laboratorio, validacion))
     .filter(Boolean)
 ))
+
+function abrirVentasLaboratorio () {
+  ventasDialog.value = true
+  ventasFecha.value = hoyFecha
+  ventasPagination.value.page = 1
+  cargarVentasLaboratorio({ pagination: ventasPagination.value })
+}
+
+async function cargarVentasLaboratorio ({ pagination }) {
+  ventasLoading.value = true
+  try {
+    const { data } = await proxy.$axios.get('solicitudes-laboratorio/ventas-laboratorio', {
+      params: {
+        q: ventasBuscar.value || undefined,
+        fecha: ventasFecha.value || undefined,
+        page: pagination.page,
+        per_page: pagination.rowsPerPage,
+      },
+    })
+    ventasLaboratorio.value = data.data || []
+    ventasPagination.value = {
+      page: data.current_page,
+      rowsPerPage: data.per_page,
+      rowsNumber: data.total,
+    }
+  } catch (error) {
+    proxy.$alert.error(error.response?.data?.message || 'No se pudieron cargar las ventas de laboratorio')
+  } finally {
+    ventasLoading.value = false
+  }
+}
+
+function recargarVentas () {
+  ventasPagination.value.page = 1
+  ventasTable.value?.requestServerInteraction()
+}
+
+function formatoFechaHora (value) {
+  if (!value) return '—'
+  return new Date(value).toLocaleString('es-BO', { dateStyle: 'short', timeStyle: 'short' })
+}
+
+function aplicarVentaLaboratorio (venta) {
+  const idsDisponibles = new Set(laboratorios.value.map(item => item.id))
+  const productoIds = [...new Set((venta.detalles || [])
+    .map(detalle => detalle.producto_id)
+    .filter(id => idsDisponibles.has(id)))]
+
+  if (!productoIds.length) {
+    proxy.$alert.error('La venta no contiene análisis disponibles en el catálogo actual')
+    return
+  }
+
+  form.value.paciente_id = venta.paciente_id
+  form.value.doctor_id = venta.doctor_id || null
+  form.value.producto_ids = productoIds
+  valores.value = {}
+  visibles.value = {}
+  productoIds.forEach(precargarDefectos)
+  productoIds.forEach(precargarVisibilidad)
+
+  if (venta.paciente && !pacientesOpciones.value.some(item => item.id === venta.paciente.id)) {
+    pacientesOpciones.value.unshift(venta.paciente)
+  }
+  if (venta.doctor && !doctoresTodos.value.some(item => item.id === venta.doctor.id)) {
+    doctoresTodos.value.unshift(venta.doctor)
+    doctores.value = doctoresTodos.value
+  }
+
+  ventasDialog.value = false
+  proxy.$alert.success(`Venta #${venta.id} cargada: ${productoIds.length} análisis marcado(s)`)
+}
 
 async function cargarDatos () {
   try {
@@ -313,6 +519,7 @@ async function cargarSolicitud () {
     for (const resultado of item.resultados || []) {
       if (resultado.producto_laboratorio_dato_id) {
         valores.value[resultado.producto_laboratorio_dato_id] = resultado.valor || ''
+        visibles.value[resultado.producto_laboratorio_dato_id] = resultado.visible !== false
       }
     }
   }
@@ -348,6 +555,27 @@ async function cargarMasPacientes ({ to, ref }) {
 }
 function pacienteLabel (paciente) {
   return `${paciente.nombre_completo}${paciente.ci ? ` · CI ${paciente.ci}` : ''}`
+}
+function abrirPacienteNuevo () {
+  pacienteNuevo.value = {
+    nombre_completo: '', ci: '', sexo: null, fecha_nacimiento: null,
+    telefono: '', direccion: '',
+  }
+  pacienteDialog.value = true
+}
+async function guardarPaciente () {
+  savingPaciente.value = true
+  try {
+    const { data } = await proxy.$axios.post('pacientes', pacienteNuevo.value)
+    pacientesOpciones.value = [data, ...pacientesOpciones.value.filter(item => item.id !== data.id)]
+    form.value.paciente_id = data.id
+    pacienteDialog.value = false
+    proxy.$alert.success('Paciente creado y seleccionado')
+  } catch (error) {
+    proxy.$alert.error(error.response?.data?.message || firstValidationError(error) || 'No se pudo crear el paciente')
+  } finally {
+    savingPaciente.value = false
+  }
 }
 function filtrarDoctores (value, update) {
   const search = value.toLowerCase().trim()
@@ -388,6 +616,16 @@ function toggleLaboratorio (id) {
   else {
     form.value.producto_ids.push(id)
     precargarDefectos(id)
+    precargarVisibilidad(id)
+  }
+}
+
+/* Recupera la selección inicial desde el campo visible configurado para el
+   dato. Al editar prevalece el valor que ya fue guardado en la solicitud. */
+function precargarVisibilidad (productoId) {
+  const laboratorio = laboratorios.value.find(item => item.id === productoId)
+  for (const dato of laboratorio?.laboratorio_datos || []) {
+    if (visibles.value[dato.id] === undefined) visibles.value[dato.id] = dato.visible !== false
   }
 }
 
@@ -428,6 +666,7 @@ async function guardarConfirmado () {
       (laboratorio.laboratorio_datos || []).map(dato => ({
         producto_laboratorio_dato_id: dato.id,
         valor: dato.formula ? calcularDato(laboratorio, dato) : (valores.value[dato.id] || null),
+        visible: visibles.value[dato.id] !== false,
       }))
     )
     const payload = {
@@ -606,11 +845,12 @@ cargarDatos()
   line-height: 1.2;
 }
 
-/* Campos densos y comprimidos */
+/* Campos compactos sin reducir la zona reservada para el label flotante.
+   QField outlined+dense necesita 40 px para separar label y valor. */
 .lab-compacto :deep(.q-field--dense .q-field__control),
 .lab-compacto :deep(.q-field--dense .q-field__marginal) {
-  height: 28px;
-  min-height: 28px;
+  height: 40px;
+  min-height: 40px;
 }
 .lab-compacto :deep(.q-field--dense .q-field__native),
 .lab-compacto :deep(.q-field--dense .q-field__input),
@@ -620,10 +860,7 @@ cargarDatos()
 }
 .lab-compacto :deep(.q-field--dense .q-field__append),
 .lab-compacto :deep(.q-field--dense .q-field__prepend) {
-  height: 28px;
-}
-.lab-compacto :deep(.q-field--dense.q-field--float .q-field__label) {
-  transform: translateY(-38%) scale(0.75);
+  height: 40px;
 }
 .lab-compacto :deep(.q-field__bottom) {
   min-height: 0;

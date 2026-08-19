@@ -21,4 +21,9 @@ class Seguro extends Model implements AuditableContract
     {
         return $this->hasMany(Paciente::class);
     }
+
+    public function internaciones()
+    {
+        return $this->hasMany(Internacion::class);
+    }
 }

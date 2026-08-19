@@ -6,6 +6,11 @@ use App\Models\Doctor;
 use App\Models\Paciente;
 use App\Models\Producto;
 use App\Models\Solicitude;
+use App\Models\Venta;
+use BaconQrCode\Renderer\Image\SvgImageBackEnd;
+use BaconQrCode\Renderer\ImageRenderer;
+use BaconQrCode\Renderer\RendererStyle\RendererStyle;
+use BaconQrCode\Writer;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -73,6 +78,50 @@ class SolicitudeController extends Controller
         );
     }
 
+    public function ventasLaboratorio(Request $request)
+    {
+        $this->authorizeAny($request, ['Crear Solicitudes Laboratorio', 'Editar Solicitudes Laboratorio']);
+
+        $query = Venta::query()
+            ->whereNotNull('paciente_id')
+            ->where(function ($pagadas) {
+                $pagadas->where('estado', 'ACTIVO')
+                    ->orWhere(fn ($pendiente) => $pendiente
+                        ->where('estado', 'PENDIENTE')
+                        ->whereNotNull('fecha_hora_cobro'));
+            })
+            ->whereHas('detalles.producto.tipoProducto', fn ($tipo) => $tipo->where('es_laboratorio', true))
+            ->with([
+                'paciente:id,nombre_completo,ci,sexo,fecha_nacimiento',
+                'doctor:id,nombre',
+                'user:id,name',
+                'cobradoPor:id,name',
+                'detalles' => fn ($detalles) => $detalles
+                    ->whereHas('producto.tipoProducto', fn ($tipo) => $tipo->where('es_laboratorio', true))
+                    ->with('producto:id,codigo,nombre'),
+            ])
+            ->orderByDesc(DB::raw('COALESCE(fecha_hora_cobro, fecha_hora)'))
+            ->orderByDesc('id');
+
+        if ($search = trim((string) $request->input('q'))) {
+            $query->where(function ($filtro) use ($search) {
+                $filtro->where('id', $search)
+                    ->orWhereHas('paciente', fn ($paciente) => $paciente
+                        ->where('nombre_completo', 'like', "%{$search}%")
+                        ->orWhere('ci', 'like', "%{$search}%"))
+                    ->orWhereHas('detalles.producto', fn ($producto) => $producto
+                        ->where('nombre', 'like', "%{$search}%")
+                        ->orWhere('codigo', 'like', "%{$search}%"));
+            });
+        }
+        if ($fecha = $request->input('fecha')) {
+            $request->validate(['fecha' => ['date']]);
+            $query->whereDate(DB::raw('COALESCE(fecha_hora_cobro, fecha_hora)'), $fecha);
+        }
+
+        return response()->json($query->paginate(min((int) $request->input('per_page', 15), 50)));
+    }
+
     public function store(Request $request)
     {
         $this->authorizeAny($request, 'Crear Solicitudes Laboratorio');
@@ -125,9 +174,56 @@ class SolicitudeController extends Controller
         $this->authorizeAny($request, 'Ver Solicitudes Laboratorio');
         $solicitude->load(['paciente', 'doctor.especialidades:id,nombre', 'user', 'laboratorioItems.resultados']);
 
-        return Pdf::loadView('reportes.solicitud-laboratorio', compact('solicitude'))
+        $impresoPor = $request->user();
+        $urlVerificacion = rtrim(config('app.frontend_url'), '/').'/verificacion/'.$solicitude->codigo_verificacion;
+        $renderer = new ImageRenderer(new RendererStyle(160, 4), new SvgImageBackEnd);
+        $qrSvg = (new Writer($renderer))->writeString($urlVerificacion);
+        $qrDataUri = 'data:image/svg+xml;base64,'.base64_encode($qrSvg);
+
+        return Pdf::loadView('reportes.solicitud-laboratorio', compact(
+            'solicitude', 'impresoPor', 'urlVerificacion', 'qrDataUri'
+        ))
             ->setPaper('letter')
             ->stream('laboratorio_'.$solicitude->codigo_solicitud.'.pdf');
+    }
+
+    public function verificacion(string $codigo)
+    {
+        abort_unless(strlen($codigo) === 32, 404);
+
+        $solicitude = Solicitude::query()
+            ->where('codigo_verificacion', $codigo)
+            ->with(['paciente', 'doctor', 'laboratorioItems.resultados'])
+            ->firstOrFail();
+
+        return response()->json([
+            'codigo_solicitud' => $solicitude->codigo_solicitud,
+            'codigo_verificacion' => $solicitude->codigo_verificacion,
+            'fecha_solicitud' => $solicitude->fecha_solicitud->format('Y-m-d'),
+            'hora_solicitud' => substr($solicitude->hora_solicitud, 0, 5),
+            'estado' => $solicitude->estado,
+            'diagnostico_clinico' => $solicitude->diagnostico_clinico,
+            'observaciones' => $solicitude->observaciones,
+            'paciente' => [
+                'nombre_completo' => $solicitude->paciente->nombre_completo,
+                'ci' => $solicitude->paciente->ci,
+                'sexo' => $solicitude->paciente->sexo,
+            ],
+            'doctor' => $solicitude->doctor ? ['nombre' => $solicitude->doctor->nombre] : null,
+            'laboratorios' => $solicitude->laboratorioItems
+                ->filter(fn ($item) => $item->resultados->where('visible', true)->isNotEmpty())
+                ->map(fn ($item) => [
+                    'nombre' => $item->producto_nombre,
+                    'resultados' => $item->resultados->where('visible', true)->values()->map(fn ($resultado) => [
+                        'nombre' => $resultado->nombre,
+                        'valor' => $resultado->valor,
+                        'unidad' => $resultado->unidad,
+                        'rango_referencia' => $resultado->rango_referencia,
+                        'metodo' => $resultado->metodo,
+                        'muestra' => $resultado->muestra,
+                    ]),
+                ])->values(),
+        ]);
     }
 
     public function destroy(Request $request, Solicitude $solicitude)
@@ -153,6 +249,7 @@ class SolicitudeController extends Controller
             'resultados' => ['nullable', 'array'],
             'resultados.*.producto_laboratorio_dato_id' => ['required', 'integer'],
             'resultados.*.valor' => ['nullable', 'string', 'max:2000'],
+            'resultados.*.visible' => ['nullable', 'boolean'],
         ]);
         $productos = Producto::query()
             ->whereIn('id', $validated['producto_ids'])
@@ -181,16 +278,21 @@ class SolicitudeController extends Controller
                 'precio' => $producto->precio,
             ]);
             foreach ($producto->laboratorioDatos as $dato) {
+                $valorConfigurado = $valores->get($dato->id, []);
                 $item->resultados()->create([
                     'producto_laboratorio_dato_id' => $dato->id,
                     'nombre' => $dato->nombre,
                     'nombre_variable' => $dato->nombre_variable,
                     'unidad' => $dato->unidad,
+                    'metodo' => $dato->metodo,
+                    'muestra' => $dato->muestra,
                     'rango_referencia' => $dato->rango_referencia,
                     'formula' => $dato->formula?->formula,
-                    'valor' => $valores->get($dato->id)['valor'] ?? null,
+                    'valor' => $valorConfigurado['valor'] ?? null,
                     'orden' => $dato->orden,
-                    'visible' => $dato->visible,
+                    'visible' => array_key_exists('visible', $valorConfigurado)
+                        ? (bool) $valorConfigurado['visible']
+                        : $dato->visible,
                 ]);
             }
         }

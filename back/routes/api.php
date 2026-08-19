@@ -1,7 +1,7 @@
 <?php
 
-use App\Http\Controllers\CierreCajaController;
 use App\Http\Controllers\CajaMovimientoController;
+use App\Http\Controllers\CierreCajaController;
 use App\Http\Controllers\CompraController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DoctorController;
@@ -21,6 +21,7 @@ use Illuminate\Support\Facades\Route;
 
 // ── Rutas públicas ────────────────────────────────────────────
 Route::post('/login', [UserController::class, 'login']);
+Route::get('/verificacion-laboratorio/{codigo}', [SolicitudeController::class, 'verificacion']);
 
 // ── Rutas protegidas ──────────────────────────────────────────
 Route::middleware('auth:sanctum')->group(function () {
@@ -105,6 +106,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // Solicitudes de laboratorio
     Route::get('/solicitudes-laboratorio/form-data', [SolicitudeController::class, 'formData']);
     Route::get('/solicitudes-laboratorio/pacientes', [SolicitudeController::class, 'pacientes']);
+    Route::get('/solicitudes-laboratorio/ventas-laboratorio', [SolicitudeController::class, 'ventasLaboratorio']);
     Route::get('/solicitudes-laboratorio', [SolicitudeController::class, 'index']);
     Route::post('/solicitudes-laboratorio', [SolicitudeController::class, 'store']);
     Route::get('/solicitudes-laboratorio/{solicitude}/pdf', [SolicitudeController::class, 'pdf']);
@@ -118,6 +120,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Seguros
     Route::get('/seguros', [SeguroController::class, 'index']);
+    Route::get('/seguros/{id}/detalle', [SeguroController::class, 'detalle']);
     Route::post('/seguros', [SeguroController::class, 'store']);
     Route::put('/seguros/{id}', [SeguroController::class, 'update']);
     Route::delete('/seguros/{id}', [SeguroController::class, 'destroy']);
@@ -172,8 +175,8 @@ Route::middleware('auth:sanctum')->group(function () {
     // Ingresos y gastos de Caja Administrativa y Caja General
     Route::get('/caja-movimientos', [CajaMovimientoController::class, 'index']);
     Route::post('/caja-movimientos', [CajaMovimientoController::class, 'store']);
+    Route::put('/caja-movimientos/{cajaMovimiento}/anular', [CajaMovimientoController::class, 'anular']);
     Route::put('/caja-movimientos/{cajaMovimiento}', [CajaMovimientoController::class, 'update']);
-    Route::delete('/caja-movimientos/{cajaMovimiento}', [CajaMovimientoController::class, 'destroy']);
 
     // Doctores y especialidades
     Route::get('/especialidades', [DoctorController::class, 'especialidades']);

@@ -113,6 +113,9 @@
               <q-chip v-if="int.tipo_paciente" dense square color="amber-1" text-color="orange-9" class="q-ma-none">
                 {{ int.tipo_paciente }}
               </q-chip>
+              <q-chip dense square color="cyan-1" text-color="cyan-10" icon="verified_user" class="q-ma-none">
+                {{ int.seguro?.nombre || 'PARTICULAR' }}
+              </q-chip>
               <q-chip v-if="int.sala" dense square color="white" text-color="grey-8"
                       icon="meeting_room" class="q-ma-none">{{ int.sala }}</q-chip>
               <q-chip v-if="int.codigo_hc" dense square color="white" text-color="grey-8"
@@ -354,6 +357,14 @@
             <q-input v-model="int.tipo_paciente" label="Tipo de paciente" dense outlined class="q-mb-sm" v-uppercase>
               <template v-slot:prepend><q-icon name="category" /></template>
             </q-input>
+            <q-select v-model="int.seguro_id" label="Seguro de la internación" dense outlined clearable
+                      class="q-mb-sm" :options="seguros" option-value="id" option-label="nombre"
+                      emit-value map-options>
+              <template v-slot:prepend><q-icon name="verified_user" /></template>
+              <template v-slot:no-option>
+                <q-item><q-item-section class="text-grey">No hay seguros registrados</q-item-section></q-item>
+              </template>
+            </q-select>
             <div class="row q-col-gutter-sm q-mb-md">
               <div class="col-6">
                 <q-input v-model="int.codigo_hc" label="Código H.C." dense outlined v-uppercase>
@@ -665,7 +676,7 @@ const savingInt = ref(false)
 const actionInt = ref('Nueva')
 const int       = ref({})
 
-function intNew ()     { int.value = { paciente_id: paciente.value.id, fecha_ingreso: '', tipo_paciente: '', fecha_alta: '', codigo_hc: '', sala: '' }; actionInt.value = 'Nueva';  dialogInt.value = true }
+function intNew ()     { int.value = { paciente_id: paciente.value.id, seguro_id: paciente.value.seguro_id || null, fecha_ingreso: '', tipo_paciente: '', fecha_alta: '', codigo_hc: '', sala: '' }; actionInt.value = 'Nueva';  dialogInt.value = true }
 function intEdit (row) { int.value = { ...row }; actionInt.value = 'Editar'; dialogInt.value = true }
 
 async function intSave () {

@@ -209,6 +209,8 @@ class ProductoLaboratorioController extends Controller
                     ->ignore($dato?->id),
             ],
             'unidad' => 'nullable|string|max:100',
+            'metodo' => 'nullable|string|max:100',
+            'muestra' => 'nullable|string|max:100',
             'rango_referencia' => 'nullable|string|max:2000',
             'valor_defecto' => 'nullable|string|max:255',
             'opciones' => 'nullable|array|max:50',
@@ -218,6 +220,12 @@ class ProductoLaboratorioController extends Controller
         $data['nombre'] = mb_strtoupper(trim($data['nombre']));
         $data['nombre_variable'] = mb_strtolower(trim($data['nombre_variable']));
         $data['unidad'] = isset($data['unidad']) ? trim($data['unidad']) : null;
+        $data['metodo'] = isset($data['metodo']) && trim($data['metodo']) !== ''
+            ? mb_strtoupper(trim($data['metodo']))
+            : null;
+        $data['muestra'] = isset($data['muestra']) && trim($data['muestra']) !== ''
+            ? mb_strtoupper(trim($data['muestra']))
+            : null;
         $data['rango_referencia'] = isset($data['rango_referencia'])
             ? mb_strtoupper(trim($data['rango_referencia']))
             : null;

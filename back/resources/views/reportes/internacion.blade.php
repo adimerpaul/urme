@@ -57,6 +57,10 @@
             <td>{{ $internacion->fecha_alta ?: '—' }}</td>
         </tr>
         <tr>
+            <td class="label">Seguro</td>
+            <td colspan="3">{{ $internacion->seguro->nombre ?? 'PARTICULAR' }}</td>
+        </tr>
+        <tr>
             <td class="label">Total días</td>
             <td>{{ $internacion->dias_internado ?? '—' }}</td>
             <td class="label">Tipo de paciente</td>

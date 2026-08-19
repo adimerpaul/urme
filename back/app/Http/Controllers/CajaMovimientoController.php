@@ -16,7 +16,7 @@ class CajaMovimientoController extends Controller
         [$caja, $tipo] = $this->contexto($request);
         $this->autorizar($request, 'Ver', $caja);
 
-        $query = CajaMovimiento::with('user:id,name,username')
+        $query = CajaMovimiento::with(['user:id,name,username', 'anuladoPor:id,name,username'])
             ->where('caja', $caja)
             ->where('tipo', $tipo)
             ->orderByDesc('fecha_hora')
@@ -37,7 +37,7 @@ class CajaMovimientoController extends Controller
             $query->whereDate('fecha_hora', '<=', $hasta);
         }
 
-        $total = (clone $query)->sum('importe');
+        $total = (clone $query)->where('estado', 'ACTIVO')->sum('importe');
         $paginador = $query->paginate((int) $request->input('per_page', 15));
 
         return response()->json([
@@ -66,17 +66,28 @@ class CajaMovimientoController extends Controller
     public function update(Request $request, CajaMovimiento $cajaMovimiento)
     {
         $this->autorizar($request, 'Editar', $cajaMovimiento->caja);
+        abort_if($cajaMovimiento->estado === 'ANULADO', 422, 'Un movimiento anulado no puede modificarse');
         $cajaMovimiento->update($this->validar($request));
 
         return response()->json($cajaMovimiento->load('user:id,name,username'));
     }
 
-    public function destroy(Request $request, CajaMovimiento $cajaMovimiento)
+    public function anular(Request $request, CajaMovimiento $cajaMovimiento)
     {
-        $this->autorizar($request, 'Eliminar', $cajaMovimiento->caja);
-        $cajaMovimiento->delete();
+        $this->autorizar($request, 'Anular', $cajaMovimiento->caja);
+        abort_if($cajaMovimiento->estado === 'ANULADO', 422, 'El movimiento ya está anulado');
+        $datos = $request->validate(['motivo_anulacion' => 'required|string|max:500']);
+        $cajaMovimiento->update([
+            'estado' => 'ANULADO',
+            'anulado_por_id' => $request->user()->id,
+            'anulado_en' => now(),
+            'motivo_anulacion' => $datos['motivo_anulacion'],
+        ]);
 
-        return response()->json(['message' => 'Movimiento eliminado']);
+        return response()->json([
+            'message' => 'Movimiento anulado',
+            'movimiento' => $cajaMovimiento->load(['user:id,name,username', 'anuladoPor:id,name,username']),
+        ]);
     }
 
     private function validar(Request $request): array

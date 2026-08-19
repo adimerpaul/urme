@@ -13,7 +13,7 @@ class SolicitudLaboratorioResultado extends Model implements AuditableContract
 
     protected $fillable = [
         'solicitud_laboratorio_item_id', 'producto_laboratorio_dato_id',
-        'nombre', 'nombre_variable', 'unidad', 'rango_referencia',
+        'nombre', 'nombre_variable', 'unidad', 'metodo', 'muestra', 'rango_referencia',
         'formula', 'valor', 'orden', 'visible',
     ];
 

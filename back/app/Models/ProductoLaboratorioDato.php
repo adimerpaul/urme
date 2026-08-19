@@ -18,6 +18,8 @@ class ProductoLaboratorioDato extends Model implements AuditableContract
         'nombre',
         'nombre_variable',
         'unidad',
+        'metodo',
+        'muestra',
         'rango_referencia',
         'valor_defecto',
         'orden',

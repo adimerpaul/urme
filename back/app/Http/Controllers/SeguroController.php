@@ -41,6 +41,33 @@ class SeguroController extends Controller
         return response()->json($seguro, 201);
     }
 
+    public function detalle(Request $request, $id)
+    {
+        $this->req($request, 'Ver Seguros');
+
+        $seguro = Seguro::with([
+            'pacientes:id,seguro_id,nombre_completo,ci,telefono',
+            'internaciones' => fn ($query) => $query
+                ->with(['paciente:id,nombre_completo,ci', 'items:id,internacion_id,nombre,cantidad,precio,total'])
+                ->orderByDesc('fecha_ingreso')
+                ->orderByDesc('id'),
+        ])->findOrFail($id);
+
+        $total = $seguro->internaciones->sum(fn ($internacion) => $internacion->items->sum('total'));
+
+        return response()->json([
+            'seguro' => $seguro->only(['id', 'nombre', 'nit']),
+            'pacientes' => $seguro->pacientes,
+            'internaciones' => $seguro->internaciones,
+            'resumen' => [
+                'cantidad_pacientes' => $seguro->pacientes->count(),
+                'pacientes_internados' => $seguro->internaciones->pluck('paciente_id')->unique()->count(),
+                'cantidad_internaciones' => $seguro->internaciones->count(),
+                'total' => round((float) $total, 2),
+            ],
+        ]);
+    }
+
     public function update(Request $request, $id)
     {
         $this->req($request, 'Editar Seguros');

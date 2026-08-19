@@ -77,7 +77,7 @@ export default boot(({ app, router }) => {
       localStorage.setItem('permissionsUrme', JSON.stringify(perms))
     }).catch(error => {
       console.log(error)
-      router.push('/login')
+      if (!router.currentRoute.value.path.startsWith('/verificacion/')) router.push('/login')
       localStorage.removeItem('tokenUrme')
       localStorage.removeItem('permissionsUrme')
       useCounterStore().isLogged = false

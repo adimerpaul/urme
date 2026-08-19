@@ -197,6 +197,22 @@ const menuSections = [
     ],
   },
   {
+    title: 'Caja Administrativa',
+    icon: 'account_balance_wallet',
+    links: [
+      { title: 'Ingresos administrativos', icon: 'add_card', link: '/cajas/administrativa/ingresos' },
+      { title: 'Gastos administrativos', icon: 'payments', link: '/cajas/administrativa/gastos' },
+    ],
+  },
+  {
+    title: 'Caja General',
+    icon: 'account_balance',
+    links: [
+      { title: 'Ingresos caja general', icon: 'add_card', link: '/cajas/general/ingresos' },
+      { title: 'Gastos caja general', icon: 'payments', link: '/cajas/general/gastos' },
+    ],
+  },
+  {
     title: 'Pacientes',
     icon: 'badge',
     links: [

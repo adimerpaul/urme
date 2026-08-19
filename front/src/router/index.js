@@ -51,6 +51,7 @@ export default defineRouter((/* { store, ssrContext } */) => {
 
   Router.beforeEach(async (to) => {
     if (to.path === '/login') return true
+    if (to.path.startsWith('/verificacion/')) return true
     const token = localStorage.getItem('tokenUrme')
     if (!token) return '/login'
 

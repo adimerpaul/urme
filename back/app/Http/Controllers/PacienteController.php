@@ -59,7 +59,7 @@ class PacienteController extends Controller
 
         $paciente = Paciente::findOrFail($id);
 
-        $query = $paciente->internaciones()->getQuery()->orderByDesc('fecha_ingreso')->orderByDesc('id');
+        $query = $paciente->internaciones()->with('seguro:id,nombre')->orderByDesc('fecha_ingreso')->orderByDesc('id');
 
         if ($request->boolean('abiertas')) {
             $query->whereNull('fecha_alta');
@@ -71,14 +71,14 @@ class PacienteController extends Controller
     public function show(Request $request, $id)
     {
         $this->req($request, 'Ver Pacientes');
-        $paciente = Paciente::with(['seguro', 'internaciones.items.producto:id,nombre', 'internaciones.items.user:id,name'])->findOrFail($id);
+        $paciente = Paciente::with(['seguro', 'internaciones.seguro:id,nombre', 'internaciones.items.producto:id,nombre', 'internaciones.items.user:id,name'])->findOrFail($id);
 
         return response()->json($paciente);
     }
 
     public function store(Request $request)
     {
-        $this->req($request, ['Crear Pacientes', 'Crear Ventas']);
+        $this->req($request, ['Crear Pacientes', 'Crear Ventas', 'Crear Solicitudes Laboratorio']);
         $request->validate([
             'nombre_completo' => 'required|string|max:255',
             'sexo' => 'nullable|in:M,F',

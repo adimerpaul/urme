@@ -13,19 +13,31 @@ class CajaMovimiento extends Model implements AuditableContract
 
     protected $fillable = [
         'user_id', 'caja', 'tipo', 'fecha_hora', 'categoria', 'concepto',
-        'descripcion', 'beneficiario', 'documento', 'importe',
+        'descripcion', 'beneficiario', 'documento', 'importe', 'estado',
+        'anulado_por_id', 'anulado_en', 'motivo_anulacion',
     ];
 
     protected $hidden = ['deleted_at'];
 
     protected $casts = [
         'fecha_hora' => 'datetime',
+        'anulado_en' => 'datetime',
         'importe' => 'decimal:2',
     ];
 
     public function user()
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function anuladoPor()
+    {
+        return $this->belongsTo(User::class, 'anulado_por_id');
+    }
+
+    public function setMotivoAnulacionAttribute($value): void
+    {
+        $this->attributes['motivo_anulacion'] = $this->mayuscula($value);
     }
 
     public function setCategoriaAttribute($value): void

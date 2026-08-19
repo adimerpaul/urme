@@ -48,11 +48,11 @@ class Permisos
         ],
         'Caja Administrativa' => [
             'Ver Caja Administrativa', 'Crear Caja Administrativa',
-            'Editar Caja Administrativa', 'Eliminar Caja Administrativa',
+            'Editar Caja Administrativa', 'Anular Caja Administrativa',
         ],
         'Caja General' => [
             'Ver Caja General', 'Crear Caja General',
-            'Editar Caja General', 'Eliminar Caja General',
+            'Editar Caja General', 'Anular Caja General',
         ],
         'Seguros' => [
             'Ver Seguros', 'Crear Seguros', 'Editar Seguros', 'Eliminar Seguros',

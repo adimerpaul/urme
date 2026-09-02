@@ -12,6 +12,8 @@
       <q-space />
       <q-btn v-if="!editId" dense outline no-caps color="primary" icon="receipt_long"
              label="Cargar venta pagada" class="q-mr-sm" @click="abrirVentasLaboratorio" />
+      <q-btn v-if="editId" dense outline no-caps color="teal" icon="label"
+             label="Imprimir rótulo" class="q-mr-sm" @click="imprimirRotulo" />
       <q-btn dense no-caps color="positive" icon="save" class="q-mr-sm"
              :label="editId ? 'Guardar e imprimir' : 'Crear e imprimir'"
              :loading="saving" :disable="!form.producto_ids.length" @click="guardar" />
@@ -130,8 +132,15 @@
               <div v-if="!seleccionados.length" class="text-center text-grey-5 q-pa-md text-caption">
                 Seleccione pruebas del listado de la izquierda
               </div>
-              <div v-for="laboratorio in seleccionados" :key="laboratorio.id" class="q-mb-xs">
-                <div class="row items-center bg-blue-grey-1 q-px-xs q-py-none rounded-borders">
+              <div v-for="(laboratorio, indice) in seleccionados" :key="laboratorio.id"
+                   class="q-mb-xs prueba-ordenable"
+                   :class="{ 'prueba-ordenable--arrastrando': laboratorioArrastrado === laboratorio.id }"
+                   @dragover.prevent @drop="soltarLaboratorio(indice)">
+                <div class="row items-center bg-blue-grey-1 q-px-xs q-py-none rounded-borders prueba-ordenable__cabecera"
+                     draggable="true" @dragstart="iniciarArrastre(laboratorio.id, $event)" @dragend="finalizarArrastre">
+                  <q-icon name="drag_indicator" size="18px" color="grey-7" class="q-mr-xs cursor-grab">
+                    <q-tooltip>Arrastre para cambiar el orden de impresión</q-tooltip>
+                  </q-icon>
                   <q-icon name="biotech" size="14px" color="primary" class="q-mr-xs" />
                   <span class="text-caption text-weight-bold">{{ laboratorio.nombre }}</span>
                   <q-space />
@@ -189,6 +198,8 @@
         <q-space />
         <div class="text-subtitle1 text-weight-bold">Total: <span class="text-primary">Bs {{ money(total) }}</span></div>
         <q-btn flat dense label="Cancelar" no-caps color="grey-7" to="/solicitudes-laboratorio" />
+        <q-btn v-if="editId" outline dense label="Imprimir rótulo" icon="label"
+               no-caps color="teal" @click="imprimirRotulo" />
         <q-btn type="submit" color="positive" icon="save" dense padding="4px 14px"
                :label="editId ? 'Guardar e imprimir' : 'Crear e imprimir'"
                no-caps :loading="saving" :disable="!form.producto_ids.length" />
@@ -346,6 +357,7 @@
 
 <script setup>
 import { computed, getCurrentInstance, ref } from 'vue'
+import { imprimirRotuloSolicitudLaboratorio } from '../../../addons/solicitudLaboratorioRotuloPrint'
 
 const { proxy } = getCurrentInstance()
 const pacientesOpciones = ref([])
@@ -370,6 +382,7 @@ const alertasDialog = ref(false)
 const confirmandoGuardado = ref(false)
 const valores = ref({})
 const visibles = ref({})
+const laboratorioArrastrado = ref(null)
 const ventasDialog = ref(false)
 const ventasTable = ref(null)
 const ventasLaboratorio = ref([])
@@ -406,7 +419,9 @@ const laboratoriosFiltrados = computed(() => {
     ? laboratorios.value.filter(item => `${item.nombre} ${item.codigo || ''}`.toLowerCase().includes(search))
     : laboratorios.value
 })
-const seleccionados = computed(() => laboratorios.value.filter(item => form.value.producto_ids.includes(item.id)))
+const seleccionados = computed(() => form.value.producto_ids
+  .map(id => laboratorios.value.find(item => item.id === id))
+  .filter(Boolean))
 const total = computed(() => seleccionados.value.reduce((sum, item) => sum + Number(item.precio || 0), 0))
 
 // Mensajes de validación configurados en cada laboratorio que no se cumplen
@@ -620,6 +635,23 @@ function toggleLaboratorio (id) {
   }
 }
 
+function iniciarArrastre (laboratorioId, event) {
+  laboratorioArrastrado.value = laboratorioId
+  event.dataTransfer.effectAllowed = 'move'
+  event.dataTransfer.setData('text/plain', String(laboratorioId))
+}
+
+function soltarLaboratorio (indiceDestino) {
+  const indiceOrigen = form.value.producto_ids.indexOf(laboratorioArrastrado.value)
+  if (indiceOrigen < 0 || indiceOrigen === indiceDestino) return
+  const [laboratorioId] = form.value.producto_ids.splice(indiceOrigen, 1)
+  form.value.producto_ids.splice(indiceDestino, 0, laboratorioId)
+}
+
+function finalizarArrastre () {
+  laboratorioArrastrado.value = null
+}
+
 /* Recupera la selección inicial desde el campo visible configurado para el
    dato. Al editar prevalece el valor que ya fue guardado en la solicitud. */
 function precargarVisibilidad (productoId) {
@@ -692,6 +724,14 @@ async function abrirPdf (id, ventana) {
   if (ventana) ventana.location.href = url
   else window.open(url, '_blank')
   setTimeout(() => URL.revokeObjectURL(url), 60000)
+}
+async function imprimirRotulo () {
+  try {
+    const { data } = await proxy.$axios.get(`solicitudes-laboratorio/${editId.value}`)
+    imprimirRotuloSolicitudLaboratorio(data, proxy.$imgBase)
+  } catch (error) {
+    proxy.$alert.error(error.response?.data?.message || 'No se pudo imprimir el rótulo')
+  }
 }
 function required (value) {
   return value !== null && value !== undefined && value !== '' || 'Campo requerido'
@@ -843,6 +883,18 @@ cargarDatos()
 .lab-sub {
   font-size: 10px;
   line-height: 1.2;
+}
+.prueba-ordenable {
+  transition: opacity 0.15s ease;
+}
+.prueba-ordenable--arrastrando {
+  opacity: 0.45;
+}
+.prueba-ordenable__cabecera {
+  cursor: grab;
+}
+.prueba-ordenable__cabecera:active {
+  cursor: grabbing;
 }
 
 /* Campos compactos sin reducir la zona reservada para el label flotante.

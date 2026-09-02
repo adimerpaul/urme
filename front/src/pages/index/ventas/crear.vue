@@ -52,12 +52,12 @@
                       emit-value map-options @filter="filtrarTiposProducto"
                       @update:model-value="onBuscarProducto">
               <template #prepend>
-                <q-icon name="category" color="primary" />
+                <q-icon :name="iconoTipo(tipoProductoSeleccionado?.nombre)" color="primary" />
               </template>
               <template #option="scope">
                 <q-item v-bind="scope.itemProps">
                   <q-item-section avatar>
-                    <q-icon name="category" :style="{ color: scope.opt.color || '#607d8b' }" />
+                    <q-icon :name="iconoTipo(scope.opt.nombre)" :style="{ color: scope.opt.color || '#607d8b' }" />
                   </q-item-section>
                   <q-item-section>{{ scope.opt.nombre }}</q-item-section>
                 </q-item>
@@ -662,6 +662,61 @@ const totalProductos   = ref(0)
 const perProductos     = 10
 
 const pagesProductos = computed(() => Math.max(1, Math.ceil(totalProductos.value / perProductos)))
+const tipoProductoSeleccionado = computed(() => tiposProducto.value.find(tipo => tipo.id === filtroTipo.value))
+
+const iconosTipoProducto = {
+  AMBULANCIA: 'local_shipping',
+  ECOGRAFIA: 'graphic_eq',
+  'ESTUDIOS DIAGNOSTICOS': 'monitor_heart',
+  FARMACIA: 'medication',
+  INTERNACION: 'hotel',
+  NEONATOLOGIA: 'child_care',
+  'OXIGENO TERAPIA': 'air',
+  'RAYOS X CONTRASTADOS': 'invert_colors',
+  'RAYOS X SIN INFORME': 'camera_alt',
+  'SALAS DE PROCEDIMIENTOS': 'meeting_room',
+  'SERVICIO DE ENFERMERIA': 'vaccines',
+  'SERVICIO MEDICO': 'medical_services',
+  'TOMOGRAFIA EN C.D.': 'scanner',
+  'U.T.I. ADULTOS': 'emergency',
+  'USO DE QUIROFANO': 'health_and_safety',
+  HEMATOLOGIA: 'bloodtype',
+  COAGULOGRAMA: 'opacity',
+  'BIOQUIMICA CLINICA': 'science',
+  'IONOGRAMA / ELECTROLITOS': 'bolt',
+  'CINETICA DE HIERRO': 'hardware',
+  'PERFIL CARDIACO': 'favorite',
+  CITOQUIMICOS: 'colorize',
+  UROLOGIA: 'water_drop',
+  COPROLOGIA: 'compost',
+  SECRECIONES: 'bubble_chart',
+  SEROLOGIAS: 'analytics',
+  GASOMETRIAS: 'speed',
+  'PERFIL TIROIDEO': 'device_thermostat',
+  'FERTILIDAD - INMUNOLOGIA': 'favorite_border',
+  'HORMONAS - INMUNOLOGIA': 'hub',
+  'AUTOINMUNES - INMUNOLOGIA': 'security',
+  'MARCADORES TUMORALES - INMUNOLOGIA': 'crisis_alert',
+  'INFECCIOSOS (ELISA) - INMUNOLOGIA': 'coronavirus',
+  'PESQUIZA NEONATAL': 'filter_vintage',
+  VITAMINAS: 'wb_sunny',
+  VARIOS: 'more_horiz',
+  BACTERIOLOGIA: 'biotech',
+  'DROGAS DE ABUSO': 'smoke_free',
+  CITOLOGIA: 'spa',
+  'BIOLOGIA MOLECULAR': 'account_tree',
+  GENETICA: 'fingerprint',
+}
+
+function iconoTipo (nombre) {
+  const normalizado = String(nombre || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase()
+    .trim()
+
+  return iconosTipoProducto[normalizado] || 'category'
+}
 
 function cantidadDisponibleProducto (producto) {
   return Math.max(

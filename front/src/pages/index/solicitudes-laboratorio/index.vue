@@ -69,6 +69,10 @@
                 <q-item-section avatar><q-icon name="print" color="indigo" /></q-item-section>
                 <q-item-section>Imprimir / reimprimir</q-item-section>
               </q-item>
+              <q-item clickable v-close-popup @click="imprimirRotulo(props.row)">
+                <q-item-section avatar><q-icon name="label" color="teal" /></q-item-section>
+                <q-item-section>Imprimir rótulo</q-item-section>
+              </q-item>
               <q-item clickable v-close-popup @click="enviarWhatsApp(props.row)">
                 <q-item-section avatar><q-icon name="chat" color="positive" /></q-item-section>
                 <q-item-section>
@@ -134,6 +138,7 @@
 <script setup>
 import { computed, getCurrentInstance, ref } from 'vue'
 import { nowBoliviaDateTimeInput } from '../../../addons/dateTime'
+import { imprimirRotuloSolicitudLaboratorio } from '../../../addons/solicitudLaboratorioRotuloPrint'
 
 const { proxy } = getCurrentInstance()
 const tableRef = ref(null)
@@ -211,6 +216,14 @@ async function imprimir (row) {
   } catch (error) {
     ventana?.close()
     proxy.$alert.error(error.response?.data?.message || 'No se pudo generar el PDF')
+  }
+}
+async function imprimirRotulo (row) {
+  try {
+    const { data } = await proxy.$axios.get(`solicitudes-laboratorio/${row.id}`)
+    imprimirRotuloSolicitudLaboratorio(data, proxy.$imgBase)
+  } catch (error) {
+    proxy.$alert.error(error.response?.data?.message || 'No se pudo imprimir el rótulo')
   }
 }
 async function enviarWhatsApp (row) {

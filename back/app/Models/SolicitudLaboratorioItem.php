@@ -11,7 +11,7 @@ class SolicitudLaboratorioItem extends Model implements AuditableContract
 {
     use AuditableTrait, SoftDeletes;
 
-    protected $fillable = ['solicitude_id', 'producto_id', 'producto_nombre', 'precio'];
+    protected $fillable = ['solicitude_id', 'producto_id', 'producto_nombre', 'precio', 'orden'];
 
     protected $hidden = ['deleted_at'];
 

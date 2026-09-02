@@ -57,6 +57,6 @@ class Solicitude extends Model implements AuditableContract
 
     public function laboratorioItems()
     {
-        return $this->hasMany(SolicitudLaboratorioItem::class, 'solicitude_id');
+        return $this->hasMany(SolicitudLaboratorioItem::class, 'solicitude_id')->orderBy('orden')->orderBy('id');
     }
 }

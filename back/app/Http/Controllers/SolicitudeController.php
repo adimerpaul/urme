@@ -149,7 +149,7 @@ class SolicitudeController extends Controller
     {
         $this->authorizeAny($request, 'Ver Solicitudes Laboratorio');
 
-        return response()->json($solicitude->load(['paciente', 'doctor', 'user', 'laboratorioItems.resultados']));
+        return response()->json($solicitude->load(['paciente.seguro', 'doctor', 'user', 'laboratorioItems.resultados']));
     }
 
     public function update(Request $request, Solicitude $solicitude)
@@ -172,7 +172,13 @@ class SolicitudeController extends Controller
     public function pdf(Request $request, Solicitude $solicitude)
     {
         $this->authorizeAny($request, 'Ver Solicitudes Laboratorio');
-        $solicitude->load(['paciente', 'doctor.especialidades:id,nombre', 'user', 'laboratorioItems.resultados']);
+        $solicitude->load([
+            'paciente',
+            'doctor.especialidades:id,nombre',
+            'user',
+            'laboratorioItems.producto.tipoProducto:id,nombre',
+            'laboratorioItems.resultados',
+        ]);
 
         $impresoPor = $request->user();
         $urlVerificacion = rtrim(config('app.frontend_url'), '/').'/verificacion/'.$solicitude->codigo_verificacion;
@@ -255,7 +261,9 @@ class SolicitudeController extends Controller
             ->whereIn('id', $validated['producto_ids'])
             ->whereHas('tipoProducto', fn ($query) => $query->where('es_laboratorio', true))
             ->with(['laboratorioDatos.formula', 'laboratorioDatos.opciones'])
-            ->get();
+            ->get()
+            ->sortBy(fn ($producto) => array_search($producto->id, $validated['producto_ids'], true))
+            ->values();
         abort_unless($productos->count() === count($validated['producto_ids']), 422, 'Seleccione únicamente productos de laboratorio.');
 
         return [
@@ -271,11 +279,12 @@ class SolicitudeController extends Controller
             $itemAnterior->resultados->each->delete();
             $itemAnterior->delete();
         }
-        foreach ($productos as $producto) {
+        foreach ($productos as $indice => $producto) {
             $item = $solicitud->laboratorioItems()->create([
                 'producto_id' => $producto->id,
                 'producto_nombre' => $producto->nombre,
                 'precio' => $producto->precio,
+                'orden' => ($indice + 1) * 10,
             ]);
             foreach ($producto->laboratorioDatos as $dato) {
                 $valorConfigurado = $valores->get($dato->id, []);

@@ -49,6 +49,10 @@
 
       <div class="row items-center q-col-gutter-xs q-mb-xs">
         <div class="col-auto">
+          <q-btn dense outline no-caps color="primary" icon="date_range" label="Esta semana"
+                 @click="filtrarSemanaActual" />
+        </div>
+        <div class="col-auto">
           <q-input v-model="filtro.fecha_inicio" label="Fecha inicio" dense outlined type="date"
                    style="width:150px" @update:model-value="onFiltroChange" />
         </div>
@@ -208,7 +212,30 @@ const pageCompras    = ref(1)
 const totalCompras   = ref(0)
 const perCompras     = 15
 const exportingExcel = ref(false)
-const filtro = ref({ fecha_inicio: '', fecha_fin: '', proveedor_id: null, estado: null })
+function fechaIsoUtc (date) {
+  return date.toISOString().slice(0, 10)
+}
+
+function rangoSemanaActual () {
+  const partes = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/La_Paz',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date())
+  const fecha = Object.fromEntries(partes.filter(p => p.type !== 'literal').map(p => [p.type, Number(p.value)]))
+  const hoy = new Date(Date.UTC(fecha.year, fecha.month - 1, fecha.day))
+  const diasDesdeLunes = (hoy.getUTCDay() + 6) % 7
+  const inicio = new Date(hoy)
+  inicio.setUTCDate(hoy.getUTCDate() - diasDesdeLunes)
+  const fin = new Date(inicio)
+  fin.setUTCDate(inicio.getUTCDate() + 6)
+
+  return { fecha_inicio: fechaIsoUtc(inicio), fecha_fin: fechaIsoUtc(fin) }
+}
+
+const semanaActual = rangoSemanaActual()
+const filtro = ref({ ...semanaActual, proveedor_id: null, estado: null })
 
 const pagesCompras = computed(() => Math.max(1, Math.ceil(totalCompras.value / perCompras)))
 
@@ -216,6 +243,14 @@ let timerFiltro = null
 function onFiltroChange () {
   clearTimeout(timerFiltro)
   timerFiltro = setTimeout(() => { pageCompras.value = 1; loadCompras() }, 350)
+}
+
+function filtrarSemanaActual () {
+  const semana = rangoSemanaActual()
+  filtro.value.fecha_inicio = semana.fecha_inicio
+  filtro.value.fecha_fin = semana.fecha_fin
+  pageCompras.value = 1
+  loadCompras()
 }
 
 async function loadCompras () {

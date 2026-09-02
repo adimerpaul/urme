@@ -214,10 +214,14 @@
                   <td colspan="10" class="text-center text-grey-5 q-pa-md">Sin ventas registradas</td>
                 </tr>
                 <template v-for="v in ventas" :key="v.id">
-                  <tr class="cursor-pointer" :class="v.estado === 'PENDIENTE' && !v.fecha_hora_cobro ? 'bg-orange-1' : ''"
-                      @click="toggleVenta(v.id)">
+                  <tr :class="[
+                        v.estado === 'PENDIENTE' && !v.fecha_hora_cobro ? 'bg-orange-1' : '',
+                        canDetalleVenta ? 'cursor-pointer' : '',
+                      ]"
+                      @click="canDetalleVenta && toggleVenta(v.id)">
                     <td class="text-center">
-                      <q-icon :name="expandidas.includes(v.id) ? 'expand_less' : 'expand_more'"
+                      <q-icon v-if="canDetalleVenta"
+                              :name="expandidas.includes(v.id) ? 'expand_less' : 'expand_more'"
                               size="16px" color="grey-7" />
                     </td>
                     <td class="text-weight-bold">#{{ v.id }}</td>
@@ -236,7 +240,7 @@
                       <q-btn v-if="v.estado === 'PENDIENTE' && !v.fecha_hora_cobro && canCrearVenta" dense unelevated size="xs"
                              color="positive" icon="payments" no-caps label="Cobrar"
                              @click.stop="abrirCobrar(v)" />
-                      <q-btn v-else dense flat round size="xs" color="grey-7" icon="print"
+                      <q-btn v-else-if="canDetalleVenta" dense flat round size="xs" color="grey-7" icon="print"
                              @click.stop="imprimirVentaFila(v)">
                         <q-tooltip>Imprimir</q-tooltip>
                       </q-btn>
@@ -508,6 +512,8 @@ const canEditarInt   = computed(() => proxy.$store.hasPermission('Editar Interna
 const canEliminarInt = computed(() => proxy.$store.hasPermission('Eliminar Internaciones'))
 const canVerVentas   = computed(() => proxy.$store.hasPermission('Ver Ventas'))
 const canCrearVenta  = computed(() => proxy.$store.hasPermission('Crear Ventas'))
+// Detalle de la venta y reimpresión del comprobante: permiso aparte.
+const canDetalleVenta = computed(() => proxy.$store.hasPermission('Ver Detalle Ventas'))
 
 const tab = ref('internaciones')
 

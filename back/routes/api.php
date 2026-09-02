@@ -39,6 +39,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/users/{id}', [UserController::class, 'update']);
     Route::delete('/users/{id}', [UserController::class, 'destroy']);
     Route::put('/users/{id}/reset-password', [UserController::class, 'resetPassword']);
+    Route::put('/users/{id}/bloqueo', [UserController::class, 'toggleBloqueo']);
     Route::post('/users/{id}/avatar', [UserController::class, 'uploadAvatar']);
 
     // Permisos
@@ -136,6 +137,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // Internaciones
     Route::get('/internaciones', [InternacionController::class, 'index']);
     Route::get('/internaciones/{id}/pdf', [InternacionController::class, 'pdf']);
+    Route::put('/internaciones/{id}/seguimiento', [InternacionController::class, 'updateSeguimiento']);
     Route::post('/internaciones', [InternacionController::class, 'store']);
     Route::put('/internaciones/{id}', [InternacionController::class, 'update']);
     Route::delete('/internaciones/{id}', [InternacionController::class, 'destroy']);
@@ -169,6 +171,9 @@ Route::middleware('auth:sanctum')->group(function () {
     // Cierre de caja
     Route::get('/cierres-caja/estado', [CierreCajaController::class, 'estado']);
     Route::get('/cierres-caja', [CierreCajaController::class, 'index']);
+    Route::get('/cierres-caja/{id}/ventas/export-excel', [CierreCajaController::class, 'ventasExportExcel']);
+    Route::get('/cierres-caja/{id}/ventas/export-pdf', [CierreCajaController::class, 'ventasExportPdf']);
+    Route::get('/cierres-caja/{id}/ventas', [CierreCajaController::class, 'ventas']);
     Route::post('/cierres-caja', [CierreCajaController::class, 'store']);
     Route::put('/cierres-caja/{id}', [CierreCajaController::class, 'update']);
 

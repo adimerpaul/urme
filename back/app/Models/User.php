@@ -13,7 +13,7 @@ use Spatie\Permission\Traits\HasRoles;
 
 class User extends Authenticatable implements Auditable
 {
-    use HasFactory, Notifiable, SoftDeletes, HasApiTokens, HasRoles, AuditableTrait;
+    use AuditableTrait, HasApiTokens, HasFactory, HasRoles, Notifiable, SoftDeletes;
 
     protected $fillable = [
         'name',
@@ -23,6 +23,7 @@ class User extends Authenticatable implements Auditable
         'ci',
         'password',
         'avatar',
+        'bloqueado',
     ];
 
     protected $hidden = [
@@ -37,6 +38,7 @@ class User extends Authenticatable implements Auditable
     {
         return [
             'email_verified_at' => 'datetime',
+            'bloqueado' => 'boolean',
         ];
     }
 }

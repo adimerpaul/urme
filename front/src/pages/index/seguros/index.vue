@@ -43,7 +43,10 @@
               <q-list>
                 <q-item v-if="canVer" clickable v-close-popup @click="verDetalle(props.row)">
                   <q-item-section avatar><q-icon name="groups" color="primary" /></q-item-section>
-                  <q-item-section><q-item-label>Pacientes e internaciones</q-item-label></q-item-section>
+                  <q-item-section>
+                    <q-item-label>Pacientes e internaciones</q-item-label>
+                    <q-item-label caption>Planilla de seguimiento del seguro</q-item-label>
+                  </q-item-section>
                 </q-item>
                 <q-item v-if="canEditar" clickable v-close-popup @click="seguroEdit(props.row)">
                   <q-item-section avatar><q-icon name="edit" /></q-item-section>
@@ -82,67 +85,16 @@
         </q-card>
       </q-dialog>
 
-      <q-dialog v-model="dialogDetalle" maximized>
-        <q-card>
-          <q-card-section class="row items-center bg-primary text-white q-py-sm">
-            <q-icon name="verified_user" size="22px" class="q-mr-sm" />
-            <div>
-              <div class="text-subtitle1 text-weight-bold">{{ detalle.seguro?.nombre }}</div>
-              <div class="text-caption">Pacientes e internaciones del seguro</div>
-            </div>
-            <q-space />
-            <q-btn flat dense no-caps icon="print" label="Imprimir" color="white" @click="imprimirDetalle" />
-            <q-btn icon="close" flat round dense color="white" @click="dialogDetalle = false" />
-          </q-card-section>
-
-          <q-card-section class="q-pa-md">
-            <div class="row q-col-gutter-sm q-mb-md">
-              <div v-for="item in resumenCards" :key="item.label" class="col-6 col-md-3">
-                <q-card flat bordered class="q-pa-md">
-                  <div class="text-caption text-grey-7">{{ item.label }}</div>
-                  <div class="text-h6 text-weight-bold text-primary">{{ item.value }}</div>
-                </q-card>
-              </div>
-            </div>
-
-            <q-inner-loading :showing="loadingDetalle" color="primary" />
-            <q-tabs v-model="tabDetalle" dense align="left" no-caps active-color="primary" indicator-color="primary">
-              <q-tab name="pacientes" icon="groups" :label="'Pacientes (' + (detalle.resumen?.cantidad_pacientes || 0) + ')'" />
-              <q-tab name="internaciones" icon="local_hospital" :label="'Internaciones (' + (detalle.resumen?.cantidad_internaciones || 0) + ')'" />
-            </q-tabs>
-            <q-separator />
-            <q-tab-panels v-model="tabDetalle" animated>
-              <q-tab-panel name="pacientes" class="q-pa-none q-pt-sm">
-                <q-table dense flat bordered row-key="id" :rows="detalle.pacientes || []"
-                         :columns="pacienteColumns" :rows-per-page-options="[10, 20, 50]"
-                         no-data-label="No hay pacientes afiliados actualmente" />
-              </q-tab-panel>
-              <q-tab-panel name="internaciones" class="q-pa-none q-pt-sm">
-                <q-table dense flat bordered row-key="id" :rows="detalle.internaciones || []"
-                         :columns="internacionColumns" :rows-per-page-options="[10, 20, 50]"
-                         no-data-label="No hay internaciones registradas con este seguro">
-                  <template v-slot:body-cell-estado="props">
-                    <q-td :props="props">
-                      <q-badge :color="props.row.fecha_alta ? 'positive' : 'orange'">
-                        {{ props.row.fecha_alta ? 'ALTA' : 'INTERNADO' }}
-                      </q-badge>
-                    </q-td>
-                  </template>
-                </q-table>
-              </q-tab-panel>
-            </q-tab-panels>
-          </q-card-section>
-        </q-card>
-      </q-dialog>
     </template>
   </q-page>
 </template>
 
 <script setup>
 import { ref, computed, watch, getCurrentInstance } from 'vue'
-import { imprimirSeguro } from '../../../addons/seguroPrint'
+import { useRouter } from 'vue-router'
 
 const { proxy } = getCurrentInstance()
+const router = useRouter()
 
 const canVer      = computed(() => proxy.$store.hasPermission('Ver Seguros'))
 const canCrear    = computed(() => proxy.$store.hasPermission('Crear Seguros'))
@@ -156,43 +108,12 @@ const loading = ref(false)
 const saving  = ref(false)
 const action  = ref('')
 const filter  = ref('')
-const dialogDetalle = ref(false)
-const loadingDetalle = ref(false)
-const tabDetalle = ref('pacientes')
-const detalle = ref({ seguro: {}, pacientes: [], internaciones: [], resumen: {} })
 
 const columns = [
   { name: 'actions', label: 'Acciones', align: 'center' },
   { name: 'nombre',  label: 'Nombre',   align: 'left', field: 'nombre', sortable: true },
   { name: 'nit',     label: 'NIT',      align: 'left', field: 'nit',    sortable: true },
 ]
-
-const pacienteColumns = [
-  { name: 'nombre', label: 'Paciente', align: 'left', field: 'nombre_completo', sortable: true },
-  { name: 'ci', label: 'CI', align: 'left', field: row => row.ci || '—', sortable: true },
-  { name: 'telefono', label: 'Teléfono', align: 'left', field: row => row.telefono || '—' },
-]
-
-function totalInternacion (row) {
-  return (row.items || []).reduce((sum, item) => sum + Number(item.total || 0), 0)
-}
-
-const internacionColumns = [
-  { name: 'paciente', label: 'Paciente', align: 'left', field: row => row.paciente?.nombre_completo || '—', sortable: true },
-  { name: 'ci', label: 'CI', align: 'left', field: row => row.paciente?.ci || '—' },
-  { name: 'fecha_ingreso', label: 'Ingreso', align: 'left', field: row => row.fecha_ingreso || '—', sortable: true },
-  { name: 'fecha_alta', label: 'Alta', align: 'left', field: row => row.fecha_alta || '—' },
-  { name: 'sala', label: 'Sala', align: 'left', field: row => row.sala || '—' },
-  { name: 'estado', label: 'Estado', align: 'center' },
-  { name: 'total', label: 'Total Bs', align: 'right', field: row => totalInternacion(row).toFixed(2), sortable: true },
-]
-
-const resumenCards = computed(() => [
-  { label: 'Pacientes afiliados', value: detalle.value.resumen?.cantidad_pacientes || 0 },
-  { label: 'Pacientes internados', value: detalle.value.resumen?.pacientes_internados || 0 },
-  { label: 'Internaciones', value: detalle.value.resumen?.cantidad_internaciones || 0 },
-  { label: 'Total cargos', value: `${Number(detalle.value.resumen?.total || 0).toFixed(2)} Bs` },
-])
 
 let fetched = false
 watch(() => proxy.$store.isLogged, (val) => {
@@ -242,22 +163,8 @@ function seguroDelete (id) {
   })
 }
 
-async function verDetalle (row) {
-  dialogDetalle.value = true
-  loadingDetalle.value = true
-  tabDetalle.value = 'pacientes'
-  try {
-    const { data } = await proxy.$axios.get(`seguros/${row.id}/detalle`)
-    detalle.value = data
-  } catch (err) {
-    dialogDetalle.value = false
-    proxy.$alert.error(err.response?.data?.message || 'Error al cargar el detalle del seguro')
-  } finally {
-    loadingDetalle.value = false
-  }
-}
-
-function imprimirDetalle () {
-  imprimirSeguro(detalle.value)
+// La planilla de pacientes e internaciones vive en su propia página.
+function verDetalle (row) {
+  router.push('/seguros/' + row.id)
 }
 </script>

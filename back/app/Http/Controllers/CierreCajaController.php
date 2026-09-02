@@ -2,9 +2,12 @@
 
 namespace App\Http\Controllers;
 
+use App\Exports\CierreCajaVentasExport;
 use App\Models\CierreCaja;
 use App\Models\Venta;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
+use Maatwebsite\Excel\Facades\Excel;
 
 /**
  * Cierre de caja diario por usuario.
@@ -36,8 +39,12 @@ class CierreCajaController extends Controller
             $query->where('user_id', $userId);
         }
 
-        // Ya cerrado, el cierre se ve completo: montos, sistema y diferencia.
-        return response()->json($query->paginate((int) $request->input('per_page', 15)));
+        $cierres = $query->paginate((int) $request->input('per_page', 15));
+
+        // Sin 'Ver Montos Caja' solo se ve lo declarado, nunca el sistema ni la diferencia.
+        $cierres->getCollection()->transform(fn ($cierre) => $this->ocultarMontos($cierre, $request->user()));
+
+        return response()->json($cierres);
     }
 
     /**
@@ -61,7 +68,7 @@ class CierreCajaController extends Controller
             'fecha' => $fecha,
             'cerrada' => (bool) $cierre,
             'ver_montos' => $verMontos,
-            'cierre' => $cierre?->load('user:id,name,username'),
+            'cierre' => $this->ocultarMontos($cierre?->load('user:id,name,username'), $user),
             'total_sistema' => $totales['total'] ?? null,
             'cantidad_ventas' => $totales['cantidad'] ?? null,
         ]);
@@ -83,7 +90,7 @@ class CierreCajaController extends Controller
         if ($cierre = self::cierreDelDia($user->id, $fecha)) {
             return response()->json([
                 'message' => 'La caja de hoy ya fue cerrada',
-                'cierre' => $cierre->load('user:id,name,username'),
+                'cierre' => $this->ocultarMontos($cierre->load('user:id,name,username'), $user),
                 'ya_existia' => true,
             ]);
         }
@@ -104,7 +111,7 @@ class CierreCajaController extends Controller
 
         return response()->json([
             'message' => 'Caja cerrada',
-            'cierre' => $cierre->load('user:id,name,username'),
+            'cierre' => $this->ocultarMontos($cierre->load('user:id,name,username'), $user),
             'ya_existia' => false,
         ], 201);
     }
@@ -139,11 +146,79 @@ class CierreCajaController extends Controller
 
         return response()->json([
             'message' => 'Cierre modificado',
-            'cierre' => $cierre->load('user:id,name,username'),
+            'cierre' => $this->ocultarMontos($cierre->load('user:id,name,username'), $user),
         ]);
     }
 
+    /** Ventas que componen un cierre ya guardado (las del usuario en esa fecha). */
+    public function ventas(Request $request, $id)
+    {
+        $this->req($request, 'Ver Cierres Caja');
+
+        $cierre = CierreCaja::with('user:id,name,username')->findOrFail($id);
+
+        $ventas = self::ventasDelDia($cierre->user_id, $cierre->fecha->toDateString())
+            ->with([
+                'paciente:id,nombre_completo,ci',
+                'user:id,name',
+                'cobradoPor:id,name',
+                'detalles:id,venta_id,nombre,cantidad,precio,total',
+            ])
+            ->orderBy('fecha_hora')
+            ->paginate(min((int) $request->input('per_page', 15), 100));
+
+        return response()->json([
+            'cierre' => $this->ocultarMontos($cierre, $request->user()),
+            'ventas' => $ventas,
+        ]);
+    }
+
+    public function ventasExportExcel(Request $request, $id)
+    {
+        $this->req($request, 'Ver Cierres Caja');
+
+        $cierre = CierreCaja::with('user:id,name,username')->findOrFail($id);
+
+        return Excel::download(
+            new CierreCajaVentasExport($cierre),
+            'cierre_caja_'.$cierre->fecha->format('Ymd').'_'.$cierre->id.'.xlsx'
+        );
+    }
+
+    public function ventasExportPdf(Request $request, $id)
+    {
+        $this->req($request, 'Ver Cierres Caja');
+        ini_set('memory_limit', '1024M');
+
+        $cierre = CierreCaja::with('user:id,name,username')->findOrFail($id);
+
+        $ventas = self::ventasDelDia($cierre->user_id, $cierre->fecha->toDateString())
+            ->with(['paciente:id,nombre_completo,ci', 'detalles:id,venta_id,nombre,cantidad,precio,total'])
+            ->orderBy('fecha_hora')
+            ->get();
+
+        $pdf = Pdf::loadView('reportes.cierre-caja-ventas', [
+            'cierre' => $cierre,
+            'ventas' => $ventas,
+        ])->setPaper('letter');
+
+        return $pdf->stream('cierre_caja_'.$cierre->fecha->format('Ymd').'_'.$cierre->id.'.pdf');
+    }
+
     // ── Helpers ───────────────────────────────────────────────────
+
+    /**
+     * Sin 'Ver Montos Caja' el cierre viaja sin el total del sistema ni la
+     * diferencia: la cajera solo ve el efectivo que ella misma declaró.
+     */
+    private function ocultarMontos(?CierreCaja $cierre, $user): ?CierreCaja
+    {
+        if ($cierre && ! $user->can('Ver Montos Caja')) {
+            $cierre->makeHidden(['monto_sistema', 'diferencia']);
+        }
+
+        return $cierre;
+    }
 
     /** Cierre vigente de un usuario en una fecha, o null. */
     public static function cierreDelDia(int $userId, string $fecha): ?CierreCaja
@@ -156,10 +231,13 @@ class CierreCajaController extends Controller
         return now()->toDateString();
     }
 
-    /** Ventas ACTIVO del usuario en el día. */
-    private function totalesDelDia(int $userId, string $fecha): array
+    /**
+     * Ventas que entran a la caja de un usuario en un día: las que registró
+     * cobradas y las pendientes que él cobró ese día.
+     */
+    public static function ventasDelDia(int $userId, string $fecha)
     {
-        $ventas = Venta::where(function ($query) use ($userId, $fecha) {
+        return Venta::where(function ($query) use ($userId, $fecha) {
             $query->where(function ($directas) use ($userId, $fecha) {
                 $directas->where('user_id', $userId)
                     ->where('estado', 'ACTIVO')
@@ -170,6 +248,12 @@ class CierreCajaController extends Controller
                     ->whereDate('fecha_hora_cobro', $fecha);
             });
         });
+    }
+
+    /** Ventas ACTIVO del usuario en el día. */
+    private function totalesDelDia(int $userId, string $fecha): array
+    {
+        $ventas = self::ventasDelDia($userId, $fecha);
 
         return [
             'total' => round((float) (clone $ventas)->sum('total'), 2),

@@ -1,1 +1,0 @@
-import{pt as e,rt as t}from"./QBtn-BnR1N-YX.js";var n={name:String};function r(t={}){return(n,r,i)=>{n[r](e(`input`,{class:`hidden`+(i||``),...t.value}))}}function i(e){return t(()=>e.name||e.for)}export{i as n,n as r,r as t};

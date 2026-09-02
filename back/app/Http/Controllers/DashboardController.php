@@ -24,13 +24,11 @@ class DashboardController extends Controller
             abort(403, 'No tiene permiso para ver el panel general');
         }
 
-        $dias = (int) $request->input('dias', 30);
-        $dias = max(7, min($dias, 365));
+        [$periodo, $desde, $hasta, $granularidad] = $this->rango($request);
 
+        $inicio = $desde->copy()->startOfDay();
+        $fin = $hasta->copy()->endOfDay();
         $hoy = Carbon::today();
-        $desde = $hoy->copy()->subDays($dias - 1);
-        $inicioMes = $hoy->copy()->startOfMonth();
-        $inicioMesAnterior = $inicioMes->copy()->subMonth();
 
         $verVentas = $user->can('Ver Ventas');
         $verCompras = $user->can('Ver Compras');
@@ -41,9 +39,11 @@ class DashboardController extends Controller
 
         return response()->json([
             'rango' => [
-                'dias' => $dias,
+                'periodo' => $periodo,
+                'granularidad' => $granularidad,
+                'dias' => (int) $desde->diffInDays($hasta) + 1,
                 'desde' => $desde->format('Y-m-d'),
-                'hasta' => $hoy->format('Y-m-d'),
+                'hasta' => $hasta->format('Y-m-d'),
             ],
             'permisos' => [
                 'ventas' => $verVentas,
@@ -53,52 +53,110 @@ class DashboardController extends Controller
                 'laboratorio' => $verLaboratorio,
                 'internaciones' => $verInternaciones,
             ],
-            'resumen' => $this->resumen($hoy, $inicioMes, $inicioMesAnterior, $verVentas, $verCompras, $verProductos, $verPacientes, $verLaboratorio, $verInternaciones),
-            'serie_dias' => $verVentas || $verCompras ? $this->serieDias($desde, $hoy, $verVentas, $verCompras) : [],
-            'serie_meses' => $verVentas || $verCompras ? $this->serieMeses($hoy, $verVentas, $verCompras) : [],
-            'tipo_pago' => $verVentas ? $this->tipoPago($desde) : [],
-            'top_productos' => $verVentas ? $this->topProductos($desde) : [],
-            'por_tipo_producto' => $verVentas ? $this->porTipoProducto($desde) : [],
-            'top_vendedores' => $verVentas ? $this->topVendedores($desde) : [],
-            'ventas_por_hora' => $verVentas ? $this->ventasPorHora($desde) : [],
-            'solicitudes_estado' => $verLaboratorio ? $this->solicitudesPorEstado($desde) : [],
+            'resumen' => $this->resumen($inicio, $fin, $hoy, $verVentas, $verCompras, $verProductos, $verPacientes, $verLaboratorio, $verInternaciones),
+            'serie' => $verVentas || $verCompras ? $this->serie($inicio, $fin, $granularidad, $verVentas, $verCompras) : [],
+            'tipo_pago' => $verVentas ? $this->tipoPago($inicio, $fin) : [],
+            'top_productos' => $verVentas ? $this->topProductos($inicio, $fin) : [],
+            'por_tipo_producto' => $verVentas ? $this->porTipoProducto($inicio, $fin) : [],
+            'top_vendedores' => $verVentas ? $this->topVendedores($inicio, $fin) : [],
+            'top_profesionales' => $verVentas ? $this->topProfesionales($inicio, $fin) : [],
+            'ventas_por_hora' => $verVentas ? $this->ventasPorHora($inicio, $fin) : [],
+            'solicitudes_estado' => $verLaboratorio ? $this->solicitudesPorEstado($inicio, $fin) : [],
             'vencimientos' => $verProductos ? $this->vencimientos($hoy) : [],
             'stock_critico' => $verProductos ? $this->stockCritico() : [],
         ]);
     }
 
-    // ── Resumen (KPIs) ────────────────────────────────────────────
+    // ── Rango del período ─────────────────────────────────────────
 
-    private function resumen(Carbon $hoy, Carbon $inicioMes, Carbon $inicioMesAnterior, bool $verVentas, bool $verCompras, bool $verProductos, bool $verPacientes, bool $verLaboratorio, bool $verInternaciones): array
+    /**
+     * Resuelve el período pedido (hoy, ayer, semana, mes, anio o rango libre)
+     * a fechas de calendario y a la granularidad con la que conviene dibujar
+     * la serie: un solo día se abre por hora y más de un trimestre se agrupa
+     * por mes para no apretar cientos de puntos en el eje.
+     *
+     * @return array{0:string,1:Carbon,2:Carbon,3:string}
+     */
+    private function rango(Request $request): array
+    {
+        $hoy = Carbon::today();
+        $periodo = mb_strtolower((string) $request->input('periodo', 'semana'));
+
+        switch ($periodo) {
+            case 'hoy':
+                $desde = $hoy->copy();
+                $hasta = $hoy->copy();
+                break;
+            case 'ayer':
+                $desde = $hoy->copy()->subDay();
+                $hasta = $desde->copy();
+                break;
+            case 'mes':
+                $desde = $hoy->copy()->startOfMonth();
+                $hasta = $hoy->copy();
+                break;
+            case 'anio':
+                $desde = $hoy->copy()->startOfYear();
+                $hasta = $hoy->copy();
+                break;
+            case 'rango':
+                $desde = $this->fecha($request->input('desde')) ?? $hoy->copy()->startOfWeek();
+                $hasta = $this->fecha($request->input('hasta')) ?? $hoy->copy();
+                if ($desde->gt($hasta)) {
+                    [$desde, $hasta] = [$hasta, $desde];
+                }
+                // Techo defensivo: cinco años bastan para cualquier comparativo
+                if ((int) $desde->diffInDays($hasta) > 1826) {
+                    $desde = $hasta->copy()->subDays(1826);
+                }
+                break;
+            default:
+                $periodo = 'semana';
+                $desde = $hoy->copy()->startOfWeek();
+                $hasta = $hoy->copy();
+        }
+
+        $dias = (int) $desde->diffInDays($hasta) + 1;
+        $granularidad = $dias <= 1 ? 'hora' : ($dias <= 92 ? 'dia' : 'mes');
+
+        return [$periodo, $desde, $hasta, $granularidad];
+    }
+
+    private function fecha($valor): ?Carbon
+    {
+        if (! $valor) {
+            return null;
+        }
+
+        try {
+            return Carbon::parse($valor)->startOfDay();
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    // ── Resumen compacto ──────────────────────────────────────────
+
+    private function resumen(Carbon $inicio, Carbon $fin, Carbon $hoy, bool $verVentas, bool $verCompras, bool $verProductos, bool $verPacientes, bool $verLaboratorio, bool $verInternaciones): array
     {
         $resumen = [];
 
         if ($verVentas) {
-            $ventasHoy = Venta::where('estado', 'ACTIVO')->whereDate('fecha_hora', $hoy);
-            $ventasMes = Venta::where('estado', 'ACTIVO')->whereDate('fecha_hora', '>=', $inicioMes);
-            $ventasMesAnterior = Venta::where('estado', 'ACTIVO')
-                ->whereDate('fecha_hora', '>=', $inicioMesAnterior)
-                ->whereDate('fecha_hora', '<', $inicioMes);
+            $ventas = Venta::where('estado', 'ACTIVO')->whereBetween('fecha_hora', [$inicio, $fin]);
 
-            $totalMes = (float) (clone $ventasMes)->sum('total');
-            $cantidadMes = (clone $ventasMes)->count();
-            $totalMesAnterior = (float) $ventasMesAnterior->sum('total');
+            $total = (float) (clone $ventas)->sum('total');
+            $cantidad = (clone $ventas)->count();
 
-            $resumen['ventas_hoy'] = (float) (clone $ventasHoy)->sum('total');
-            $resumen['ventas_hoy_cantidad'] = (clone $ventasHoy)->count();
-            $resumen['ventas_mes'] = $totalMes;
-            $resumen['ventas_mes_cantidad'] = $cantidadMes;
-            $resumen['ticket_promedio'] = $cantidadMes > 0 ? round($totalMes / $cantidadMes, 2) : 0;
-            $resumen['ventas_variacion'] = $totalMesAnterior > 0
-                ? round((($totalMes - $totalMesAnterior) / $totalMesAnterior) * 100, 1)
-                : null;
+            $resumen['ventas_total'] = $total;
+            $resumen['ventas_cantidad'] = $cantidad;
+            $resumen['ticket_promedio'] = $cantidad > 0 ? round($total / $cantidad, 2) : 0;
             $resumen['ventas_pendientes'] = (float) Venta::where('estado', 'PENDIENTE')->whereNull('fecha_hora_cobro')->sum('total');
             $resumen['ventas_pendientes_cantidad'] = Venta::where('estado', 'PENDIENTE')->whereNull('fecha_hora_cobro')->count();
         }
 
         if ($verCompras) {
-            $resumen['compras_mes'] = (float) Compra::where('estado', 'ACTIVO')
-                ->whereDate('fecha_hora', '>=', $inicioMes)
+            $resumen['compras_total'] = (float) Compra::where('estado', 'ACTIVO')
+                ->whereBetween('fecha_hora', [$inicio, $fin])
                 ->sum('total');
         }
 
@@ -118,11 +176,11 @@ class DashboardController extends Controller
 
         if ($verPacientes) {
             $resumen['pacientes'] = Paciente::count();
-            $resumen['pacientes_mes'] = Paciente::whereDate('created_at', '>=', $inicioMes)->count();
+            $resumen['pacientes_nuevos'] = Paciente::whereBetween('created_at', [$inicio, $fin])->count();
         }
 
         if ($verLaboratorio) {
-            $resumen['solicitudes_mes'] = Solicitude::whereDate('fecha_solicitud', '>=', $inicioMes)->count();
+            $resumen['solicitudes'] = Solicitude::whereBetween('fecha_solicitud', [$inicio, $fin])->count();
             $resumen['solicitudes_pendientes'] = Solicitude::whereNotIn('estado', ['FINALIZADO', 'ANULADO'])->count();
         }
 
@@ -133,85 +191,80 @@ class DashboardController extends Controller
         return $resumen;
     }
 
-    // ── Series temporales ─────────────────────────────────────────
+    // ── Serie temporal del período ────────────────────────────────
 
-    private function serieDias(Carbon $desde, Carbon $hoy, bool $verVentas, bool $verCompras): array
+    private function serie(Carbon $inicio, Carbon $fin, string $granularidad, bool $verVentas, bool $verCompras): array
     {
+        [$expresion, $formato] = match ($granularidad) {
+            'hora' => ["DATE_FORMAT(fecha_hora, '%Y-%m-%d %H')", 'Y-m-d H'],
+            'mes' => ["DATE_FORMAT(fecha_hora, '%Y-%m')", 'Y-m'],
+            default => ['DATE(fecha_hora)', 'Y-m-d'],
+        };
+
         $ventas = $verVentas
             ? Venta::where('estado', 'ACTIVO')
-                ->whereDate('fecha_hora', '>=', $desde)
-                ->whereDate('fecha_hora', '<=', $hoy)
-                ->selectRaw('DATE(fecha_hora) as dia, SUM(total) as total, COUNT(*) as cantidad')
-                ->groupBy('dia')
+                ->whereBetween('fecha_hora', [$inicio, $fin])
+                ->selectRaw("$expresion as clave, SUM(total) as total, COUNT(*) as cantidad")
+                ->groupBy('clave')
                 ->get()
-                ->keyBy(fn ($fila) => (string) $fila->dia)
+                ->keyBy(fn ($fila) => (string) $fila->clave)
             : collect();
 
         $compras = $verCompras
             ? Compra::where('estado', 'ACTIVO')
-                ->whereDate('fecha_hora', '>=', $desde)
-                ->whereDate('fecha_hora', '<=', $hoy)
-                ->selectRaw('DATE(fecha_hora) as dia, SUM(total) as total')
-                ->groupBy('dia')
+                ->whereBetween('fecha_hora', [$inicio, $fin])
+                ->selectRaw("$expresion as clave, SUM(total) as total")
+                ->groupBy('clave')
                 ->get()
-                ->keyBy(fn ($fila) => (string) $fila->dia)
+                ->keyBy(fn ($fila) => (string) $fila->clave)
             : collect();
 
+        $cursor = $granularidad === 'mes' ? $inicio->copy()->startOfMonth() : $inicio->copy();
         $serie = [];
-        for ($fecha = $desde->copy(); $fecha->lte($hoy); $fecha->addDay()) {
-            $clave = $fecha->format('Y-m-d');
+
+        while ($cursor->lte($fin)) {
+            $clave = $cursor->format($formato);
             $serie[] = [
-                'fecha' => $clave,
+                'clave' => $clave,
+                'etiqueta' => $this->etiqueta($cursor, $granularidad),
+                'detalle' => $this->detalleEtiqueta($cursor, $granularidad),
                 'ventas' => (float) ($ventas[$clave]->total ?? 0),
                 'cantidad' => (int) ($ventas[$clave]->cantidad ?? 0),
                 'compras' => (float) ($compras[$clave]->total ?? 0),
             ];
+
+            match ($granularidad) {
+                'hora' => $cursor->addHour(),
+                'mes' => $cursor->addMonth(),
+                default => $cursor->addDay(),
+            };
         }
 
         return $serie;
     }
 
-    private function serieMeses(Carbon $hoy, bool $verVentas, bool $verCompras): array
+    private function etiqueta(Carbon $fecha, string $granularidad): string
     {
-        $desde = $hoy->copy()->startOfMonth()->subMonths(11);
-
-        $ventas = $verVentas
-            ? Venta::where('estado', 'ACTIVO')
-                ->whereDate('fecha_hora', '>=', $desde)
-                ->selectRaw("DATE_FORMAT(fecha_hora, '%Y-%m') as mes, SUM(total) as total, COUNT(*) as cantidad")
-                ->groupBy('mes')
-                ->get()
-                ->keyBy(fn ($fila) => (string) $fila->mes)
-            : collect();
-
-        $compras = $verCompras
-            ? Compra::where('estado', 'ACTIVO')
-                ->whereDate('fecha_hora', '>=', $desde)
-                ->selectRaw("DATE_FORMAT(fecha_hora, '%Y-%m') as mes, SUM(total) as total")
-                ->groupBy('mes')
-                ->get()
-                ->keyBy(fn ($fila) => (string) $fila->mes)
-            : collect();
-
-        $serie = [];
-        for ($fecha = $desde->copy(); $fecha->lte($hoy); $fecha->addMonth()) {
-            $clave = $fecha->format('Y-m');
-            $serie[] = [
-                'mes' => $clave,
-                'etiqueta' => mb_strtoupper($fecha->locale('es')->isoFormat('MMM YY')),
-                'ventas' => (float) ($ventas[$clave]->total ?? 0),
-                'cantidad' => (int) ($ventas[$clave]->cantidad ?? 0),
-                'compras' => (float) ($compras[$clave]->total ?? 0),
-            ];
-        }
-
-        return $serie;
+        return match ($granularidad) {
+            'hora' => $fecha->format('H:i'),
+            'mes' => mb_strtoupper($fecha->locale('es')->isoFormat('MMM YY')),
+            default => $fecha->format('d/m'),
+        };
     }
 
-    private function ventasPorHora(Carbon $desde): array
+    private function detalleEtiqueta(Carbon $fecha, string $granularidad): string
+    {
+        return match ($granularidad) {
+            'hora' => $fecha->format('d/m/Y H:i'),
+            'mes' => mb_strtoupper($fecha->locale('es')->isoFormat('MMMM [de] YYYY')),
+            default => $fecha->format('d/m/Y'),
+        };
+    }
+
+    private function ventasPorHora(Carbon $inicio, Carbon $fin): array
     {
         $filas = Venta::where('estado', 'ACTIVO')
-            ->whereDate('fecha_hora', '>=', $desde)
+            ->whereBetween('fecha_hora', [$inicio, $fin])
             ->selectRaw('HOUR(fecha_hora) as hora, COUNT(*) as cantidad, SUM(total) as total')
             ->groupBy('hora')
             ->get()
@@ -231,10 +284,10 @@ class DashboardController extends Controller
 
     // ── Distribuciones ────────────────────────────────────────────
 
-    private function tipoPago(Carbon $desde): array
+    private function tipoPago(Carbon $inicio, Carbon $fin): array
     {
         $filas = Venta::where('estado', 'ACTIVO')
-            ->whereDate('fecha_hora', '>=', $desde)
+            ->whereBetween('fecha_hora', [$inicio, $fin])
             ->selectRaw('COALESCE(tipo_pago, ?) as tipo_pago, SUM(total) as total, COUNT(*) as cantidad', ['SIN DEFINIR'])
             ->groupBy('tipo_pago')
             ->orderByDesc('total')
@@ -248,13 +301,13 @@ class DashboardController extends Controller
         return $this->plegarEnOtros($filas, 'tipo_pago');
     }
 
-    private function topProductos(Carbon $desde): array
+    private function topProductos(Carbon $inicio, Carbon $fin): array
     {
         return VentaDetalle::query()
             ->join('ventas', 'ventas.id', '=', 'venta_detalles.venta_id')
             ->whereNull('ventas.deleted_at')
             ->where('ventas.estado', 'ACTIVO')
-            ->whereDate('ventas.fecha_hora', '>=', $desde)
+            ->whereBetween('ventas.fecha_hora', [$inicio, $fin])
             ->selectRaw('venta_detalles.nombre as nombre, SUM(venta_detalles.cantidad) as cantidad, SUM(venta_detalles.total) as total')
             ->groupBy('venta_detalles.nombre')
             ->orderByDesc('total')
@@ -268,7 +321,7 @@ class DashboardController extends Controller
             ->all();
     }
 
-    private function porTipoProducto(Carbon $desde): array
+    private function porTipoProducto(Carbon $inicio, Carbon $fin): array
     {
         $filas = VentaDetalle::query()
             ->join('ventas', 'ventas.id', '=', 'venta_detalles.venta_id')
@@ -276,7 +329,7 @@ class DashboardController extends Controller
             ->leftJoin('tipo_productos', 'tipo_productos.id', '=', 'productos.tipo_producto_id')
             ->whereNull('ventas.deleted_at')
             ->where('ventas.estado', 'ACTIVO')
-            ->whereDate('ventas.fecha_hora', '>=', $desde)
+            ->whereBetween('ventas.fecha_hora', [$inicio, $fin])
             ->selectRaw('COALESCE(tipo_productos.nombre, ?) as tipo, SUM(venta_detalles.total) as total', ['SIN CATEGORÍA'])
             ->groupBy('tipo')
             ->orderByDesc('total')
@@ -290,7 +343,7 @@ class DashboardController extends Controller
     }
 
     /**
-     * Las donas se pintan con la paleta categórica en orden por tamaño, así que
+     * Las tortas se pintan con la paleta categórica en orden por tamaño, así que
      * cualquier par de porciones puede quedar contiguo. Solo cuatro ranuras
      * superan la validación con todos los pares, de modo que el excedente se
      * pliega en OTROS en lugar de reciclar colores.
@@ -311,12 +364,12 @@ class DashboardController extends Controller
         return $filas->take($limite)->push($otros)->values()->all();
     }
 
-    private function topVendedores(Carbon $desde): array
+    private function topVendedores(Carbon $inicio, Carbon $fin): array
     {
         return Venta::query()
             ->join('users', 'users.id', '=', 'ventas.user_id')
             ->where('ventas.estado', 'ACTIVO')
-            ->whereDate('ventas.fecha_hora', '>=', $desde)
+            ->whereBetween('ventas.fecha_hora', [$inicio, $fin])
             ->selectRaw('users.name as nombre, SUM(ventas.total) as total, COUNT(*) as cantidad')
             ->groupBy('users.id', 'users.name')
             ->orderByDesc('total')
@@ -330,10 +383,34 @@ class DashboardController extends Controller
             ->all();
     }
 
-    private function solicitudesPorEstado(Carbon $desde): array
+    /**
+     * Profesionales (doctores) que derivaron las ventas del período. Las ventas
+     * sin doctor asignado no forman parte del ranking.
+     */
+    private function topProfesionales(Carbon $inicio, Carbon $fin): array
+    {
+        return Venta::query()
+            ->join('doctores', 'doctores.id', '=', 'ventas.doctor_id')
+            ->whereNull('doctores.deleted_at')
+            ->where('ventas.estado', 'ACTIVO')
+            ->whereBetween('ventas.fecha_hora', [$inicio, $fin])
+            ->selectRaw('doctores.nombre as nombre, SUM(ventas.total) as total, COUNT(*) as cantidad')
+            ->groupBy('doctores.id', 'doctores.nombre')
+            ->orderByDesc('total')
+            ->limit(6)
+            ->get()
+            ->map(fn ($fila) => [
+                'nombre' => (string) $fila->nombre,
+                'total' => (float) $fila->total,
+                'cantidad' => (int) $fila->cantidad,
+            ])
+            ->all();
+    }
+
+    private function solicitudesPorEstado(Carbon $inicio, Carbon $fin): array
     {
         return Solicitude::query()
-            ->whereDate('fecha_solicitud', '>=', $desde)
+            ->whereBetween('fecha_solicitud', [$inicio, $fin])
             ->selectRaw('estado, COUNT(*) as cantidad')
             ->groupBy('estado')
             ->orderByDesc('cantidad')

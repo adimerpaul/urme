@@ -13,8 +13,12 @@
 
       <div class="row items-center q-mb-xs">
         <div>
-          <div class="text-h6 text-weight-bold">Ventas</div>
-          <div class="text-caption text-grey-6">Historial de ventas y proformas de pago</div>
+          <div class="text-h6 text-weight-bold">{{ soloFarmacia ? 'Ventas de farmacia' : 'Ventas' }}</div>
+          <div class="text-caption text-grey-6">
+            {{ soloFarmacia
+              ? 'Historial de ventas compuestas solo por productos de farmacia'
+              : 'Historial de ventas y proformas de pago' }}
+          </div>
         </div>
         <q-space />
         <q-btn v-if="canCerrarCaja" rounded outline color="teal-8" icon="lock_clock" class="q-mr-sm"
@@ -24,8 +28,10 @@
           </q-tooltip>
         </q-btn>
         <q-btn v-if="canCrear" rounded unelevated color="primary" icon="point_of_sale"
-               label="Nueva venta" no-caps :disable="caja.cerrada" to="/ventas/crear">
+               :label="soloFarmacia ? 'Nueva venta de farmacia' : 'Nueva venta'" no-caps
+               :disable="caja.cerrada" :to="rutaCrear">
           <q-tooltip v-if="caja.cerrada">Su caja de hoy ya fue cerrada</q-tooltip>
+          <q-tooltip v-else-if="soloFarmacia">Registrar una venta solo con productos de farmacia</q-tooltip>
         </q-btn>
       </div>
 
@@ -67,50 +73,76 @@
 
       <!-- ══ HISTORIAL ══════════════════════════════════════════════ -->
       <div>
-        <div class="row items-center q-col-gutter-xs q-mb-xs">
-          <div class="col-auto">
-            <q-btn dense unelevated no-caps color="primary" icon="today" label="Hoy" @click="filtrarHoy">
-              <q-tooltip>Ventas de hoy, de 00:00 a 23:59</q-tooltip>
-            </q-btn>
-          </div>
-          <div class="col-auto">
-            <q-btn dense outline no-caps color="grey-7" icon="event_repeat" label="Ver todo" @click="verTodo">
-              <q-tooltip>Quitar el filtro de fecha y hora</q-tooltip>
-            </q-btn>
-          </div>
-          <div class="col-auto">
-            <q-input v-model="filtro.fecha_inicio" label="Fecha inicio" dense outlined type="date"
-                     style="width:140px" @update:model-value="onFiltroChange" />
-          </div>
-          <div class="col-auto">
-            <q-input v-model="filtro.hora_inicio" label="Desde hora" dense outlined type="time"
-                     style="width:110px" @update:model-value="onFiltroChange" />
-          </div>
-          <div class="col-auto">
-            <q-input v-model="filtro.fecha_fin" label="Fecha fin" dense outlined type="date"
-                     style="width:140px" @update:model-value="onFiltroChange" />
-          </div>
-          <div class="col-auto">
-            <q-input v-model="filtro.hora_fin" label="Hasta hora" dense outlined type="time"
-                     style="width:110px" @update:model-value="onFiltroChange" />
-          </div>
-          <div class="col-auto">
-            <q-select v-model="filtro.paciente_id" label="Paciente" dense outlined clearable use-input
-                      input-debounce="350" :options="opcionesPaciente"
-                      option-value="id" option-label="nombre_completo" emit-value map-options
-                      style="width:220px" @filter="filtrarPacientes" @update:model-value="onFiltroChange">
-              <template v-slot:no-option>
-                <q-item><q-item-section class="text-grey">Sin resultados</q-item-section></q-item>
-              </template>
-            </q-select>
-          </div>
-          <div class="col-auto">
-            <q-select v-model="filtro.estado" label="Estado" dense outlined clearable
-                      :options="['ACTIVO', 'PENDIENTE', 'ANULADO']" style="width:140px" @update:model-value="onFiltroChange" />
-          </div>
-        </div>
+        <!-- Los campos van sin label flotante: el rótulo de cada grupo va al
+             lado y el valor vacío muestra el nombre del filtro, así la barra
+             ocupa una sola línea baja en vez de ocho cajas altas. -->
+        <div class="filtros q-mb-xs">
+          <q-btn dense unelevated no-caps size="sm" color="primary" icon="today" label="Hoy" @click="filtrarHoy">
+            <q-tooltip>Ventas de hoy, de 00:00 a 23:59</q-tooltip>
+          </q-btn>
+          <q-btn dense flat no-caps size="sm" color="grey-7" icon="event_repeat" label="Ver todo" @click="verTodo">
+            <q-tooltip>Quitar el filtro de fecha y hora</q-tooltip>
+          </q-btn>
 
-        <div class="text-caption text-grey-6 q-mb-xs">{{ rangoFiltro }}</div>
+          <q-separator vertical class="filtros__sep" />
+
+          <span class="filtros__rotulo">Desde</span>
+          <q-input v-model="filtro.fecha_inicio" dense outlined hide-bottom-space type="date"
+                   class="filtros__campo" style="width:120px" @update:model-value="onFiltroChange">
+            <q-tooltip>Fecha de inicio</q-tooltip>
+          </q-input>
+          <q-input v-model="filtro.hora_inicio" dense outlined hide-bottom-space type="time"
+                   class="filtros__campo" style="width:86px" @update:model-value="onFiltroChange">
+            <q-tooltip>Hora de inicio</q-tooltip>
+          </q-input>
+
+          <span class="filtros__rotulo">Hasta</span>
+          <q-input v-model="filtro.fecha_fin" dense outlined hide-bottom-space type="date"
+                   class="filtros__campo" style="width:120px" @update:model-value="onFiltroChange">
+            <q-tooltip>Fecha de fin</q-tooltip>
+          </q-input>
+          <q-input v-model="filtro.hora_fin" dense outlined hide-bottom-space type="time"
+                   class="filtros__campo" style="width:86px" @update:model-value="onFiltroChange">
+            <q-tooltip>Hora de fin</q-tooltip>
+          </q-input>
+
+          <q-separator vertical class="filtros__sep" />
+
+          <q-select v-model="filtro.paciente_id" dense outlined clearable use-input hide-bottom-space
+                    input-debounce="350" :options="opcionesPaciente"
+                    option-value="id" option-label="nombre_completo" emit-value map-options
+                    :display-value="pacienteDisplay"
+                    :class="['filtros__campo', { 'filtros__campo--vacio': !filtro.paciente_id }]"
+                    style="width:200px" @filter="filtrarPacientes" @update:model-value="onPacienteFiltro">
+            <template v-slot:prepend><q-icon name="person_search" size="16px" color="grey-6" /></template>
+            <template v-slot:no-option>
+              <q-item><q-item-section class="text-grey">Sin resultados</q-item-section></q-item>
+            </template>
+          </q-select>
+
+          <q-select v-model="filtro.user_id" dense outlined clearable hide-bottom-space
+                    :options="usuarios" option-value="id" emit-value map-options
+                    :option-label="u => `${u.name} (${u.cantidad})`"
+                    :display-value="usuarioDisplay"
+                    :class="['filtros__campo', { 'filtros__campo--vacio': !filtro.user_id }]"
+                    style="width:190px" @update:model-value="onUsuarioFiltro">
+            <template v-slot:prepend><q-icon name="badge" size="16px" color="grey-6" /></template>
+            <template v-slot:no-option>
+              <q-item><q-item-section class="text-grey">Nadie vendió en este rango</q-item-section></q-item>
+            </template>
+          </q-select>
+
+          <q-select v-model="filtro.estado" dense outlined clearable hide-bottom-space
+                    :options="['ACTIVO', 'PENDIENTE', 'ANULADO']"
+                    :display-value="filtro.estado || 'Estado'"
+                    :class="['filtros__campo', { 'filtros__campo--vacio': !filtro.estado }]"
+                    style="width:140px" @update:model-value="onFiltroChange">
+            <template v-slot:prepend><q-icon name="filter_alt" size="16px" color="grey-6" /></template>
+          </q-select>
+
+          <q-space />
+          <span class="filtros__rango">{{ rangoFiltro }}</span>
+        </div>
 
         <!-- Ancho de columnas fijo y alto mínimo: la tabla no cambia de forma al cargar -->
         <div class="tabla-ventas-wrap">
@@ -137,11 +169,11 @@
               <td class="q-pa-xs">
                 <q-btn-dropdown label="Opciones" no-caps size="10px" dense rounded unelevated color="primary">
                   <q-list dense>
-                    <q-item clickable v-close-popup @click="verDetalle(row)">
+                    <q-item v-if="canDetalle" clickable v-close-popup @click="verDetalle(row)">
                       <q-item-section avatar><q-icon name="visibility" color="primary" /></q-item-section>
                       <q-item-section><q-item-label>Ver detalle ({{ row.detalles_count }})</q-item-label></q-item-section>
                     </q-item>
-                    <q-item clickable v-close-popup @click="imprimir(row)">
+                    <q-item v-if="canDetalle" clickable v-close-popup @click="imprimir(row)">
                       <q-item-section avatar><q-icon name="print" color="primary" /></q-item-section>
                       <q-item-section><q-item-label>Imprimir</q-item-label></q-item-section>
                     </q-item>
@@ -289,7 +321,7 @@
           <!-- El total del sistema es el dinero que se debe entregar: no se
                muestra mientras se declara, solo después de cerrada la caja. -->
           <div v-if="caja.cerrada && !editandoCierre" class="row q-col-gutter-xs q-mb-sm">
-            <div class="col-6">
+            <div v-if="canMontos" class="col-6">
               <q-card flat bordered class="q-pa-xs text-center">
                 <div class="text-caption text-grey-6">Ventas del día (sistema)</div>
                 <div class="text-subtitle1 text-weight-bold text-primary">
@@ -297,7 +329,7 @@
                 </div>
               </q-card>
             </div>
-            <div class="col-6">
+            <div :class="canMontos ? 'col-6' : 'col-12'">
               <q-card flat bordered class="q-pa-xs text-center">
                 <div class="text-caption text-grey-6">Cantidad de ventas</div>
                 <div class="text-subtitle1 text-weight-bold">
@@ -315,12 +347,14 @@
                   <td class="text-grey-7">Efectivo declarado</td>
                   <td class="text-right text-weight-bold">{{ money(caja.cierre?.monto) }} Bs</td>
                 </tr>
-                <tr>
+                <!-- La diferencia contra el sistema es solo para quien tiene 'Ver Montos Caja'. -->
+                <tr v-if="canMontos">
                   <td class="text-grey-7">Diferencia contra el sistema</td>
                   <td class="text-right">
-                    <q-badge :color="Number(caja.cierre?.diferencia) === 0 ? 'positive'
-                      : (Number(caja.cierre?.diferencia) > 0 ? 'blue-7' : 'negative')">
-                      {{ money(caja.cierre?.diferencia) }} Bs
+                    <q-badge :color="diferencia(caja.cierre?.diferencia).color" class="text-weight-bold">
+                      <q-icon :name="diferencia(caja.cierre?.diferencia).icono" size="12px" class="q-mr-xs" />
+                      {{ diferencia(caja.cierre?.diferencia).monto }} Bs
+                      <q-tooltip>{{ diferencia(caja.cierre?.diferencia).titulo }}</q-tooltip>
                     </q-badge>
                   </td>
                 </tr>
@@ -389,10 +423,20 @@ import { formatBoliviaDate, formatBoliviaDateTime } from '../../../addons/dateTi
 
 const { proxy } = getCurrentInstance()
 
+// soloFarmacia: la misma pantalla acotada a las ventas de puros productos de farmacia.
+const props = defineProps({
+  soloFarmacia: { type: Boolean, default: false },
+})
+
+// Desde farmacia se crea la venta en su propia pantalla, limitada a productos de farmacia.
+const rutaCrear = computed(() => props.soloFarmacia ? '/ventas-farmacia/crear' : '/ventas/crear')
+
 // ── Permisos ───────────────────────────────────────────────────
 const canVer      = computed(() => proxy.$store.hasPermission('Ver Ventas'))
 const canCrear    = computed(() => proxy.$store.hasPermission('Crear Ventas'))
 const canEliminar = computed(() => proxy.$store.hasPermission('Eliminar Ventas'))
+// Detalle de la venta y reimpresión del comprobante: permiso aparte.
+const canDetalle  = computed(() => proxy.$store.hasPermission('Ver Detalle Ventas'))
 // Montos acumulados de caja (tarjetas de totales): permiso aparte.
 const canMontos   = computed(() => proxy.$store.hasPermission('Ver Montos Caja'))
 
@@ -459,6 +503,19 @@ async function guardarCierre () {
 }
 
 function money (v) { return Number(v || 0).toFixed(2) }
+
+/**
+ * Misma lectura que en Cierres de caja: sobrante en verde con +, faltante en
+ * rojo con −, caja cuadrada en gris. El monto va en valor absoluto porque el
+ * signo ya lo dice el ícono.
+ */
+function diferencia (valor) {
+  const n = Math.round((Number(valor) || 0) * 100) / 100
+  if (n > 0) return { icono: 'add', color: 'positive', texto: 'text-positive', titulo: 'Sobrante: se declaró de más', monto: money(n) }
+  if (n < 0) return { icono: 'remove', color: 'negative', texto: 'text-negative', titulo: 'Faltante: se declaró de menos', monto: money(-n) }
+  return { icono: 'check', color: 'grey-6', texto: 'text-grey-7', titulo: 'Sin diferencia: la caja cuadra', monto: money(0) }
+}
+
 function formatFecha (v) { return formatBoliviaDateTime(v) }
 function formatSoloFecha (v) { return formatBoliviaDate(v, '—') }
 
@@ -497,8 +554,30 @@ const filtro = ref({
   hora_inicio: '00:00',
   hora_fin: '23:59',
   paciente_id: null,
+  user_id: null,
   estado: null,
 })
+
+/* Vendedores del rango: la lista llega con cada carga del historial y no se
+   recorta al filtrar por usuario, así se puede saltar de uno a otro. El
+   seleccionado se guarda aparte para seguir mostrando su nombre aunque el
+   nuevo rango ya no lo incluya. */
+const usuarios = ref([])
+const usuarioSel = ref(null)
+const pacienteSel = ref(null)
+
+const usuarioDisplay = computed(() => usuarioSel.value?.name || 'Usuario')
+const pacienteDisplay = computed(() => pacienteSel.value?.nombre_completo || 'Paciente')
+
+function onUsuarioFiltro (val) {
+  usuarioSel.value = val ? (usuarios.value.find(u => u.id === val) || usuarioSel.value) : null
+  onFiltroChange()
+}
+
+function onPacienteFiltro (val) {
+  pacienteSel.value = val ? (opcionesPaciente.value.find(p => p.id === val) || pacienteSel.value) : null
+  onFiltroChange()
+}
 
 const rangoFiltro = computed(() => {
   const f = filtro.value
@@ -546,11 +625,14 @@ async function loadVentas () {
         hora_inicio: filtro.value.hora_inicio,
         hora_fin: filtro.value.hora_fin,
         paciente_id: filtro.value.paciente_id,
+        user_id: filtro.value.user_id,
         estado: filtro.value.estado,
+        solo_farmacia: props.soloFarmacia ? 1 : undefined,
       },
     })
     const data = res.data || {}
     resumen.value = data.resumen || { total_ventas: 0, total_anuladas: 0, cantidad: 0 }
+    usuarios.value = data.usuarios || []
     ventas.value = data.ventas?.data || []
     totalVentas.value = data.ventas?.total || 0
   } catch (e) {
@@ -635,6 +717,40 @@ watch(() => proxy.$store.isLogged, (val) => { if (val) init() }, { immediate: tr
 </script>
 
 <style scoped>
+/* ── Barra de filtros ──────────────────────────────────────────
+   Una sola fila baja: campos sin label flotante ni espacio para
+   mensajes, separados por rótulos de texto en lugar de cajas. */
+.filtros {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  background: #fff;
+  border: 1px solid #e3e3de;
+  border-radius: 8px;
+}
+.filtros__rotulo {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  color: #9a9992;
+}
+.filtros__sep {
+  height: 20px;
+  margin: 0 2px;
+}
+.filtros__rango {
+  font-size: 11px;
+  color: #9a9992;
+}
+/* Sin selección el campo muestra el nombre del filtro en gris, como
+   un placeholder: reemplaza al label sin ocupar una línea propia. */
+.filtros__campo--vacio :deep(.q-field__native > span) {
+  color: #9a9992;
+}
+
 .ventas-compactas :deep(.q-field--dense:not(.q-textarea) .q-field__control),
 .ventas-compactas :deep(.q-field--dense:not(.q-textarea) .q-field__marginal) {
   height: 30px;

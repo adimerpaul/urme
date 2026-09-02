@@ -173,6 +173,9 @@ const menuSections = [
     links: [
       { title: 'Inicio',    icon: 'dashboard', link: '/' },
       { title: 'Usuarios',  icon: 'people',    link: '/usuarios' },
+      { title: 'Ventas',    icon: 'point_of_sale', link: '/ventas' },
+      { title: 'Nueva venta', icon: 'add_shopping_cart', link: '/ventas/crear' },
+      { title: 'Cierres de caja', icon: 'lock_clock', link: '/cierres-caja' },
     ],
   },
   {
@@ -184,9 +187,10 @@ const menuSections = [
       { title: 'Productos por vencer', icon: 'hourglass_bottom', link: '/productos-por-vencer' },
       { title: 'Productos vencidos', icon: 'warning', link: '/productos-vencidos' },
       { title: 'Compras',   icon: 'shopping_cart', link: '/compras' },
-      { title: 'Ventas',    icon: 'point_of_sale', link: '/ventas' },
-      { title: 'Nueva venta', icon: 'add_shopping_cart', link: '/ventas/crear' },
-      { title: 'Cierres de caja', icon: 'lock_clock', link: '/cierres-caja' },
+      { title: 'Nueva compra', icon: 'add_shopping_cart', link: '/compras/crear' },
+      { title: 'Proveedores', icon: 'local_shipping', link: '/proveedores' },
+      { title: 'Ventas',    icon: 'point_of_sale', link: '/ventas-farmacia' },
+      { title: 'Nueva venta de farmacia', icon: 'add_shopping_cart', link: '/ventas-farmacia/crear' },
     ],
   },
   {

@@ -16,7 +16,7 @@ class DatabaseSeeder extends Seeder
             foreach ($permisos as $p) {
                 Permission::updateOrCreate(
                     ['name' => $p, 'guard_name' => 'web'],
-                    ['modulo' => $modulo],
+                    ['modulo' => $modulo, 'descripcion' => Permisos::descripcionDe($p)],
                 );
             }
         }

@@ -75,6 +75,40 @@ class InternacionController extends Controller
         return response()->json(['message' => 'Internación eliminada']);
     }
 
+    /**
+     * Planilla de seguimiento del seguro: entrega de informe, respuesta de
+     * auditoría, facturación, cancelación y tipo de pago de la internación.
+     */
+    public function updateSeguimiento(Request $request, $id)
+    {
+        $this->req($request, 'Editar Seguros');
+
+        $request->validate([
+            'entrega_informe' => 'nullable|date',
+            'respuesta_auditoria' => 'nullable|date',
+            'fecha_facturacion' => 'nullable|date',
+            'monto_facturado' => 'nullable|numeric|min:0',
+            'fecha_cancelacion' => 'nullable|date',
+            'tipo_pago' => 'nullable|string|max:30',
+            'observacion_seguro' => 'nullable|string',
+        ]);
+
+        $internacion = Internacion::findOrFail($id);
+        $internacion->update([
+            'entrega_informe' => $request->entrega_informe ?: null,
+            'respuesta_auditoria' => $request->respuesta_auditoria ?: null,
+            'fecha_facturacion' => $request->fecha_facturacion ?: null,
+            'monto_facturado' => $request->monto_facturado !== null && $request->monto_facturado !== ''
+                ? $request->monto_facturado
+                : null,
+            'fecha_cancelacion' => $request->fecha_cancelacion ?: null,
+            'tipo_pago' => $request->tipo_pago ?: null,
+            'observacion_seguro' => $request->observacion_seguro ?: null,
+        ]);
+
+        return response()->json($internacion->load(['paciente:id,nombre_completo,ci', 'items:id,internacion_id,nombre,cantidad,precio,total']));
+    }
+
     public function pdf(Request $request, $id)
     {
         $this->req($request, 'Ver Internaciones');

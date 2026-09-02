@@ -24,14 +24,22 @@ class VentaController extends Controller
         $estado = $request->input('estado', '');
         $perPage = (int) $request->input('per_page', 15);
 
-        $query = Venta::with([
+        // Los ítems de cada venta solo viajan a quien puede ver el detalle;
+        // sin ese permiso el listado se queda en la cantidad de ítems.
+        $verDetalle = $request->user()->can('Ver Detalle Ventas');
+
+        $relaciones = [
             'paciente:id,nombre_completo,ci',
             'doctor:id,nombre',
             'seguro:id,nombre',
             'user:id,name',
             'cobradoPor:id,name',
-            'detalles:id,venta_id,nombre,lote,precio,cantidad,total',
-        ])
+        ];
+        if ($verDetalle) {
+            $relaciones[] = 'detalles:id,venta_id,nombre,lote,precio,cantidad,total';
+        }
+
+        $query = Venta::with($relaciones)
             ->withCount('detalles')
             ->orderByDesc('fecha_hora');
 
@@ -39,6 +47,18 @@ class VentaController extends Controller
 
         $resumenQuery = Venta::query();
         $this->applyFiltros($resumenQuery, $fechaInicio, $fechaFin, $pacienteId, $userId, '', $horaInicio, $horaFin);
+
+        // Vendedores del rango: se arma sin el filtro de usuario para que el
+        // selector siga ofreciendo a todos los que vendieron ese día.
+        $usuariosQuery = Venta::query();
+        $this->applyFiltros($usuariosQuery, $fechaInicio, $fechaFin, $pacienteId, '', $estado, $horaInicio, $horaFin);
+
+        // Pantalla de Farmacia: solo las ventas compuestas únicamente por productos de farmacia.
+        if ($request->boolean('solo_farmacia')) {
+            $this->soloFarmacia($query);
+            $this->soloFarmacia($resumenQuery);
+            $this->soloFarmacia($usuariosQuery);
+        }
 
         // Los montos acumulados de caja solo se envían a quien tiene el permiso.
         $verMontos = $request->user()->can('Ver Montos Caja');
@@ -55,13 +75,35 @@ class VentaController extends Controller
                 'cantidad' => (clone $resumenQuery)->count(),
                 'cantidad_pendientes' => (clone $resumenQuery)->where('estado', 'PENDIENTE')->whereNull('fecha_hora_cobro')->count(),
             ] : null,
+            'usuarios' => $this->usuariosVendedores($usuariosQuery),
             'ventas' => $query->paginate($perPage),
         ]);
     }
 
+    /**
+     * Usuarios que registraron alguna venta dentro del rango filtrado, con la
+     * cantidad de ventas de cada uno, para el selector del historial.
+     */
+    private function usuariosVendedores($query): array
+    {
+        return $query
+            ->join('users', 'users.id', '=', 'ventas.user_id')
+            ->selectRaw('users.id as id, users.name as name, COUNT(*) as cantidad')
+            ->groupBy('users.id', 'users.name')
+            ->orderBy('users.name')
+            ->get()
+            ->map(fn ($fila) => [
+                'id' => (int) $fila->id,
+                'name' => (string) $fila->name,
+                'cantidad' => (int) $fila->cantidad,
+            ])
+            ->all();
+    }
+
+    /** Detalle completo de una venta: alimenta el modal de detalle y la reimpresión. */
     public function show(Request $request, $id)
     {
-        $this->req($request, 'Ver Ventas');
+        $this->req($request, 'Ver Detalle Ventas');
         $venta = Venta::with(['paciente:id,nombre_completo,ci', 'doctor:id,nombre', 'seguro:id,nombre', 'user:id,name', 'cobradoPor:id,name', 'detalles.producto:id,nombre,codigo'])
             ->findOrFail($id);
 
@@ -265,6 +307,21 @@ class VentaController extends Controller
         if ($estado) {
             $query->where('estado', $estado);
         }
+    }
+
+    /**
+     * Deja en la consulta solo las ventas "puras de farmacia": tienen al menos un
+     * producto del tipo FARMACIA y ningún detalle de otro tipo (ni ítems sueltos).
+     */
+    private function soloFarmacia($query): void
+    {
+        $esFarmacia = fn ($producto) => $producto->whereHas(
+            'tipoProducto',
+            fn ($tipo) => $tipo->where('nombre', 'FARMACIA')
+        );
+
+        $query->whereHas('detalles', fn ($detalle) => $detalle->whereHas('producto', $esFarmacia))
+            ->whereDoesntHave('detalles', fn ($detalle) => $detalle->whereDoesntHave('producto', $esFarmacia));
     }
 
     private function req(Request $request, string|array $permission): void

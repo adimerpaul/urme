@@ -12,12 +12,18 @@
     <template v-else-if="proxy.$store.isLogged">
 
       <div class="row items-center q-mb-sm">
-        <q-btn flat dense round icon="arrow_back" color="grey-7" class="q-mr-sm" to="/ventas">
-          <q-tooltip>Volver a ventas</q-tooltip>
+        <q-btn flat dense round icon="arrow_back" color="grey-7" class="q-mr-sm" :to="rutaVentas">
+          <q-tooltip>{{ soloFarmacia ? 'Volver a ventas de farmacia' : 'Volver a ventas' }}</q-tooltip>
         </q-btn>
         <div>
-          <div class="text-h6 text-weight-bold">Nueva venta</div>
-          <div class="text-caption text-grey-6">Registro de una nueva venta o proforma de pago</div>
+          <div class="text-h6 text-weight-bold">
+            {{ soloFarmacia ? 'Nueva venta de farmacia' : 'Nueva venta' }}
+          </div>
+          <div class="text-caption text-grey-6">
+            {{ soloFarmacia
+              ? 'Registro de una venta compuesta solo por productos de farmacia'
+              : 'Registro de una nueva venta o proforma de pago' }}
+          </div>
         </div>
       </div>
       <q-separator class="q-mb-sm" />
@@ -26,7 +32,7 @@
         <template v-slot:avatar><q-icon name="lock" color="orange-9" /></template>
         Su caja de hoy ya fue cerrada: no puede registrar más ventas hasta mañana.
         <template v-slot:action>
-          <q-btn flat dense no-caps color="orange-10" label="Ir a ventas" to="/ventas" />
+          <q-btn flat dense no-caps color="orange-10" label="Ir a ventas" :to="rutaVentas" />
         </template>
       </q-banner>
 
@@ -35,9 +41,12 @@
         <!-- Productos -->
         <div class="col-12 col-md-7">
           <div class="row items-center q-gutter-sm q-mb-sm">
-            <span class="text-subtitle2 text-weight-bold text-grey-8">Productos</span>
+            <span class="text-subtitle2 text-weight-bold text-grey-8">
+              {{ soloFarmacia ? 'Productos de farmacia' : 'Productos' }}
+            </span>
             <q-space />
-            <q-select v-model="filtroTipo" dense outlined clearable label="Tipo" style="width:150px"
+            <!-- En modo farmacia el tipo está fijo: no se ofrece el selector. -->
+            <q-select v-if="!soloFarmacia" v-model="filtroTipo" dense outlined clearable label="Tipo" style="width:150px"
                       :options="tiposProducto" option-value="id" option-label="nombre"
                       emit-value map-options @update:model-value="onBuscarProducto" />
             <q-btn dense outline no-caps color="primary" icon="refresh" label="Actualizar"
@@ -118,14 +127,14 @@
             </div>
 
             <div>
-              <q-markup-table dense flat bordered separator="horizontal" class="full-width q-mb-sm rounded-borders tabla-compacta">
+              <q-markup-table dense flat bordered separator="horizontal" class="full-width q-mb-sm rounded-borders tabla-compacta tabla-carrito">
                 <thead>
                   <tr class="bg-grey-1 text-grey-7 text-uppercase">
-                    <th style="width:36px"></th>
+                    <th style="width:30px"></th>
                     <th class="text-left">Producto</th>
-                    <th class="text-right" style="width:86px">Cant.</th>
-                    <th class="text-right" style="width:96px">Precio</th>
-                    <th class="text-right" style="width:80px">Total</th>
+                    <th class="text-right" style="width:70px">Cant.</th>
+                    <th class="text-right" style="width:78px">Precio</th>
+                    <th class="text-right" style="width:66px">Total</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -136,16 +145,17 @@
                     <td class="text-center">
                       <q-btn flat dense round icon="delete" color="negative" size="sm" @click="quitarLinea(idx)" />
                     </td>
-                    <td>
-                      <div>{{ linea.nombre }}</div>
-                      <div v-if="linea.requiere_lote" class="text-caption text-grey-7">
+                    <td class="celda-producto">
+                      <div class="producto-nombre">
+                        {{ linea.nombre }}
+                        <q-tooltip>{{ linea.nombre }}</q-tooltip>
+                      </div>
+                      <div v-if="linea.requiere_lote" class="producto-info text-grey-7">
                         Lote: <b>{{ linea.lote }}</b>
                         <span class="q-ml-xs">Vence: {{ linea.fecha_vencimiento || 'SIN FECHA' }}</span>
+                        <span class="q-ml-xs text-positive">Disp: {{ Number(linea.cantidad_disponible).toFixed(2) }}</span>
                       </div>
-                      <div v-if="linea.requiere_lote" class="text-caption text-positive">
-                        Disponible: {{ Number(linea.cantidad_disponible).toFixed(2) }}
-                      </div>
-                      <div v-else class="text-caption text-blue-grey-7">Sin control de lote</div>
+                      <div v-else class="producto-info text-blue-grey-7">Sin control de lote</div>
                     </td>
                     <td class="celda-num"><q-input v-model.number="linea.cantidad" dense outlined type="number" step="1" min="0"
                                  input-class="text-right"
@@ -266,6 +276,7 @@
                           </q-item-label>
                           <q-item-label caption>
                             Sala: {{ int.sala || '—' }} · H.C.: {{ int.codigo_hc || '—' }}
+                            · {{ int.seguro?.nombre || 'PARTICULAR' }}
                             <span v-if="int.dias_internado"> · {{ int.dias_internado }} día(s)</span>
                           </q-item-label>
                         </q-item-section>
@@ -444,6 +455,16 @@
               <div class="col-6">
                 <q-input v-model="intQ.tipo_paciente" label="Tipo de paciente" dense outlined v-uppercase />
               </div>
+              <div class="col-12">
+                <q-select v-model="intQ.seguro_id" label="Seguro / Institución" dense outlined clearable
+                          :options="allSeguros" option-value="id" option-label="nombre"
+                          emit-value map-options
+                          hint="Sin seguro se registra como PARTICULAR">
+                  <template v-slot:no-option>
+                    <q-item><q-item-section class="text-grey">No hay seguros registrados</q-item-section></q-item>
+                  </template>
+                </q-select>
+              </div>
               <div class="col-6">
                 <q-input v-model="intQ.sala" label="Sala" dense outlined v-uppercase />
               </div>
@@ -487,11 +508,17 @@
 
 <script setup>
 import { ref, computed, watch, getCurrentInstance } from 'vue'
-import { useRouter } from 'vue-router'
 import { imprimirVenta } from '../../../addons/ventaPrint'
 
 const { proxy } = getCurrentInstance()
-const router = useRouter()
+
+// soloFarmacia: la misma pantalla acotada a vender únicamente productos de farmacia.
+const props = defineProps({
+  soloFarmacia: { type: Boolean, default: false },
+})
+
+const soloFarmacia = computed(() => props.soloFarmacia)
+const rutaVentas   = computed(() => props.soloFarmacia ? '/ventas-farmacia' : '/ventas')
 
 // ── Permisos ───────────────────────────────────────────────────
 const canCrear = computed(() => proxy.$store.hasPermission('Crear Ventas'))
@@ -616,6 +643,8 @@ async function loadProductos () {
       params: {
         q: buscarProducto.value,
         tipo_producto_id: filtroTipo.value,
+        // La venta de farmacia solo puede armarse con productos de ese tipo.
+        tipo: props.soloFarmacia ? 'FARMACIA' : undefined,
         page: pageProductos.value,
         per_page: perProductos,
       },
@@ -846,7 +875,9 @@ async function registrarVenta (estado = 'ACTIVO') {
     if (estado !== 'PENDIENTE') {
       imprimirVenta(res.data)
     }
-    router.push('/ventas')
+    // Se queda en la pantalla para seguir vendiendo: solo se refrescan los
+    // productos, porque la venta ya descontó stock de los lotes.
+    loadProductos()
   } catch (e) {
     proxy.$alert.error(e.response?.data?.message || 'Error al registrar la venta')
   } finally {
@@ -863,10 +894,18 @@ const docQuick = ref(false)
 const docQ = ref({ nombre: '', especialidad_ids: [] })
 
 const intQuick = ref(false)
-const intQ = ref({ fecha_ingreso: '', tipo_paciente: '', sala: '', codigo_hc: '' })
+const intQ = ref({ fecha_ingreso: '', tipo_paciente: '', seguro_id: null, sala: '', codigo_hc: '' })
 
 function abrirIntQuick () {
-  intQ.value = { fecha_ingreso: hoyFecha, tipo_paciente: '', sala: '', codigo_hc: '' }
+  // El seguro de la internación arranca en el del paciente y, si no tiene,
+  // en el que ya se eligió para la venta; siempre se puede cambiar o limpiar.
+  intQ.value = {
+    fecha_ingreso: hoyFecha,
+    tipo_paciente: '',
+    seguro_id: pacienteElegido.value?.seguro_id ?? nueva.value.seguro_id ?? null,
+    sala: '',
+    codigo_hc: '',
+  }
   intQuick.value = true
 }
 
@@ -984,6 +1023,34 @@ watch(() => proxy.$store.isLogged, (val) => { if (val) init() }, { immediate: tr
   padding: 3px 8px;
 }
 
+/* Carrito: ancho de columnas fijo para que un nombre largo se parta en varias
+   líneas en lugar de estirar la tabla y empujar Cant./Precio/Total fuera de vista. */
+.tabla-carrito {
+  table-layout: fixed;
+}
+
+.tabla-carrito :deep(th),
+.tabla-carrito :deep(td) {
+  font-size: 10px;
+  padding: 2px 5px;
+}
+
+.celda-producto {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.15;
+}
+
+.celda-producto .producto-nombre {
+  font-size: 10.5px;
+  font-weight: 500;
+}
+
+.celda-producto .producto-info {
+  font-size: 9px;
+  line-height: 1.1;
+}
+
 /* Celdas de Cant. y Precio: el input aprovecha todo el ancho de la columna. */
 .celda-num {
   padding: 2px 4px !important;
@@ -995,7 +1062,7 @@ watch(() => proxy.$store.isLogged, (val) => { if (val) init() }, { immediate: tr
 }
 
 .celda-num :deep(.q-field--dense .q-field__native) {
-  font-size: 12px;
+  font-size: 11px;
 }
 
 /* Las flechitas del type="number" se comían el último dígito al escribir. */

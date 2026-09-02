@@ -25,6 +25,10 @@ class UserController extends Controller
             return response()->json(['message' => 'Usuario o contraseña incorrectos'], 401);
         }
 
+        if ($user->bloqueado) {
+            return response()->json(['message' => 'Usuario bloqueado. Contacte al administrador'], 403);
+        }
+
         $token = $user->createToken('auth_token')->plainTextToken;
 
         return response()->json([
@@ -151,6 +155,29 @@ class UserController extends Controller
         User::findOrFail($id)->update(['password' => bcrypt('123456')]);
 
         return response()->json(['message' => 'Contraseña restablecida a 123456']);
+    }
+
+    public function toggleBloqueo(Request $request, $id)
+    {
+        $this->requirePermission($request, 'Editar Usuarios');
+
+        $user = User::findOrFail($id);
+
+        if ((int) $user->id === (int) $request->user()->id) {
+            return response()->json(['message' => 'No puede bloquear su propio usuario'], 422);
+        }
+
+        $user->update(['bloqueado' => ! $user->bloqueado]);
+
+        // Al bloquear se cierran todas sus sesiones: se borran todos sus tokens
+        if ($user->bloqueado) {
+            $user->tokens()->delete();
+        }
+
+        return response()->json([
+            'bloqueado' => $user->bloqueado,
+            'message' => $user->bloqueado ? 'Usuario bloqueado' : 'Usuario desbloqueado',
+        ]);
     }
 
     // ── Avatar ───────────────────────────────────────────────

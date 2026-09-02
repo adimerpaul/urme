@@ -45,25 +45,41 @@ class SeguroController extends Controller
     {
         $this->req($request, 'Ver Seguros');
 
+        // Mes de la planilla en formato YYYY-MM; sin él se listan todas las internaciones.
+        $mes = $request->input('mes');
+
         $seguro = Seguro::with([
             'pacientes:id,seguro_id,nombre_completo,ci,telefono',
-            'internaciones' => fn ($query) => $query
-                ->with(['paciente:id,nombre_completo,ci', 'items:id,internacion_id,nombre,cantidad,precio,total'])
-                ->orderByDesc('fecha_ingreso')
-                ->orderByDesc('id'),
+            'internaciones' => function ($query) use ($mes) {
+                $query->with(['paciente:id,nombre_completo,ci', 'items:id,internacion_id,nombre,cantidad,precio,total'])
+                    ->orderByDesc('fecha_ingreso')
+                    ->orderByDesc('id');
+
+                if ($mes && preg_match('/^\d{4}-\d{2}$/', $mes)) {
+                    [$anio, $numeroMes] = explode('-', $mes);
+                    $query->whereYear('fecha_ingreso', $anio)->whereMonth('fecha_ingreso', $numeroMes);
+                }
+            },
         ])->findOrFail($id);
 
-        $total = $seguro->internaciones->sum(fn ($internacion) => $internacion->items->sum('total'));
+        $internaciones = $seguro->internaciones;
+        $total = $internaciones->sum(fn ($internacion) => $internacion->items->sum('total'));
+        $completadas = $internaciones->where('seguimiento_estado', 'COMPLETADO');
 
         return response()->json([
             'seguro' => $seguro->only(['id', 'nombre', 'nit']),
+            'mes' => $mes,
             'pacientes' => $seguro->pacientes,
-            'internaciones' => $seguro->internaciones,
+            'internaciones' => $internaciones->values(),
             'resumen' => [
                 'cantidad_pacientes' => $seguro->pacientes->count(),
-                'pacientes_internados' => $seguro->internaciones->pluck('paciente_id')->unique()->count(),
-                'cantidad_internaciones' => $seguro->internaciones->count(),
+                'pacientes_internados' => $internaciones->pluck('paciente_id')->unique()->count(),
+                'cantidad_internaciones' => $internaciones->count(),
                 'total' => round((float) $total, 2),
+                'total_facturado' => round((float) $internaciones->sum('monto_facturado'), 2),
+                'total_cancelado' => round((float) $internaciones->whereNotNull('fecha_cancelacion')->sum('monto_facturado'), 2),
+                'completados' => $completadas->count(),
+                'pendientes' => $internaciones->count() - $completadas->count(),
             ],
         ]);
     }

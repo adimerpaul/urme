@@ -4,8 +4,11 @@ namespace App\Http\Controllers;
 
 use App\Models\Internacion;
 use App\Models\Paciente;
+use App\Models\Venta;
+use App\Models\VentaDetalle;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class InternacionController extends Controller
 {
@@ -62,6 +65,7 @@ class InternacionController extends Controller
             'fecha_alta' => 'nullable|date',
         ]);
         $internacion = Internacion::findOrFail($id);
+        self::bloqueadaSiPagada($internacion);
         $internacion->update($request->only(['paciente_id', 'seguro_id', 'fecha_ingreso', 'tipo_paciente', 'fecha_alta', 'codigo_hc', 'sala']));
 
         return response()->json($internacion->load(['paciente:id,nombre_completo', 'seguro:id,nombre']));
@@ -70,7 +74,9 @@ class InternacionController extends Controller
     public function destroy(Request $request, $id)
     {
         $this->req($request, 'Eliminar Internaciones');
-        Internacion::findOrFail($id)->delete();
+        $internacion = Internacion::findOrFail($id);
+        self::bloqueadaSiPagada($internacion);
+        $internacion->delete();
 
         return response()->json(['message' => 'Internación eliminada']);
     }
@@ -107,6 +113,110 @@ class InternacionController extends Controller
         ]);
 
         return response()->json($internacion->load(['paciente:id,nombre_completo,ci', 'items:id,internacion_id,nombre,cantidad,precio,total']));
+    }
+
+    /**
+     * Pago total de la internación: cobra todos los cargos de una vez.
+     *
+     * Genera una venta ACTIVO a nombre del paciente con los mismos ítems, para
+     * que el dinero entre al historial de ventas y al cierre de caja del cajero.
+     * Después del pago la internación queda bloqueada: no admite más cambios.
+     */
+    public function pagarTotal(Request $request, $id)
+    {
+        $this->req($request, 'Crear Ventas');
+
+        $request->validate([
+            'tipo_pago' => 'nullable|string|max:30',
+            'pago' => 'nullable|numeric|min:0',
+            'observacion' => 'nullable|string|max:255',
+        ]);
+
+        $internacion = Internacion::with('items')->findOrFail($id);
+
+        if ($internacion->pagado_en) {
+            abort(422, 'Esta internación ya fue pagada');
+        }
+        if ($internacion->items->isEmpty()) {
+            abort(422, 'La internación no tiene cargos que cobrar');
+        }
+        if (CierreCajaController::cierreDelDia($request->user()->id, now()->toDateString())) {
+            abort(422, 'Su caja de hoy ya fue cerrada: no puede registrar más cobros hasta mañana');
+        }
+
+        $total = round((float) $internacion->items->sum('total'), 2);
+        $pago = $request->pago !== null && $request->pago !== ''
+            ? round((float) $request->pago, 2)
+            : $total;
+
+        if ($pago < $total) {
+            abort(422, 'El pago no puede ser menor al total de la internación');
+        }
+
+        $tipoPago = $request->tipo_pago ? mb_strtoupper($request->tipo_pago) : 'EFECTIVO';
+
+        $venta = DB::transaction(function () use ($internacion, $request, $total, $pago, $tipoPago) {
+            $venta = Venta::create([
+                'user_id' => $request->user()->id,
+                'paciente_id' => $internacion->paciente_id,
+                'seguro_id' => $internacion->seguro_id,
+                'fecha_hora' => now(),
+                'tipo_pago' => $tipoPago,
+                'comentario' => 'Pago total de la internación #' . $internacion->id,
+                'estado' => 'ACTIVO',
+                'total' => $total,
+                'pago' => $pago,
+                'cambio' => round($pago - $total, 2),
+            ]);
+
+            // Los cargos viajan como ítems sueltos: la internación no mueve lotes,
+            // así que la venta no debe descontar stock de farmacia.
+            foreach ($internacion->items as $item) {
+                VentaDetalle::create([
+                    'venta_id' => $venta->id,
+                    'producto_id' => null,
+                    'nombre' => $item->nombre,
+                    'precio' => $item->precio,
+                    'cantidad' => $item->cantidad,
+                    'total' => $item->total,
+                ]);
+            }
+
+            $internacion->update([
+                'pagado_en' => now(),
+                'pagado_por_id' => $request->user()->id,
+                'venta_id' => $venta->id,
+                'monto_pagado' => $total,
+                'pago_tipo' => $tipoPago,
+                'pago_observacion' => $request->observacion ?: null,
+            ]);
+
+            return $venta;
+        });
+
+        return response()->json([
+            'message' => 'Internación cobrada',
+            'internacion' => $internacion->fresh()->load([
+                'paciente:id,nombre_completo,ci',
+                'seguro:id,nombre',
+                'pagadoPor:id,name',
+                'items.producto:id,nombre',
+                'items.user:id,name',
+            ]),
+            'venta' => $venta->load([
+                'paciente:id,nombre_completo,ci',
+                'user:id,name',
+                'detalles:id,venta_id,nombre,lote,precio,cantidad,total',
+            ]),
+        ]);
+    }
+
+    /** Una internación pagada queda congelada: ni sus datos ni sus cargos cambian. */
+    public static function bloqueadaSiPagada(Internacion $internacion): void
+    {
+        if ($internacion->pagado_en) {
+            abort(422, 'La internación ya fue pagada: no admite más cambios');
+        }
     }
 
     public function pdf(Request $request, $id)

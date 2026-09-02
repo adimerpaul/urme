@@ -36,7 +36,7 @@ class VentaController extends Controller
             'cobradoPor:id,name',
         ];
         if ($verDetalle) {
-            $relaciones[] = 'detalles:id,venta_id,nombre,lote,precio,cantidad,total';
+            $relaciones[] = 'detalles:id,venta_id,nombre,lote,precio,precio_original,cantidad,total,total_original';
         }
 
         $query = Venta::with($relaciones)
@@ -157,12 +157,19 @@ class VentaController extends Controller
             ]);
 
             $total = 0;
+            $totalOriginal = 0;
             foreach ($request->detalles as $item) {
                 $producto = ! empty($item['producto_id'])
                     ? Producto::with('tipoProducto:id,nombre')->find($item['producto_id'])
                     : null;
                 $precio = (float) $item['precio'];
                 $cantidad = (float) $item['cantidad'];
+
+                // El precio de lista sale del producto, nunca de lo que mandó el
+                // navegador: es la referencia de cuánto debería haberse cobrado.
+                // Los ítems sueltos (sin producto) no tienen lista: su referencia
+                // es el precio con el que se registraron.
+                $precioOriginal = $producto ? (float) $producto->precio : $precio;
 
                 $loteCompra = null;
                 $requiereLote = $producto
@@ -192,7 +199,9 @@ class VentaController extends Controller
                 }
 
                 $lineaTotal = round($precio * $cantidad, 2);
+                $lineaTotalOriginal = round($precioOriginal * $cantidad, 2);
                 $total += $lineaTotal;
+                $totalOriginal += $lineaTotalOriginal;
 
                 VentaDetalle::create([
                     'venta_id' => $venta->id,
@@ -202,13 +211,15 @@ class VentaController extends Controller
                     'lote' => $loteCompra?->lote,
                     'fecha_vencimiento' => $loteCompra?->fecha_vencimiento,
                     'precio' => $precio,
+                    'precio_original' => $precioOriginal,
                     'cantidad' => $cantidad,
                     'total' => $lineaTotal,
+                    'total_original' => $lineaTotalOriginal,
                 ]);
             }
 
             if ($estado === 'PENDIENTE') {
-                $venta->update(['total' => $total]);
+                $venta->update(['total' => $total, 'total_original' => $totalOriginal]);
 
                 return $venta;
             }
@@ -220,6 +231,7 @@ class VentaController extends Controller
 
             $venta->update([
                 'total' => $total,
+                'total_original' => $totalOriginal,
                 'pago' => $pago,
                 'cambio' => round($pago - $total, 2),
             ]);

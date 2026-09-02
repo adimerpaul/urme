@@ -1,0 +1,1 @@
+import{R as e,ct as t}from"./QSpinner-DoOIdKeu.js";import n from"./crear-vSELtZER.js";var r={__name:`crear`,setup(r){return(r,i)=>(t(),e(n,{"solo-farmacia":``}))}};export{r as default};

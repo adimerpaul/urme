@@ -15,17 +15,26 @@ class VentaDetalle extends Model implements AuditableContract
 
     protected $fillable = [
         'venta_id', 'producto_id', 'compra_detalle_id', 'nombre', 'lote',
-        'fecha_vencimiento', 'precio', 'cantidad', 'total',
+        'fecha_vencimiento', 'precio', 'precio_original', 'cantidad', 'total', 'total_original',
     ];
 
     protected $hidden = ['created_at', 'updated_at', 'deleted_at'];
 
     protected $casts = [
         'precio' => 'decimal:2',
+        'precio_original' => 'decimal:2',
         'cantidad' => 'decimal:4',
         'total' => 'decimal:2',
+        'total_original' => 'decimal:2',
         'fecha_vencimiento' => 'date',
     ];
+
+    /** El cajero cobró un precio distinto al de lista. */
+    public function getPrecioModificadoAttribute(): bool
+    {
+        return $this->precio_original !== null
+            && round((float) $this->precio, 2) !== round((float) $this->precio_original, 2);
+    }
 
     public function venta()
     {

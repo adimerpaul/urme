@@ -178,6 +178,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/cierres-caja/{id}', [CierreCajaController::class, 'update']);
 
     // Ingresos y gastos de Caja Administrativa y Caja General
+    Route::get('/caja-movimientos/reporte/pdf', [CajaMovimientoController::class, 'reportePdf']);
+    Route::get('/caja-movimientos/reporte/excel', [CajaMovimientoController::class, 'reporteExcel']);
+    Route::get('/caja-movimientos/reporte', [CajaMovimientoController::class, 'reporte']);
     Route::get('/caja-movimientos', [CajaMovimientoController::class, 'index']);
     Route::post('/caja-movimientos', [CajaMovimientoController::class, 'store']);
     Route::put('/caja-movimientos/{cajaMovimiento}/anular', [CajaMovimientoController::class, 'anular']);

@@ -1,1 +1,0 @@
-import{R as e,ct as t}from"./QSpinner-DoOIdKeu.js";import{t as n}from"./ProductosVencimiento-DBN-Irmv.js";var r={__name:`index`,setup(r){return(r,i)=>(t(),e(n,{tipo:`por-vencer`}))}};export{r as default};

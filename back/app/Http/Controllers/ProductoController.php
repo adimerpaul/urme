@@ -354,6 +354,18 @@ class ProductoController extends Controller
         $perPage = (int) $request->input('per_page', 20);
 
         $query = Producto::with(['fabricante:id,nombre', 'unidad:id,nombre,abreviatura', 'tipoProducto:id,nombre,color,es_laboratorio'])
+            ->addSelect([
+                'ultimo_precio_compra' => CompraDetalle::query()
+                    ->select('compra_detalles.precio')
+                    ->join('compras', 'compras.id', '=', 'compra_detalles.compra_id')
+                    ->whereColumn('compra_detalles.producto_id', 'productos.id')
+                    ->whereNull('compra_detalles.deleted_at')
+                    ->whereNull('compras.deleted_at')
+                    ->where('compras.estado', 'ACTIVO')
+                    ->orderByDesc('compras.fecha_hora')
+                    ->orderByDesc('compra_detalles.id')
+                    ->limit(1),
+            ])
             ->withSum(['compraDetalles as cantidad_con_lote' => function ($detalle) {
                 $detalle->whereNotNull('lote')
                     ->where('lote', '<>', '')

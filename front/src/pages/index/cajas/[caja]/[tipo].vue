@@ -19,11 +19,50 @@
         <q-btn v-if="canCrear" color="primary" icon="add" :label="'Registrar ' + tituloSingular.toLowerCase()" no-caps @click="nuevo" />
       </div>
 
+      <!-- Filtro semanal: se navega de lunes a domingo, sin rangos sueltos. -->
       <div class="row q-col-gutter-xs q-mb-sm items-center">
+        <div class="col-auto">
+          <q-btn-group outline>
+            <q-btn outline dense no-caps color="primary" icon="chevron_left" @click="moverSemana(-1)">
+              <q-tooltip>Semana anterior</q-tooltip>
+            </q-btn>
+            <q-btn outline dense no-caps color="primary" class="semana-btn" :label="etiquetaSemana">
+              <q-tooltip>Semana del {{ filtro.desde }} al {{ filtro.hasta }}</q-tooltip>
+              <q-popup-proxy cover transition-show="scale" transition-hide="scale">
+                <q-date v-model="diaSemana" mask="YYYY-MM-DD" minimal
+                        today-btn @update:model-value="irASemanaDe" />
+              </q-popup-proxy>
+            </q-btn>
+            <q-btn outline dense no-caps color="primary" icon="chevron_right" @click="moverSemana(1)">
+              <q-tooltip>Semana siguiente</q-tooltip>
+            </q-btn>
+          </q-btn-group>
+        </div>
+        <div class="col-auto">
+          <q-btn flat dense no-caps size="sm" color="grey-7" icon="today" label="Esta semana"
+                 :disable="esSemanaActual" @click="irSemanaActual" />
+        </div>
         <div class="col-auto"><q-input v-model="filtro.q" dense outlined clearable label="Buscar" debounce="350" style="width:230px" @update:model-value="buscar"><template #prepend><q-icon name="search" /></template></q-input></div>
-        <div class="col-auto"><q-input v-model="filtro.desde" dense outlined type="date" label="Desde" style="width:150px" @update:model-value="buscar" /></div>
-        <div class="col-auto"><q-input v-model="filtro.hasta" dense outlined type="date" label="Hasta" style="width:150px" @update:model-value="buscar" /></div>
         <q-btn flat round dense icon="refresh" color="primary" :loading="loading" @click="cargar"><q-tooltip>Actualizar</q-tooltip></q-btn>
+        <q-btn-dropdown outline dense no-caps color="teal-8" icon="summarize" label="Reporte semanal" class="q-ml-sm">
+          <q-list dense>
+            <q-item-label header class="q-py-xs">Ingresos y gastos · {{ etiquetaSemana }}</q-item-label>
+            <q-item clickable v-close-popup :disable="exportando" @click="exportarReporte('pdf')">
+              <q-item-section avatar><q-icon name="picture_as_pdf" color="red-8" /></q-item-section>
+              <q-item-section>
+                <q-item-label>Exportar PDF</q-item-label>
+                <q-item-label caption>Ingresos y gastos de la semana</q-item-label>
+              </q-item-section>
+            </q-item>
+            <q-item clickable v-close-popup :disable="exportando" @click="exportarReporte('excel')">
+              <q-item-section avatar><q-icon name="grid_on" color="green-8" /></q-item-section>
+              <q-item-section>
+                <q-item-label>Exportar Excel</q-item-label>
+                <q-item-label caption>Con totales y saldo del periodo</q-item-label>
+              </q-item-section>
+            </q-item>
+          </q-list>
+        </q-btn-dropdown>
         <q-space />
         <div class="text-caption text-grey-6">{{ resumen.cantidad || 0 }} movimientos</div>
       </div>
@@ -125,8 +164,57 @@ const motivoAnulacion = ref('')
 const anulando = ref(false)
 const form = ref({})
 const resumen = ref({ cantidad: 0, total: 0 })
-const filtro = ref({ q: '', desde: '', hasta: '' })
+const exportando = ref(false)
+
+// ── Filtro semanal (lunes a domingo) ───────────────────────────
+function aISO (fecha) {
+  const d = new Date(fecha)
+  d.setMinutes(d.getMinutes() - d.getTimezoneOffset())
+  return d.toISOString().slice(0, 10)
+}
+/** Lunes de la semana a la que pertenece la fecha dada. */
+function lunesDe (fecha) {
+  const d = new Date(fecha + 'T00:00:00')
+  const dia = (d.getDay() + 6) % 7 // 0 = lunes
+  d.setDate(d.getDate() - dia)
+  return aISO(d)
+}
+function sumarDias (fecha, dias) {
+  const d = new Date(fecha + 'T00:00:00')
+  d.setDate(d.getDate() + dias)
+  return aISO(d)
+}
+function semanaDe (fecha) {
+  const desde = lunesDe(fecha)
+  return { desde, hasta: sumarDias(desde, 6) }
+}
+
+const hoyISO = aISO(new Date())
+const inicial = semanaDe(hoyISO)
+const filtro = ref({ q: '', desde: inicial.desde, hasta: inicial.hasta })
+const diaSemana = ref(filtro.value.desde)
 const pagination = ref({ page: 1, rowsPerPage: 15, rowsNumber: 0 })
+
+const esSemanaActual = computed(() => filtro.value.desde === lunesDe(hoyISO))
+
+const etiquetaSemana = computed(() => {
+  const fmt = (iso) => {
+    const [a, m, d] = iso.split('-')
+    return `${d}/${m}/${a.slice(2)}`
+  }
+  return `${fmt(filtro.value.desde)} — ${fmt(filtro.value.hasta)}`
+})
+
+function aplicarSemana (desdeISO) {
+  const { desde, hasta } = semanaDe(desdeISO)
+  filtro.value.desde = desde
+  filtro.value.hasta = hasta
+  diaSemana.value = desde
+  buscar()
+}
+function moverSemana (semanas) { aplicarSemana(sumarDias(filtro.value.desde, semanas * 7)) }
+function irSemanaActual () { aplicarSemana(hoyISO) }
+function irASemanaDe (fecha) { if (fecha) aplicarSemana(fecha) }
 
 const columns = computed(() => [
   { name: 'actions', label: 'Opciones', align: 'center' },
@@ -205,6 +293,38 @@ function imprimir (row) {
   imprimirCajaMovimiento(row, tituloCaja.value)
 }
 
+/**
+ * Reporte semanal de la caja: incluye ingresos y gastos, no solo el tipo
+ * de la pantalla actual. El PDF se abre en una pestaña, el Excel se descarga.
+ */
+async function exportarReporte (formato) {
+  exportando.value = true
+  try {
+    const { data } = await proxy.$axios.get('caja-movimientos/reporte/' + formato, {
+      params: { caja: caja.value, desde: filtro.value.desde, hasta: filtro.value.hasta },
+      responseType: 'blob',
+    })
+    const tipoMime = formato === 'pdf'
+      ? 'application/pdf'
+      : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    const url = window.URL.createObjectURL(new Blob([data], { type: tipoMime }))
+
+    if (formato === 'pdf') {
+      window.open(url, '_blank')
+    } else {
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `caja_${caja.value.toLowerCase()}_${filtro.value.desde}_a_${filtro.value.hasta}.xlsx`
+      a.click()
+    }
+    setTimeout(() => window.URL.revokeObjectURL(url), 30000)
+  } catch (error) {
+    proxy.$alert.error('No se pudo generar el reporte')
+  } finally {
+    exportando.value = false
+  }
+}
+
 watch([() => proxy.$store.isLogged, caja, tipo], ([logged]) => {
   if (logged && canVer.value) { pagination.value.page = 1; cargar() }
 }, { immediate: true })
@@ -213,4 +333,6 @@ watch([() => proxy.$store.isLogged, caja, tipo], ([logged]) => {
 <style scoped>
 .caja-page :deep(.q-table th), .caja-page :deep(.q-table td) { font-size:11px; padding:3px 7px }
 .caja-page :deep(.q-field--dense .q-field__control), .caja-page :deep(.q-field--dense .q-field__marginal) { min-height:34px; height:34px }
+/* El rótulo de la semana no cambia de ancho al pasar de un mes a otro. */
+.semana-btn { min-width: 150px }
 </style>

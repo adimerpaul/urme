@@ -46,9 +46,28 @@
             </span>
             <q-space />
             <!-- En modo farmacia el tipo está fijo: no se ofrece el selector. -->
-            <q-select v-if="!soloFarmacia" v-model="filtroTipo" dense outlined clearable label="Tipo" style="width:150px"
-                      :options="tiposProducto" option-value="id" option-label="nombre"
-                      emit-value map-options @update:model-value="onBuscarProducto" />
+            <q-select v-if="!soloFarmacia" v-model="filtroTipo" dense outlined clearable use-input
+                      input-debounce="0" label="Tipo" style="width:180px"
+                      :options="tiposProductoFiltrados" option-value="id" option-label="nombre"
+                      emit-value map-options @filter="filtrarTiposProducto"
+                      @update:model-value="onBuscarProducto">
+              <template #prepend>
+                <q-icon name="category" color="primary" />
+              </template>
+              <template #option="scope">
+                <q-item v-bind="scope.itemProps">
+                  <q-item-section avatar>
+                    <q-icon name="category" :style="{ color: scope.opt.color || '#607d8b' }" />
+                  </q-item-section>
+                  <q-item-section>{{ scope.opt.nombre }}</q-item-section>
+                </q-item>
+              </template>
+              <template #no-option>
+                <q-item>
+                  <q-item-section class="text-grey-6">No se encontraron tipos</q-item-section>
+                </q-item>
+              </template>
+            </q-select>
             <q-btn dense outline no-caps color="primary" icon="refresh" label="Actualizar"
                    :loading="loadingProductos" @click="actualizarProductos">
               <q-tooltip>Actualizar productos y cantidades disponibles</q-tooltip>
@@ -132,9 +151,9 @@
                   <tr class="bg-grey-1 text-grey-7 text-uppercase">
                     <th style="width:30px"></th>
                     <th class="text-left">Producto</th>
-                    <th class="text-right" style="width:70px">Cant.</th>
-                    <th class="text-right" style="width:78px">Precio</th>
-                    <th class="text-right" style="width:66px">Total</th>
+                    <th class="text-right" style="width:66px">Cant.</th>
+                    <th class="text-right" style="width:84px">Precio</th>
+                    <th class="text-right" style="width:84px">Total</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -161,16 +180,35 @@
                                  input-class="text-right"
                                  :max="linea.requiere_lote ? linea.cantidad_disponible : undefined"
                                  @update:model-value="recalcularLinea(linea)" /></td>
-                    <td class="celda-num"><q-input v-model.number="linea.precio" dense outlined type="number" step="0.01" min="0"
-                                 input-class="text-right"
-                                 @update:model-value="recalcularLinea(linea)" /></td>
-                    <td class="text-right">{{ money(linea.total) }}</td>
+                    <!-- Precio y total editables: cambiar el precio recalcula el
+                         total, y escribir el total y pulsar Enter reparte el
+                         monto en el precio unitario. Si el precio deja de ser el
+                         de lista, la línea queda marcada con asterisco. -->
+                    <td class="celda-num" :class="{ 'celda-num--mod': precioModificado(linea) }"
+                        :title="precioModificado(linea) ? 'Precio modificado · lista ' + money(linea.precio_original) + ' Bs' : ''">
+                      <q-input v-model.number="linea.precio" dense outlined type="number" step="0.01" min="0"
+                               :input-class="precioModificado(linea) ? 'text-right text-orange-9 text-weight-bold' : 'text-right'"
+                               @update:model-value="recalcularLinea(linea)"
+                               @keyup.enter="recalcularLinea(linea)" />
+                    </td>
+                    <td class="celda-num" :class="{ 'celda-num--mod': precioModificado(linea) }"
+                        :title="precioModificado(linea) ? 'Debería ser ' + money(totalOriginalLinea(linea)) + ' Bs' : ''">
+                      <q-input v-model.number="linea.total" dense outlined type="number" step="0.01" min="0"
+                               :input-class="precioModificado(linea) ? 'text-right text-orange-9 text-weight-bold' : 'text-right'"
+                               @keyup.enter="recalcularDesdeTotal(linea)"
+                               @blur="recalcularDesdeTotal(linea)" />
+                    </td>
                   </tr>
                 </tbody>
               </q-markup-table>
 
               <div class="row items-center justify-between q-gutter-sm">
-                <div class="text-h6">Total: <span class="text-primary text-weight-bold">{{ money(totalNueva) }} Bs</span></div>
+                <div>
+                  <div class="text-h6">Total: <span class="text-primary text-weight-bold">{{ money(totalNueva) }} Bs</span></div>
+                  <div v-if="hayPreciosModificados" class="text-caption text-orange-9 text-weight-bold">
+                    * Precios modificados · debería ser {{ money(totalOriginalNueva) }} Bs
+                  </div>
+                </div>
                 <div class="q-gutter-sm">
                   <q-btn rounded unelevated color="primary" label="Registrar venta" icon-right="save" no-caps
                          :loading="registrando" :disable="!nueva.detalles.length || cajaCerrada"
@@ -351,7 +389,12 @@
             </div>
 
             <div class="row items-center justify-between q-gutter-sm">
-              <div class="text-subtitle1">Total: <span class="text-primary text-weight-bold">{{ money(totalNueva) }} Bs</span></div>
+              <div>
+                <div class="text-subtitle1">Total: <span class="text-primary text-weight-bold">{{ money(totalNueva) }} Bs</span></div>
+                <div v-if="hayPreciosModificados" class="text-caption text-orange-9 text-weight-bold">
+                  * Precios modificados · debería ser {{ money(totalOriginalNueva) }} Bs
+                </div>
+              </div>
               <div class="q-gutter-sm">
                 <q-btn flat color="grey-7" label="Cancelar" no-caps @click="dialogDatos = false" />
                 <q-btn rounded unelevated
@@ -613,6 +656,7 @@ const loadingProductos = ref(false)
 const buscarProducto   = ref('')
 const filtroTipo       = ref(null)
 const tiposProducto    = ref([])
+const tiposProductoFiltrados = ref([])
 const pageProductos    = ref(1)
 const totalProductos   = ref(0)
 const perProductos     = 10
@@ -662,7 +706,17 @@ async function loadTiposProducto () {
   try {
     const res = await proxy.$axios.get('tipo-productos')
     tiposProducto.value = res.data || []
+    tiposProductoFiltrados.value = tiposProducto.value
   } catch (e) { /* silent */ }
+}
+
+function filtrarTiposProducto (valor, actualizar) {
+  actualizar(() => {
+    const texto = String(valor || '').trim().toLocaleUpperCase('es')
+    tiposProductoFiltrados.value = texto
+      ? tiposProducto.value.filter(tipo => String(tipo.nombre || '').toLocaleUpperCase('es').includes(texto))
+      : tiposProducto.value
+  })
 }
 
 async function actualizarProductos () {
@@ -741,6 +795,8 @@ function agregarProductoSinLote (p) {
     requiere_lote: false,
     cantidad: 1,
     precio: Number(p.precio) || 0,
+    // Referencia de cuánto debería costar: no cambia aunque se edite el precio.
+    precio_original: Number(p.precio) || 0,
     total: 0,
   }
   recalcularLinea(linea)
@@ -776,6 +832,8 @@ function agregarProductoConLote (p, lote) {
     cantidad_disponible: Number(lote.cantidad_disponible),
     cantidad: 1,
     precio: Number(p.precio) || 0,
+    // Referencia de cuánto debería costar: no cambia aunque se edite el precio.
+    precio_original: Number(p.precio) || 0,
     total: 0,
   }
   recalcularLinea(linea)
@@ -792,7 +850,45 @@ function recalcularLinea (linea) {
     proxy.$alert.error('La cantidad supera el stock disponible del lote ' + linea.lote)
   }
   linea.total = Math.round(((Number(linea.cantidad) || 0) * (Number(linea.precio) || 0)) * 100) / 100
+  // Referencia del último total calculado: sirve para saber si el cajero
+  // realmente escribió otro monto o solo pasó por el campo.
+  linea.total_calculado = linea.total
 }
+
+/**
+ * Se escribe el monto final de la línea y con Enter se reparte en el precio
+ * unitario. El precio manda: después de repartirlo se vuelve a multiplicar, así
+ * que un monto que no es divisible exacto queda ajustado al centavo más cercano.
+ */
+function recalcularDesdeTotal (linea) {
+  const total = Number(linea.total) || 0
+  if (Math.round(total * 100) === Math.round((Number(linea.total_calculado) || 0) * 100)) return
+
+  const cantidad = Number(linea.cantidad) || 0
+  if (cantidad > 0) {
+    linea.precio = Math.round((total / cantidad) * 100) / 100
+  }
+  recalcularLinea(linea)
+}
+
+/* El precio de lista con el que entró la línea es la referencia: si el cajero
+   lo cambia, la línea va con asterisco y el backend guarda cuánto debería
+   haber costado. */
+function precioModificado (linea) {
+  const original = Number(linea.precio_original)
+  if (!Number.isFinite(original)) return false
+  return Math.round(original * 100) !== Math.round((Number(linea.precio) || 0) * 100)
+}
+
+function totalOriginalLinea (linea) {
+  const original = Number(linea.precio_original)
+  const base = Number.isFinite(original) ? original : (Number(linea.precio) || 0)
+  return Math.round(base * (Number(linea.cantidad) || 0) * 100) / 100
+}
+
+const hayPreciosModificados = computed(() => nueva.value.detalles.some(precioModificado))
+const totalOriginalNueva = computed(() =>
+  Math.round(nueva.value.detalles.reduce((suma, l) => suma + totalOriginalLinea(l), 0) * 100) / 100)
 
 // ── Diálogo de datos de la venta ───────────────────────────────
 const dialogDatos = ref(false)
@@ -1054,6 +1150,22 @@ watch(() => proxy.$store.isLogged, (val) => { if (val) init() }, { immediate: tr
 /* Celdas de Cant. y Precio: el input aprovecha todo el ancho de la columna. */
 .celda-num {
   padding: 2px 4px !important;
+  position: relative;
+}
+
+/* Asterisco de precio modificado: va sobre la celda para no robarle ancho
+   al campo, que ya es angosto. */
+.celda-num--mod::before {
+  content: '*';
+  position: absolute;
+  top: 0;
+  left: 3px;
+  z-index: 1;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1;
+  color: #e65100;
+  pointer-events: none;
 }
 
 .celda-num :deep(.q-field__control),

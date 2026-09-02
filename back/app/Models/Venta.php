@@ -16,7 +16,7 @@ class Venta extends Model implements AuditableContract
     protected $fillable = [
         'user_id', 'cobrado_por_id', 'paciente_id', 'doctor_id', 'seguro_id', 'cliente', 'fecha_hora',
         'fecha_hora_cobro',
-        'tipo_pago', 'comentario', 'estado', 'total', 'pago', 'cambio',
+        'tipo_pago', 'comentario', 'estado', 'total', 'total_original', 'pago', 'cambio',
     ];
 
     protected $hidden = ['created_at', 'updated_at', 'deleted_at'];
@@ -25,6 +25,7 @@ class Venta extends Model implements AuditableContract
         'fecha_hora' => 'datetime',
         'fecha_hora_cobro' => 'datetime',
         'total' => 'decimal:2',
+        'total_original' => 'decimal:2',
         'pago' => 'decimal:2',
         'cambio' => 'decimal:2',
     ];

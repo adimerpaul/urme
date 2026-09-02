@@ -1,5 +1,5 @@
 <template>
-  <q-page class="q-pa-md compras-compactas">
+  <q-page class="q-pa-sm compras-compactas">
 
     <!-- Sin acceso -->
     <div v-if="proxy.$store.isLogged && !canCrear"
@@ -62,13 +62,13 @@
                  label="Agregar línea" icon="add" @click="agregarLinea" />
         </div>
 
-        <q-markup-table dense flat bordered separator="horizontal" class="full-width q-mb-sm rounded-borders">
+        <q-markup-table dense flat bordered separator="horizontal" class="full-width q-mb-sm rounded-borders tabla-compra">
           <thead>
             <tr class="bg-grey-1 text-grey-7 text-uppercase">
               <th style="width:40px"></th>
-              <th class="text-left" style="min-width:220px">Producto / Nombre</th>
-              <th class="text-right" style="width:100px">Cantidad</th>
-              <th class="text-right" style="width:110px">Precio unit.</th>
+              <th class="text-left" style="min-width:190px">Producto / Nombre</th>
+              <th class="text-right" style="width:90px">Cantidad</th>
+              <th class="text-right" style="width:100px">Precio unit.</th>
               <th class="text-right" style="width:110px">Total</th>
               <th class="text-right" style="width:90px">Factor</th>
               <th class="text-right" style="width:110px">Precio venta</th>
@@ -98,15 +98,15 @@
                          placeholder="Nombre del ítem (si no está en catálogo)" v-uppercase />
               </td>
               <td><q-input v-model.number="linea.cantidad" dense outlined type="number" step="0.0001" min="0"
-                           class="text-right" @update:model-value="recalcularLinea(linea)" /></td>
+                           input-class="text-right" @update:model-value="recalcularLinea(linea)" /></td>
               <td><q-input v-model.number="linea.precio" dense outlined type="number" step="0.01" min="0"
-                           class="text-right" @update:model-value="recalcularLinea(linea)" /></td>
+                           input-class="text-right" @update:model-value="recalcularLinea(linea)" /></td>
               <td><q-input v-model.number="linea.total" dense outlined type="number" step="0.01" min="0"
-                           class="text-right" @update:model-value="recalcularDesdeTotal(linea)" /></td>
+                           input-class="text-right" @update:model-value="recalcularDesdeTotal(linea)" /></td>
               <td><q-input v-model.number="linea.factor" dense outlined type="number" step="0.01" min="0"
-                           class="text-right" @update:model-value="recalcularLinea(linea)" /></td>
+                           input-class="text-right" @update:model-value="recalcularLinea(linea)" /></td>
               <td><q-input v-model.number="linea.precio_venta" dense outlined type="number" step="0.01" min="0"
-                           class="text-right" /></td>
+                           input-class="text-right" /></td>
               <td><q-input v-model="linea.lote" dense outlined v-uppercase /></td>
               <td><q-input v-model="linea.fecha_vencimiento" dense outlined type="date" /></td>
             </tr>
@@ -200,7 +200,8 @@ function quitarLinea (idx) {
 
 function actualizarPrecioVenta (linea) {
   if (linea.factor) {
-    linea.precio_venta = Math.round(((Number(linea.precio) || 0) * Number(linea.factor)) * 100) / 100
+    const precioVenta = (Number(linea.precio) || 0) * Number(linea.factor)
+    linea.precio_venta = Math.round(precioVenta * 2) / 2
   }
 }
 
@@ -227,9 +228,15 @@ async function filtrarProductos (val, update) {
 function onProductoSeleccionado (linea, productoId) {
   const producto = opcionesProducto.value.find(p => p.id === productoId)
   if (producto) {
+    const precioVentaActual = Number(producto.precio) || 0
+    const ultimoPrecioCompra = Number(producto.ultimo_precio_compra)
     linea.nombre = producto.nombre
-    if (!linea.precio && producto.precio) linea.precio = Number(producto.precio)
-    recalcularLinea(linea)
+    linea.factor = 1.3
+    linea.precio = Number.isFinite(ultimoPrecioCompra) && producto.ultimo_precio_compra !== null
+      ? ultimoPrecioCompra
+      : 0
+    linea.precio_venta = precioVentaActual
+    linea.total = Math.round(((Number(linea.cantidad) || 0) * linea.precio) * 100) / 100
   }
 }
 
@@ -330,5 +337,15 @@ watch(() => proxy.$store.isLogged, (val) => { if (val) init() }, { immediate: tr
   min-height: 14px;
   padding-top: 2px;
   font-size: 10px;
+}
+
+.tabla-compra :deep(th),
+.tabla-compra :deep(td) {
+  padding: 4px;
+}
+
+.tabla-compra :deep(input[type='number']) {
+  padding-left: 2px;
+  padding-right: 2px;
 }
 </style>

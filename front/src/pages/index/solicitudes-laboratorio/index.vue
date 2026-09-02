@@ -133,6 +133,7 @@
 
 <script setup>
 import { computed, getCurrentInstance, ref } from 'vue'
+import { nowBoliviaDateTimeInput } from '../../../addons/dateTime'
 
 const { proxy } = getCurrentInstance()
 const tableRef = ref(null)
@@ -140,7 +141,8 @@ const rows = ref([])
 const loading = ref(false)
 const detalle = ref(null)
 const detalleDialog = ref(false)
-const filters = ref({ q: '', estado: null, desde: '', hasta: '' })
+const hoy = nowBoliviaDateTimeInput().slice(0, 10)
+const filters = ref({ q: '', estado: null, desde: hoy, hasta: hoy })
 const estados = ['CREADO', 'ATENDIENDO', 'ENVIADO_ANALITICA', 'ANALIZADO', 'FINALIZADO']
 const pagination = ref({ page: 1, rowsPerPage: 25, rowsNumber: 0 })
 const canCrear = computed(() => proxy.$store.hasPermission('Crear Solicitudes Laboratorio'))

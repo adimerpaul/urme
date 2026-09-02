@@ -19,11 +19,18 @@ class Internacion extends Model implements AuditableContract
         // Seguimiento de facturación al seguro
         'entrega_informe', 'respuesta_auditoria', 'fecha_facturacion', 'monto_facturado',
         'fecha_cancelacion', 'tipo_pago', 'observacion_seguro',
+        // Pago total del paciente
+        'pagado_en', 'pagado_por_id', 'venta_id', 'monto_pagado', 'pago_tipo', 'pago_observacion',
+    ];
+
+    protected $casts = [
+        'pagado_en' => 'datetime',
+        'monto_pagado' => 'decimal:2',
     ];
 
     protected $hidden = ['created_at', 'updated_at', 'deleted_at'];
 
-    protected $appends = ['dias_internado', 'seguimiento_estado', 'seguimiento_llenados'];
+    protected $appends = ['dias_internado', 'seguimiento_estado', 'seguimiento_llenados', 'pagada'];
 
     /**
      * Campos que la planilla del seguro exige para dar por cerrada una internación.
@@ -78,6 +85,22 @@ class Internacion extends Model implements AuditableContract
         return $this->seguimiento_llenados === count(self::CAMPOS_SEGUIMIENTO)
             ? 'COMPLETADO'
             : 'PENDIENTE';
+    }
+
+    /** Una internación pagada ya no se modifica: ni sus datos ni sus cargos. */
+    public function getPagadaAttribute(): bool
+    {
+        return $this->pagado_en !== null;
+    }
+
+    public function pagadoPor()
+    {
+        return $this->belongsTo(User::class, 'pagado_por_id');
+    }
+
+    public function venta()
+    {
+        return $this->belongsTo(Venta::class);
     }
 
     public function paciente()

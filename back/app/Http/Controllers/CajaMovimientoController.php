@@ -2,8 +2,12 @@
 
 namespace App\Http\Controllers;
 
+use App\Exports\CajaMovimientosExport;
 use App\Models\CajaMovimiento;
+use Barryvdh\DomPDF\Facade\Pdf;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Maatwebsite\Excel\Facades\Excel;
 
 class CajaMovimientoController extends Controller
 {
@@ -44,6 +48,85 @@ class CajaMovimientoController extends Controller
             'movimientos' => $paginador,
             'resumen' => ['cantidad' => $paginador->total(), 'total' => round((float) $total, 2)],
         ]);
+    }
+
+    /**
+     * Reporte semanal de una caja: ingresos y gastos del rango, con su saldo.
+     * A diferencia de index(), no se acota a un solo tipo: el reporte es de ambos.
+     */
+    public function reporte(Request $request)
+    {
+        return response()->json($this->datosReporte($request));
+    }
+
+    public function reportePdf(Request $request)
+    {
+        $datos = $this->datosReporte($request);
+
+        $pdf = Pdf::loadView('reportes.caja-movimientos', $datos)->setPaper('letter');
+
+        return $pdf->stream($this->nombreArchivo($datos, 'pdf'));
+    }
+
+    public function reporteExcel(Request $request)
+    {
+        $datos = $this->datosReporte($request);
+
+        return Excel::download(
+            new CajaMovimientosExport($datos),
+            $this->nombreArchivo($datos, 'xlsx')
+        );
+    }
+
+    /** Movimientos y totales del rango pedido, para las tres salidas del reporte. */
+    private function datosReporte(Request $request): array
+    {
+        $caja = mb_strtoupper((string) $request->input('caja'));
+        abort_unless(in_array($caja, self::CAJAS, true), 422, 'Caja no válida');
+        $this->autorizar($request, 'Ver', $caja);
+
+        // Por defecto, la semana en curso (lunes a domingo).
+        $desde = $request->input('desde')
+            ? Carbon::parse($request->input('desde'))->startOfDay()
+            : now()->startOfWeek();
+        $hasta = $request->input('hasta')
+            ? Carbon::parse($request->input('hasta'))->endOfDay()
+            : now()->endOfWeek();
+
+        $movimientos = CajaMovimiento::with('user:id,name,username')
+            ->where('caja', $caja)
+            ->whereBetween('fecha_hora', [$desde, $hasta])
+            ->orderBy('fecha_hora')
+            ->orderBy('id')
+            ->get();
+
+        $ingresos = $movimientos->where('tipo', 'INGRESO')->values();
+        $gastos = $movimientos->where('tipo', 'GASTO')->values();
+
+        // Los anulados se listan, pero no suman: el saldo es solo de los activos.
+        $totalIngresos = round((float) $ingresos->where('estado', 'ACTIVO')->sum('importe'), 2);
+        $totalGastos = round((float) $gastos->where('estado', 'ACTIVO')->sum('importe'), 2);
+
+        return [
+            'caja' => $caja,
+            'titulo_caja' => $caja === 'GENERAL' ? 'Caja General' : 'Caja Administrativa',
+            'desde' => $desde->toDateString(),
+            'hasta' => $hasta->toDateString(),
+            'ingresos' => $ingresos,
+            'gastos' => $gastos,
+            'resumen' => [
+                'cantidad_ingresos' => $ingresos->count(),
+                'cantidad_gastos' => $gastos->count(),
+                'total_ingresos' => $totalIngresos,
+                'total_gastos' => $totalGastos,
+                'saldo' => round($totalIngresos - $totalGastos, 2),
+            ],
+        ];
+    }
+
+    private function nombreArchivo(array $datos, string $extension): string
+    {
+        return 'caja_'.mb_strtolower($datos['caja']).'_'.$datos['desde'].'_a_'.$datos['hasta'].'.'.$extension;
     }
 
     public function store(Request $request)

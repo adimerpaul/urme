@@ -1,4 +1,5 @@
 import { Printd } from 'printd'
+import { formatBoliviaDate, formatBoliviaDateTime, formatBoliviaTime } from './dateTime'
 
 /**
  * Voucher del cierre de caja: mismo papel y tipografía que los recibos de
@@ -54,20 +55,21 @@ function money (v) {
   return Number(v || 0).toFixed(2).replace('.', ',')
 }
 
+/* Las fechas del API llegan en UTC: se imprimen en hora de Bolivia, la misma
+   que muestra el sistema en pantalla. */
 function fechaHora (v) {
-  return String(v || '').replace('T', ' ').slice(0, 19) || '—'
+  return formatBoliviaDateTime(v, '—')
 }
 
 function soloFecha (v) {
-  const iso = String(v || '').slice(0, 10)
+  const iso = formatBoliviaDate(v, '')
   if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return '—'
   const [a, m, d] = iso.split('-')
   return `${d}/${m}/${a}`
 }
 
 function hora (v) {
-  const texto = String(v || '').replace('T', ' ')
-  return texto.slice(11, 16) || '—'
+  return formatBoliviaTime(v, '—')
 }
 
 // ── Número a letras (es) ────────────────────────────────────────
@@ -148,7 +150,7 @@ function buildHtml (cierre, ventas, completo, verMontos) {
     <span class="bold">Fecha de caja:</span> ${esc(soloFecha(cierre.fecha))}<br>
     <span class="bold">Cerrado el:</span> ${esc(fechaHora(cierre.fecha_hora))}
     ${cierre.modificado_en ? `<br><span class="bold">Corregido el:</span> ${esc(fechaHora(cierre.modificado_en))}` : ''}
-    <br><span class="bold">Impreso el:</span> ${esc(fechaHora(new Date().toISOString().slice(0, 19)))}
+    <br><span class="bold">Impreso el:</span> ${esc(fechaHora(new Date()))}
 
     <hr class="dashed">
     <div class="titulo">COMPROBANTE DE CIERRE DE CAJA</div>

@@ -154,6 +154,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // Internaciones
     Route::get('/internaciones', [InternacionController::class, 'index']);
     Route::get('/internaciones/{id}/pdf', [InternacionController::class, 'pdf']);
+    Route::put('/internaciones/{id}/cerrar', [InternacionController::class, 'cerrar']);
     Route::put('/internaciones/{id}/seguimiento', [InternacionController::class, 'updateSeguimiento']);
     Route::post('/internaciones', [InternacionController::class, 'store']);
     Route::put('/internaciones/{id}', [InternacionController::class, 'update']);

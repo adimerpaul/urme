@@ -103,8 +103,8 @@
                 <q-tooltip>Fecha de ingreso</q-tooltip>
               </q-chip>
               <q-chip v-if="int.fecha_alta" dense square color="white" text-color="grey-8"
-                      icon="logout" class="q-ma-none">
-                {{ int.fecha_alta }}
+                       icon="logout" class="q-ma-none">
+                Cerrada · {{ int.fecha_alta }}
                 <q-tooltip>Fecha de alta</q-tooltip>
               </q-chip>
               <q-chip v-else dense square color="orange-1" text-color="orange-9" icon="pending" class="q-ma-none">
@@ -128,15 +128,15 @@
                      :loading="printingId === int.id" @click="imprimir(int.id)">
                 <q-tooltip>Imprimir proforma</q-tooltip>
               </q-btn>
-              <q-btn v-if="canCrearInt" dense flat round size="sm" icon="add_circle" color="positive"
+              <q-btn v-if="canCrearInt && !int.fecha_alta" dense flat round size="sm" icon="add_circle" color="positive"
                      @click="itemNew(int)">
                 <q-tooltip>Agregar cargo</q-tooltip>
               </q-btn>
-              <q-btn v-if="canEditarInt" dense flat round size="sm" icon="edit" color="grey-7"
+              <q-btn v-if="canEditarInt && !int.fecha_alta" dense flat round size="sm" icon="edit" color="grey-7"
                      @click="intEdit(int)">
                 <q-tooltip>Editar internación</q-tooltip>
               </q-btn>
-              <q-btn v-if="canEliminarInt" dense flat round size="sm" icon="delete" color="negative"
+              <q-btn v-if="canEliminarInt && !int.fecha_alta" dense flat round size="sm" icon="delete" color="negative"
                      @click="intDelete(int.id)">
                 <q-tooltip>Eliminar internación</q-tooltip>
               </q-btn>
@@ -166,8 +166,8 @@
                   <td class="text-grey-6">{{ item.user?.name || '—' }}</td>
                   <td>{{ formatHora(item.created_at) }}</td>
                   <td class="text-right">
-                    <q-btn v-if="canEditarInt" dense flat round icon="edit" size="xs" color="grey-7" @click="itemEdit(int, item)" />
-                    <q-btn v-if="canEliminarInt" dense flat round icon="delete" size="xs" color="negative" @click="itemDelete(int, item.id)" />
+                    <q-btn v-if="canEditarInt && !int.fecha_alta" dense flat round icon="edit" size="xs" color="grey-7" @click="itemEdit(int, item)" />
+                    <q-btn v-if="canEliminarInt && !int.fecha_alta" dense flat round icon="delete" size="xs" color="negative" @click="itemDelete(int, item.id)" />
                   </td>
                 </tr>
               </tbody>
@@ -353,7 +353,7 @@
                 </q-input>
               </div>
               <div class="col-6">
-                <q-input v-model="int.fecha_alta" label="Fecha de alta" dense outlined type="date">
+                <q-input v-model="int.fecha_alta" label="Fecha de alta" dense outlined type="date" readonly>
                   <template v-slot:prepend><q-icon name="logout" /></template>
                 </q-input>
               </div>
@@ -382,6 +382,8 @@
               </div>
             </div>
             <div class="row justify-end q-gutter-sm">
+              <q-btn v-if="int.id && !int.fecha_alta" outline color="negative" label="Cerrar internación"
+                     icon="lock" no-caps :loading="closingInt" @click="intClose" />
               <q-btn flat color="grey-7" label="Cancelar" no-caps @click="dialogInt = false" />
               <q-btn color="primary" :label="int.id ? 'Guardar' : 'Crear'"
                      type="submit" no-caps :loading="savingInt" icon-right="save" />
@@ -679,6 +681,7 @@ function pacDelete () {
 // ── CRUD Internaciones ───────────────────────────────────────
 const dialogInt = ref(false)
 const savingInt = ref(false)
+const closingInt = ref(false)
 const actionInt = ref('Nueva')
 const int       = ref({})
 
@@ -702,6 +705,25 @@ async function intSave () {
   } finally {
     savingInt.value = false
   }
+}
+
+function intClose () {
+  proxy.$alert.dialog(
+    '¿Cerrar internación?',
+    'Después de cerrarla no se podrán agregar, modificar ni eliminar datos o cargos.'
+  ).onOk(async () => {
+    closingInt.value = true
+    try {
+      await proxy.$axios.put('internaciones/' + int.value.id + '/cerrar')
+      proxy.$alert.success('Internación cerrada')
+      dialogInt.value = false
+      await fetchPaciente()
+    } catch (err) {
+      proxy.$alert.error(err.response?.data?.message || 'Error al cerrar la internación')
+    } finally {
+      closingInt.value = false
+    }
+  })
 }
 
 function intDelete (id) {

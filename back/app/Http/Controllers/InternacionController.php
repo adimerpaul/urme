@@ -65,8 +65,26 @@ class InternacionController extends Controller
             'fecha_alta' => 'nullable|date',
         ]);
         $internacion = Internacion::findOrFail($id);
-        self::bloqueadaSiPagada($internacion);
-        $internacion->update($request->only(['paciente_id', 'seguro_id', 'fecha_ingreso', 'tipo_paciente', 'fecha_alta', 'codigo_hc', 'sala']));
+        self::bloqueadaSiCerrada($internacion);
+        $internacion->update($request->only(['paciente_id', 'seguro_id', 'fecha_ingreso', 'tipo_paciente', 'codigo_hc', 'sala']));
+
+        return response()->json($internacion->load(['paciente:id,nombre_completo', 'seguro:id,nombre']));
+    }
+
+    public function cerrar(Request $request, $id)
+    {
+        $this->req($request, 'Editar Internaciones');
+        $request->validate(['fecha_alta' => 'nullable|date']);
+
+        $internacion = Internacion::findOrFail($id);
+        self::bloqueadaSiCerrada($internacion);
+
+        $fechaAlta = $request->input('fecha_alta') ?: now()->toDateString();
+        if ($internacion->fecha_ingreso && $fechaAlta < $internacion->fecha_ingreso) {
+            abort(422, 'La fecha de alta no puede ser anterior a la fecha de ingreso');
+        }
+
+        $internacion->update(['fecha_alta' => $fechaAlta]);
 
         return response()->json($internacion->load(['paciente:id,nombre_completo', 'seguro:id,nombre']));
     }
@@ -75,7 +93,7 @@ class InternacionController extends Controller
     {
         $this->req($request, 'Eliminar Internaciones');
         $internacion = Internacion::findOrFail($id);
-        self::bloqueadaSiPagada($internacion);
+        self::bloqueadaSiCerrada($internacion);
         $internacion->delete();
 
         return response()->json(['message' => 'Internación eliminada']);
@@ -162,7 +180,7 @@ class InternacionController extends Controller
                 'seguro_id' => $internacion->seguro_id,
                 'fecha_hora' => now(),
                 'tipo_pago' => $tipoPago,
-                'comentario' => 'Pago total de la internación #' . $internacion->id,
+                'comentario' => 'Pago total de la internación #'.$internacion->id,
                 'estado' => 'ACTIVO',
                 'total' => $total,
                 'pago' => $pago,
@@ -211,9 +229,13 @@ class InternacionController extends Controller
         ]);
     }
 
-    /** Una internación pagada queda congelada: ni sus datos ni sus cargos cambian. */
-    public static function bloqueadaSiPagada(Internacion $internacion): void
+    /** Una internación cerrada o pagada queda congelada: ni sus datos ni sus cargos cambian. */
+    public static function bloqueadaSiCerrada(Internacion $internacion): void
     {
+        if ($internacion->fecha_alta) {
+            abort(422, 'La internación está cerrada: no admite más cambios');
+        }
+
         if ($internacion->pagado_en) {
             abort(422, 'La internación ya fue pagada: no admite más cambios');
         }

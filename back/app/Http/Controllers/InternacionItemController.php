@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Internacion;
 use App\Models\InternacionItem;
 use Illuminate\Http\Request;
 
@@ -12,19 +13,22 @@ class InternacionItemController extends Controller
         $this->req($request, 'Crear Internaciones');
         $request->validate([
             'producto_id' => 'nullable|exists:productos,id',
-            'nombre'      => 'required|string|max:255',
-            'cantidad'    => 'required|numeric|min:0.01',
-            'precio'      => 'required|numeric|min:0',
+            'nombre' => 'required|string|max:255',
+            'cantidad' => 'required|numeric|min:0.01',
+            'precio' => 'required|numeric|min:0',
         ]);
+
+        $internacion = Internacion::findOrFail($internacionId);
+        InternacionController::bloqueadaSiCerrada($internacion);
 
         $item = InternacionItem::create([
             'internacion_id' => $internacionId,
-            'producto_id'    => $request->producto_id ?: null,
-            'user_id'        => $request->user()->id,
-            'nombre'         => $request->nombre,
-            'cantidad'       => $request->cantidad,
-            'precio'         => $request->precio,
-            'total'          => round($request->cantidad * $request->precio, 2),
+            'producto_id' => $request->producto_id ?: null,
+            'user_id' => $request->user()->id,
+            'nombre' => $request->nombre,
+            'cantidad' => $request->cantidad,
+            'precio' => $request->precio,
+            'total' => round($request->cantidad * $request->precio, 2),
         ]);
 
         return response()->json($item->load(['producto:id,nombre', 'user:id,name']), 201);
@@ -34,17 +38,18 @@ class InternacionItemController extends Controller
     {
         $this->req($request, 'Editar Internaciones');
         $request->validate([
-            'nombre'   => 'required|string|max:255',
+            'nombre' => 'required|string|max:255',
             'cantidad' => 'required|numeric|min:0.01',
-            'precio'   => 'required|numeric|min:0',
+            'precio' => 'required|numeric|min:0',
         ]);
 
         $item = InternacionItem::findOrFail($id);
+        InternacionController::bloqueadaSiCerrada($item->internacion);
         $item->update([
-            'nombre'   => $request->nombre,
+            'nombre' => $request->nombre,
             'cantidad' => $request->cantidad,
-            'precio'   => $request->precio,
-            'total'    => round($request->cantidad * $request->precio, 2),
+            'precio' => $request->precio,
+            'total' => round($request->cantidad * $request->precio, 2),
         ]);
 
         return response()->json($item->load(['producto:id,nombre', 'user:id,name']));
@@ -53,16 +58,21 @@ class InternacionItemController extends Controller
     public function destroy(Request $request, $id)
     {
         $this->req($request, 'Eliminar Internaciones');
-        InternacionItem::findOrFail($id)->delete();
+        $item = InternacionItem::findOrFail($id);
+        InternacionController::bloqueadaSiCerrada($item->internacion);
+        $item->delete();
+
         return response()->json(['message' => 'Cargo eliminado']);
     }
 
     private function req(Request $request, string|array $permission): void
     {
-        $user  = $request->user();
+        $user = $request->user();
         $perms = is_array($permission) ? $permission : [$permission];
         foreach ($perms as $p) {
-            if ($user->hasPermissionTo($p)) return;
+            if ($user->hasPermissionTo($p)) {
+                return;
+            }
         }
         abort(403, 'No tiene permiso para realizar esta acción');
     }

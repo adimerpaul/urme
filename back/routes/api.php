@@ -4,6 +4,7 @@ use App\Http\Controllers\CajaMovimientoController;
 use App\Http\Controllers\CierreCajaController;
 use App\Http\Controllers\CompraController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\DerivacionController;
 use App\Http\Controllers\DoctorController;
 use App\Http\Controllers\InternacionController;
 use App\Http\Controllers\InternacionItemController;
@@ -13,6 +14,7 @@ use App\Http\Controllers\ProductoFarmaciaController;
 use App\Http\Controllers\ProductoLaboratorioController;
 use App\Http\Controllers\ProductoVencimientoController;
 use App\Http\Controllers\ProveedorController;
+use App\Http\Controllers\ReactivoController;
 use App\Http\Controllers\SeguroController;
 use App\Http\Controllers\SolicitudeController;
 use App\Http\Controllers\UserController;
@@ -110,10 +112,25 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/solicitudes-laboratorio/ventas-laboratorio', [SolicitudeController::class, 'ventasLaboratorio']);
     Route::get('/solicitudes-laboratorio', [SolicitudeController::class, 'index']);
     Route::post('/solicitudes-laboratorio', [SolicitudeController::class, 'store']);
+    Route::get('/solicitudes-laboratorio/{solicitude}/auditoria', [SolicitudeController::class, 'auditoria']);
     Route::get('/solicitudes-laboratorio/{solicitude}/pdf', [SolicitudeController::class, 'pdf']);
     Route::put('/solicitudes-laboratorio/{solicitude}', [SolicitudeController::class, 'update']);
     Route::get('/solicitudes-laboratorio/{solicitude}', [SolicitudeController::class, 'show']);
     Route::delete('/solicitudes-laboratorio/{solicitude}', [SolicitudeController::class, 'destroy']);
+
+    // Reactivos y consumo por servicio de laboratorio
+    Route::get('/reactivos/form-data', [ReactivoController::class, 'formData']);
+    Route::apiResource('reactivos', ReactivoController::class);
+
+    // Derivaciones de laboratorio
+    Route::get('/derivaciones/form-data', [DerivacionController::class, 'formData']);
+    Route::get('/derivaciones/{derivacion}/pdf', [DerivacionController::class, 'pdf']);
+    Route::get('/derivaciones/{derivacion}/imagen', [DerivacionController::class, 'image']);
+    Route::get('/derivaciones', [DerivacionController::class, 'index']);
+    Route::post('/derivaciones', [DerivacionController::class, 'store']);
+    Route::get('/derivaciones/{derivacion}', [DerivacionController::class, 'show']);
+    Route::post('/derivaciones/{derivacion}', [DerivacionController::class, 'update']);
+    Route::delete('/derivaciones/{derivacion}', [DerivacionController::class, 'destroy']);
     Route::get('/productos', [ProductoController::class, 'index']);
     Route::post('/productos', [ProductoController::class, 'store']);
     Route::put('/productos/{id}', [ProductoController::class, 'update']);

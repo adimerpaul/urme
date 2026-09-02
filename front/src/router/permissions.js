@@ -27,8 +27,10 @@ export const routePermissions = [
   { path: '/doctores', can: 'Ver Doctores' },
 
   { path: '/laboratorio', can: 'Ver Productos' },
+  { path: '/reactivos', can: 'Ver Reactivos' },
   { path: '/solicitudes-laboratorio/nueva', can: 'Crear Solicitudes Laboratorio' },
   { path: '/solicitudes-laboratorio', can: 'Ver Solicitudes Laboratorio' },
+  { path: '/derivaciones', can: 'Ver Derivaciones' },
 ]
 
 // Devuelve el permiso exigido por una ruta (null si es pública para logueados).

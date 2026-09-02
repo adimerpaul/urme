@@ -14,6 +14,8 @@
              label="Cargar venta pagada" class="q-mr-sm" @click="abrirVentasLaboratorio" />
       <q-btn v-if="editId" dense outline no-caps color="teal" icon="label"
              label="Imprimir rótulo" class="q-mr-sm" @click="imprimirRotulo" />
+      <q-btn v-if="editId" dense outline no-caps color="indigo" icon="history"
+             label="Auditoría" class="q-mr-sm" @click="abrirAuditoria" />
       <q-btn dense no-caps color="positive" icon="save" class="q-mr-sm"
              :label="editId ? 'Guardar e imprimir' : 'Crear e imprimir'"
              :loading="saving" :disable="!form.producto_ids.length" @click="guardar" />
@@ -206,6 +208,63 @@
       </div>
     </q-form>
 
+    <!-- DIALOG AUDITORÍA -->
+    <q-dialog v-model="auditoriaDialog">
+      <q-card class="column no-wrap" style="width:min(96vw,900px);max-width:900px;height:min(82vh,720px)">
+        <q-card-section class="row items-center bg-indigo text-white q-py-sm">
+          <q-icon name="history" size="22px" class="q-mr-sm" />
+          <div>
+            <div class="text-subtitle1 text-weight-bold">Historial de modificaciones</div>
+            <div class="text-caption">Solicitud #{{ editId }} · cambios de datos, pruebas y resultados</div>
+          </div>
+          <q-space />
+          <q-btn icon="close" flat round dense color="white" @click="auditoriaDialog = false" />
+        </q-card-section>
+        <q-card-section class="col scroll q-pa-sm">
+          <div v-if="auditoriaLoading" class="text-center q-pa-xl">
+            <q-spinner color="indigo" size="36px" />
+          </div>
+          <div v-else-if="!auditorias.length" class="text-center text-grey-6 q-pa-xl">
+            No existen registros de auditoría para esta solicitud.
+          </div>
+          <q-list v-else bordered separator>
+            <q-expansion-item v-for="auditoria in auditorias" :key="auditoria.id" dense expand-separator>
+              <template #header>
+                <q-item-section avatar>
+                  <q-icon :name="iconoEventoAuditoria(auditoria.evento)"
+                          :color="colorEventoAuditoria(auditoria.evento)" />
+                </q-item-section>
+                <q-item-section>
+                  <q-item-label class="text-weight-medium">{{ auditoria.entidad }}</q-item-label>
+                  <q-item-label caption>{{ auditoria.usuario }} · {{ formatoFechaHora(auditoria.fecha) }}</q-item-label>
+                </q-item-section>
+                <q-item-section side>
+                  <q-badge :color="colorEventoAuditoria(auditoria.evento)" outline>
+                    {{ etiquetaEventoAuditoria(auditoria.evento) }}
+                  </q-badge>
+                </q-item-section>
+              </template>
+              <q-card>
+                <q-card-section class="q-pa-sm">
+                  <q-markup-table dense flat bordered separator="cell">
+                    <thead><tr class="bg-grey-1"><th class="text-left">Campo</th><th class="text-left">Anterior</th><th class="text-left">Nuevo</th></tr></thead>
+                    <tbody>
+                      <tr v-for="cambio in auditoria.cambios" :key="cambio.campo">
+                        <td class="text-weight-medium">{{ etiquetaCampoAuditoria(cambio.campo) }}</td>
+                        <td class="valor-auditoria">{{ mostrarValorAuditoria(cambio.anterior) }}</td>
+                        <td class="valor-auditoria">{{ mostrarValorAuditoria(cambio.nuevo) }}</td>
+                      </tr>
+                      <tr v-if="!auditoria.cambios.length"><td colspan="3" class="text-center text-grey-6">Sin valores detallados</td></tr>
+                    </tbody>
+                  </q-markup-table>
+                </q-card-section>
+              </q-card>
+            </q-expansion-item>
+          </q-list>
+        </q-card-section>
+      </q-card>
+    </q-dialog>
+
     <!-- DIALOG VENTAS PAGADAS DE LABORATORIO -->
     <q-dialog v-model="ventasDialog">
       <q-card class="column no-wrap" style="width:min(96vw,1050px);max-width:1050px;height:min(82vh,720px)">
@@ -384,6 +443,9 @@ const valores = ref({})
 const visibles = ref({})
 const laboratorioArrastrado = ref(null)
 const ventasDialog = ref(false)
+const auditoriaDialog = ref(false)
+const auditoriaLoading = ref(false)
+const auditorias = ref([])
 const ventasTable = ref(null)
 const ventasLaboratorio = ref([])
 const ventasLoading = ref(false)
@@ -471,6 +533,45 @@ function recargarVentas () {
 function formatoFechaHora (value) {
   if (!value) return '—'
   return new Date(value).toLocaleString('es-BO', { dateStyle: 'short', timeStyle: 'short' })
+}
+
+async function abrirAuditoria () {
+  auditoriaDialog.value = true
+  auditoriaLoading.value = true
+  try {
+    const { data } = await proxy.$axios.get(`solicitudes-laboratorio/${editId.value}/auditoria`)
+    auditorias.value = data || []
+  } catch (error) {
+    proxy.$alert.error(error.response?.data?.message || 'No se pudo cargar la auditoría')
+  } finally {
+    auditoriaLoading.value = false
+  }
+}
+
+function etiquetaEventoAuditoria (evento) {
+  return { created: 'Creado', updated: 'Modificado', deleted: 'Eliminado', restored: 'Restaurado' }[evento] || evento
+}
+function iconoEventoAuditoria (evento) {
+  return { created: 'add_circle', updated: 'edit', deleted: 'delete', restored: 'restore' }[evento] || 'history'
+}
+function colorEventoAuditoria (evento) {
+  return { created: 'positive', updated: 'orange-8', deleted: 'negative', restored: 'teal' }[evento] || 'grey-7'
+}
+function etiquetaCampoAuditoria (campo) {
+  const etiquetas = {
+    valor: 'Resultado', visible: 'Visible en impresión', orden: 'Orden', producto_nombre: 'Prueba',
+    precio: 'Precio', estado: 'Estado', paciente_id: 'Paciente', doctor_id: 'Doctor',
+    fecha_solicitud: 'Fecha', hora_solicitud: 'Hora', diagnostico_clinico: 'Diagnóstico clínico',
+    observaciones: 'Observaciones', codigo_solicitud: 'Código de solicitud', total: 'Total',
+    nombre: 'Dato', unidad: 'Unidad', metodo: 'Método', muestra: 'Muestra', rango_referencia: 'Referencia',
+  }
+  return etiquetas[campo] || campo.replaceAll('_', ' ')
+}
+function mostrarValorAuditoria (valor) {
+  if (valor === null || valor === undefined || valor === '') return '—'
+  if (valor === true || valor === 1) return 'Sí'
+  if (valor === false || valor === 0) return 'No'
+  return String(valor)
 }
 
 function aplicarVentaLaboratorio (venta) {
@@ -895,6 +996,11 @@ cargarDatos()
 }
 .prueba-ordenable__cabecera:active {
   cursor: grabbing;
+}
+.valor-auditoria {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-width: 300px;
 }
 
 /* Campos compactos sin reducir la zona reservada para el label flotante.

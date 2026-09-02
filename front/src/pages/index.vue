@@ -229,8 +229,10 @@ const menuSections = [
     icon: 'biotech',
     links: [
       { title: 'Catálogo de pruebas', icon: 'science', link: '/laboratorio' },
+      { title: 'Reactivos', icon: 'vaccines', link: '/reactivos' },
       { title: 'Laboratorios creados', icon: 'assignment', link: '/solicitudes-laboratorio' },
       { title: 'Crear laboratorio', icon: 'post_add', link: '/solicitudes-laboratorio/nueva' },
+      { title: 'Derivaciones', icon: 'image_search', link: '/derivaciones' },
     ],
   },
 ]

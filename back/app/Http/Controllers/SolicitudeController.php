@@ -6,6 +6,9 @@ use App\Models\Doctor;
 use App\Models\Paciente;
 use App\Models\Producto;
 use App\Models\Solicitude;
+use App\Models\SolicitudLaboratorioItem;
+use App\Models\SolicitudLaboratorioResultado;
+use App\Models\User;
 use App\Models\Venta;
 use BaconQrCode\Renderer\Image\SvgImageBackEnd;
 use BaconQrCode\Renderer\ImageRenderer;
@@ -14,6 +17,7 @@ use BaconQrCode\Writer;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use OwenIt\Auditing\Models\Audit;
 
 class SolicitudeController extends Controller
 {
@@ -186,11 +190,83 @@ class SolicitudeController extends Controller
         $qrSvg = (new Writer($renderer))->writeString($urlVerificacion);
         $qrDataUri = 'data:image/svg+xml;base64,'.base64_encode($qrSvg);
 
-        return Pdf::loadView('reportes.solicitud-laboratorio', compact(
+        $pdf = Pdf::loadView('reportes.solicitud-laboratorio', compact(
             'solicitude', 'impresoPor', 'urlVerificacion', 'qrDataUri'
         ))
-            ->setPaper('letter')
-            ->stream('laboratorio_'.$solicitude->codigo_solicitud.'.pdf');
+            ->setPaper('letter');
+        $pdf->render();
+        $canvas = $pdf->getDomPDF()->getCanvas();
+        $font = $pdf->getDomPDF()->getFontMetrics()->getFont('DejaVu Sans', 'normal');
+        $canvas->page_text(438, 772, 'Página {PAGE_NUM} de {PAGE_COUNT}', $font, 7, [55 / 255, 65 / 255, 81 / 255]);
+
+        return $pdf->stream('laboratorio_'.$solicitude->codigo_solicitud.'.pdf');
+    }
+
+    public function auditoria(Request $request, Solicitude $solicitude)
+    {
+        $this->authorizeAny($request, ['Ver Solicitudes Laboratorio', 'Editar Solicitudes Laboratorio']);
+
+        $auditoriasSolicitud = Audit::query()
+            ->where('auditable_type', Solicitude::class)
+            ->where('auditable_id', $solicitude->id)
+            ->get();
+
+        $auditoriasItems = Audit::query()
+            ->where('auditable_type', SolicitudLaboratorioItem::class)
+            ->where(function ($query) use ($solicitude) {
+                $query->where('new_values->solicitude_id', $solicitude->id)
+                    ->orWhere('old_values->solicitude_id', $solicitude->id);
+            })
+            ->get();
+
+        $itemIds = $auditoriasItems->pluck('auditable_id')->unique()->values();
+        $auditoriasResultados = $itemIds->isEmpty()
+            ? collect()
+            : Audit::query()
+                ->where('auditable_type', SolicitudLaboratorioResultado::class)
+                ->where(function ($query) use ($itemIds) {
+                    $query->whereIn('new_values->solicitud_laboratorio_item_id', $itemIds)
+                        ->orWhereIn('old_values->solicitud_laboratorio_item_id', $itemIds);
+                })
+                ->get();
+
+        $auditorias = $auditoriasSolicitud
+            ->concat($auditoriasItems)
+            ->concat($auditoriasResultados)
+            ->sortByDesc(fn ($audit) => sprintf('%s-%010d', $audit->created_at, $audit->id))
+            ->values();
+        $usuarios = User::withTrashed()->whereIn('id', $auditorias->pluck('user_id')->filter()->unique())
+            ->get()->keyBy('id');
+
+        return response()->json($auditorias->map(function ($audit) use ($usuarios) {
+            $anteriores = $audit->old_values ?? [];
+            $nuevos = $audit->new_values ?? [];
+            $valores = array_merge($anteriores, $nuevos);
+            $camposIgnorados = ['id', 'solicitude_id', 'solicitud_laboratorio_item_id', 'producto_id', 'producto_laboratorio_dato_id'];
+            $campos = collect(array_unique(array_merge(array_keys($anteriores), array_keys($nuevos))))
+                ->reject(fn ($campo) => in_array($campo, $camposIgnorados, true))
+                ->map(fn ($campo) => [
+                    'campo' => $campo,
+                    'anterior' => $anteriores[$campo] ?? null,
+                    'nuevo' => $nuevos[$campo] ?? null,
+                ])->values();
+
+            $entidad = match ($audit->auditable_type) {
+                SolicitudLaboratorioResultado::class => 'Resultado: '.($valores['nombre'] ?? '#'.$audit->auditable_id),
+                SolicitudLaboratorioItem::class => 'Prueba: '.($valores['producto_nombre'] ?? '#'.$audit->auditable_id),
+                default => 'Solicitud '.($valores['codigo_solicitud'] ?? '#'.$audit->auditable_id),
+            };
+            $usuario = $usuarios->get($audit->user_id);
+
+            return [
+                'id' => $audit->id,
+                'fecha' => $audit->created_at,
+                'evento' => $audit->event,
+                'entidad' => $entidad,
+                'usuario' => $usuario?->name ?? $usuario?->username ?? 'Usuario no registrado',
+                'cambios' => $campos,
+            ];
+        }));
     }
 
     public function verificacion(string $codigo)
@@ -275,20 +351,26 @@ class SolicitudeController extends Controller
 
     private function syncLaboratorios(Solicitude $solicitud, $productos, $valores): void
     {
-        foreach ($solicitud->laboratorioItems()->with('resultados')->get() as $itemAnterior) {
-            $itemAnterior->resultados->each->delete();
-            $itemAnterior->delete();
-        }
+        $itemsAnteriores = $solicitud->laboratorioItems()->with('resultados')->get()->keyBy('producto_id');
+
         foreach ($productos as $indice => $producto) {
-            $item = $solicitud->laboratorioItems()->create([
+            $datosItem = [
                 'producto_id' => $producto->id,
                 'producto_nombre' => $producto->nombre,
                 'precio' => $producto->precio,
                 'orden' => ($indice + 1) * 10,
-            ]);
+            ];
+            $item = $itemsAnteriores->pull($producto->id);
+            if ($item) {
+                $item->update($datosItem);
+            } else {
+                $item = $solicitud->laboratorioItems()->create($datosItem);
+            }
+            $resultadosAnteriores = $item->resultados->keyBy('producto_laboratorio_dato_id');
+
             foreach ($producto->laboratorioDatos as $dato) {
                 $valorConfigurado = $valores->get($dato->id, []);
-                $item->resultados()->create([
+                $datosResultado = [
                     'producto_laboratorio_dato_id' => $dato->id,
                     'nombre' => $dato->nombre,
                     'nombre_variable' => $dato->nombre_variable,
@@ -302,9 +384,17 @@ class SolicitudeController extends Controller
                     'visible' => array_key_exists('visible', $valorConfigurado)
                         ? (bool) $valorConfigurado['visible']
                         : $dato->visible,
-                ]);
+                ];
+                $resultado = $resultadosAnteriores->pull($dato->id);
+                $resultado ? $resultado->update($datosResultado) : $item->resultados()->create($datosResultado);
             }
+            $resultadosAnteriores->each->delete();
         }
+
+        $itemsAnteriores->each(function ($item) {
+            $item->resultados->each->delete();
+            $item->delete();
+        });
     }
 
     private function authorizeAny(Request $request, string|array $permissions): void

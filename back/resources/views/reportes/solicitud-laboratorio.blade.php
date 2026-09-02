@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <style>
-        @page { margin: 22px 32px 26px; }
+        @page { margin: 22px 32px 92px; }
         body { font-family: DejaVu Sans, sans-serif; color: #1f2937; font-size: 8.5px; }
         .header, .patient, .results { width: 100%; border-collapse: collapse; }
         .header { margin-bottom: 3px; border-bottom: 2px solid #2d82b7; }
@@ -22,14 +22,15 @@
         .results tr { page-break-inside: avoid; }
         .area td { color: #1f2937; font-size: 9px; font-weight: bold; padding: 4px; text-decoration: underline; }
         .result { font-weight: bold; }
-        .footer { margin-top: 10px; border-top: 1px solid #c2cad3; padding-top: 5px; color: #6b7280; font-size: 7.5px; }
         .signature { margin-top: 24px; width: 230px; border-top: 1px solid #374151; text-align: center; padding-top: 3px; font-size: 8px; }
         .signature-name { margin-top: 2px; font-weight: bold; color: #164e7a; font-size: 8.5px; }
-        .verification { position: fixed; right: 0; bottom: 0; width: 142px; color: #4b5563; font-size: 6.5px; }
-        .verification table { width: 100%; border-collapse: collapse; text-align: center; }
-        .verification td { padding: 0; }
-        .verification img { width: 82px; height: 82px; }
-        .verification-code { padding-top: 2px !important; white-space: nowrap; }
+        .page-footer { position: fixed; left: 0; right: 0; bottom: -78px; height: 70px; border-top: 1px solid #c2cad3; color: #374151; }
+        .page-footer table { width: 100%; height: 66px; border-collapse: collapse; }
+        .page-footer td { padding: 3px 5px; vertical-align: middle; }
+        .footer-message { width: 62%; color: #245f88; font-size: 8.5px; font-style: italic; font-weight: bold; letter-spacing: .1px; white-space: nowrap; }
+        .footer-patient { width: 25%; text-align: right; font-size: 8px; text-transform: uppercase; }
+        .footer-qr { width: 13%; text-align: right; }
+        .footer-qr img { width: 56px; height: 56px; }
     </style>
 </head>
 <body>
@@ -88,15 +89,12 @@
     <div>RESPONSABLE DE LABORATORIO</div>
     <div class="signature-name">{{ $impresoPor->name }}</div>
 </div>
-<div class="footer">
-    Este informe corresponde a la solicitud {{ $solicitude->codigo_solicitud }}.
-    Los resultados deben ser interpretados por un profesional de salud.
-</div>
-<div class="verification">
-    <table>
-        <tr><td><img src="{{ $qrDataUri }}" alt="QR de verificación"></td></tr>
-        <tr><td class="verification-code">VERIFICAR AUTENTICIDAD<br>{{ $solicitude->codigo_verificacion }}</td></tr>
-    </table>
+<div class="page-footer">
+    <table><tr>
+        <td class="footer-message">Nuestro compromiso es brindarte resultados confiables para un mejor mañana.</td>
+        <td class="footer-patient">{{ $solicitude->paciente->nombre_completo }}</td>
+        <td class="footer-qr"><img src="{{ $qrDataUri }}" alt="QR de verificación"></td>
+    </tr></table>
 </div>
 </body>
 </html>

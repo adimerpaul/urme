@@ -60,6 +60,8 @@ class Permisos
         'Laboratorio' => [
             'Ver Solicitudes Laboratorio', 'Crear Solicitudes Laboratorio',
             'Editar Solicitudes Laboratorio', 'Eliminar Solicitudes Laboratorio',
+            'Ver Reactivos', 'Crear Reactivos', 'Editar Reactivos', 'Eliminar Reactivos',
+            'Ver Derivaciones', 'Crear Derivaciones', 'Editar Derivaciones', 'Eliminar Derivaciones',
         ],
         'Reportes' => [
             'Ver Reportes', 'Imprimir Resultados', 'Exportar Excel',
@@ -160,6 +162,14 @@ class Permisos
         'Crear Solicitudes Laboratorio' => 'Registrar nuevas solicitudes de análisis de laboratorio.',
         'Editar Solicitudes Laboratorio' => 'Cargar resultados y modificar solicitudes de laboratorio.',
         'Eliminar Solicitudes Laboratorio' => 'Anular solicitudes de laboratorio.',
+        'Ver Reactivos' => 'Consultar los reactivos y su consumo configurado por servicio de laboratorio.',
+        'Crear Reactivos' => 'Registrar reactivos y vincularlos con servicios de laboratorio.',
+        'Editar Reactivos' => 'Modificar reactivos, existencias y cantidades utilizadas por servicio.',
+        'Eliminar Reactivos' => 'Dar de baja reactivos del laboratorio.',
+        'Ver Derivaciones' => 'Consultar las derivaciones registradas y generar su impresión.',
+        'Crear Derivaciones' => 'Registrar derivaciones y adjuntar imágenes de resultados externos.',
+        'Editar Derivaciones' => 'Modificar los datos o la imagen de una derivación.',
+        'Eliminar Derivaciones' => 'Eliminar derivaciones registradas.',
 
         // Reportes
         'Ver Reportes' => 'Acceder a los reportes y estadísticas del sistema.',

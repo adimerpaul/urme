@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\DescripcionHtml;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use OwenIt\Auditing\Auditable as AuditableTrait;
@@ -14,12 +15,19 @@ class Producto extends Model implements AuditableContract
     protected $table = 'productos';
 
     protected $fillable = [
-        'codigo', 'nombre', 'descripcion', 'marca',
+        'codigo', 'nombre', 'nombre_comercial', 'descripcion', 'marca',
         'fabricante_id', 'unidad_id',
         'tipo_producto_id', 'precio', 'precio_seguro',
     ];
 
     protected $hidden = ['created_at', 'updated_at', 'deleted_at'];
+
+    protected $appends = ['descripcion_html'];
+
+    public function getDescripcionHtmlAttribute(): string
+    {
+        return DescripcionHtml::mostrar($this->descripcion);
+    }
 
     protected $casts = [
         'precio' => 'decimal:2',
@@ -54,6 +62,11 @@ class Producto extends Model implements AuditableContract
     public function ventaDetalles()
     {
         return $this->hasMany(VentaDetalle::class);
+    }
+
+    public function bajaDetalles()
+    {
+        return $this->hasMany(BajaDetalle::class);
     }
 
     public function laboratorioDatos()

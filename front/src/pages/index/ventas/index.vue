@@ -27,6 +27,11 @@
             {{ caja.cerrada ? 'Ver el cierre de caja de hoy' : 'Cerrar la caja del día' }}
           </q-tooltip>
         </q-btn>
+        <q-btn v-if="canCrear && !soloFarmacia" rounded outline color="deep-orange-8" icon="shopping_bag"
+               label="Nuevo gasto" no-caps class="q-mr-sm" :disable="caja.cerrada" @click="abrirGasto">
+          <q-tooltip v-if="caja.cerrada">Su caja de hoy ya fue cerrada</q-tooltip>
+          <q-tooltip v-else>Registrar una salida de dinero de caja: un refresco, el periódico, un taxi</q-tooltip>
+        </q-btn>
         <q-btn v-if="canCrear" rounded unelevated color="primary" icon="point_of_sale"
                :label="soloFarmacia ? 'Nueva venta de farmacia' : 'Nueva venta'" no-caps
                :disable="caja.cerrada" :to="rutaCrear">
@@ -43,25 +48,34 @@
 
       <!-- Tarjetas resumen — solo con 'Ver Montos Caja' -->
       <div v-if="canMontos" class="row q-col-gutter-xs q-mb-xs">
-        <div class="col-12 col-sm-3">
+        <div class="col-6 col-md">
           <q-card flat class="bg-primary text-white q-pa-sm rounded-borders full-height">
             <div class="text-caption text-teal-2 text-uppercase text-weight-bold">Ventas activas</div>
             <div class="text-subtitle1 text-weight-bold">{{ money(resumen.total_ventas) }} <span class="text-caption text-teal-2">Bs</span></div>
           </q-card>
         </div>
-        <div class="col-12 col-sm-3">
+        <!-- Gastos: dinero que salio de caja, no una venta -->
+        <div class="col-6 col-md">
+          <q-card flat bordered class="q-pa-sm rounded-borders full-height">
+            <div class="text-caption text-grey-6 text-uppercase text-weight-bold">Gastos</div>
+            <div class="text-subtitle1 text-weight-bold text-deep-orange-8">
+              {{ money(resumen.total_egresos) }} <span class="text-caption text-grey-6">Bs</span>
+            </div>
+          </q-card>
+        </div>
+        <div class="col-6 col-md">
           <q-card flat bordered class="q-pa-sm rounded-borders full-height">
             <div class="text-caption text-grey-6 text-uppercase text-weight-bold">Pendientes</div>
             <div class="text-subtitle1 text-weight-bold text-orange-8">{{ money(resumen.total_pendientes) }} <span class="text-caption text-grey-6">Bs</span></div>
           </q-card>
         </div>
-        <div class="col-12 col-sm-3">
+        <div class="col-6 col-md">
           <q-card flat bordered class="q-pa-sm rounded-borders full-height">
             <div class="text-caption text-grey-6 text-uppercase text-weight-bold">Anuladas</div>
             <div class="text-subtitle1 text-weight-bold text-negative">{{ money(resumen.total_anuladas) }} <span class="text-caption text-grey-6">Bs</span></div>
           </q-card>
         </div>
-        <div class="col-12 col-sm-3">
+        <div class="col-6 col-md">
           <q-card flat bordered class="q-pa-sm rounded-borders full-height">
             <div class="text-caption text-grey-6 text-uppercase text-weight-bold">Total registros</div>
             <div class="text-subtitle1 text-weight-bold">{{ resumen.cantidad }}</div>
@@ -140,6 +154,14 @@
             <template v-slot:prepend><q-icon name="filter_alt" size="16px" color="grey-6" /></template>
           </q-select>
 
+          <q-select v-model="filtro.tipo_movimiento" dense outlined clearable hide-bottom-space
+                    :options="opcionesTipo" option-value="value" option-label="label" emit-value map-options
+                    :display-value="tipoDisplay"
+                    :class="['filtros__campo', { 'filtros__campo--vacio': !filtro.tipo_movimiento }]"
+                    style="width:130px" @update:model-value="onFiltroChange">
+            <template v-slot:prepend><q-icon name="swap_vert" size="16px" color="grey-6" /></template>
+          </q-select>
+
           <q-space />
           <span class="filtros__rango">{{ rangoFiltro }}</span>
         </div>
@@ -152,6 +174,7 @@
               <th class="text-left" style="width:72px"></th>
               <th class="text-left" style="width:44px">ID</th>
               <th class="text-left" style="width:118px">Fecha</th>
+              <th class="text-center" style="width:82px">Tipo</th>
               <th class="text-left">Cliente / Paciente</th>
               <th class="text-left" style="width:110px">Doctor</th>
               <th class="text-left" style="width:120px">Seguro</th>
@@ -163,7 +186,7 @@
           </thead>
           <tbody>
             <tr v-if="!ventas.length && !loadingVentas">
-              <td :colspan="canMontos ? 10 : 9" class="text-center text-grey-5 q-pa-md">Sin datos</td>
+              <td :colspan="canMontos ? 11 : 10" class="text-center text-grey-5 q-pa-md">Sin datos</td>
             </tr>
             <tr v-for="row in ventas" :key="row.id">
               <td class="q-pa-xs">
@@ -194,10 +217,14 @@
               </td>
               <td>{{ row.id }}</td>
               <td>{{ formatFecha(row.fecha_hora) }}</td>
-              <!-- title: al recortarse con puntos suspensivos, el texto completo se ve al pasar el mouse -->
-              <td :title="row.paciente ? row.paciente.nombre_completo : (row.cliente || '')">
-                {{ row.paciente ? row.paciente.nombre_completo : (row.cliente || '—') }}
+              <td class="text-center">
+                <q-badge rounded
+                         :color="esEgreso(row) ? 'deep-orange-1' : 'blue-1'"
+                         :text-color="esEgreso(row) ? 'deep-orange-9' : 'blue-9'"
+                         class="text-weight-bold">{{ esEgreso(row) ? 'GASTO' : 'VENTA' }}</q-badge>
               </td>
+              <!-- title: al recortarse con puntos suspensivos, el texto completo se ve al pasar el mouse -->
+              <td :title="clienteRow(row)">{{ clienteRow(row) }}</td>
               <td :title="row.doctor ? row.doctor.nombre : ''">{{ row.doctor ? row.doctor.nombre : '—' }}</td>
               <td :title="row.seguro ? row.seguro.nombre : 'PARTICULAR'">{{ row.seguro ? row.seguro.nombre : 'PARTICULAR' }}</td>
               <td :title="row.user ? row.user.name : ''">{{ row.user ? row.user.name : '—' }}</td>
@@ -208,7 +235,9 @@
                          class="text-weight-bold">{{ estadoLabel(row) }}</q-badge>
               </td>
               <td>{{ row.tipo_pago }}</td>
-              <td v-if="canMontos" class="text-right">{{ money(row.total) }}</td>
+              <td v-if="canMontos" class="text-right" :class="{ 'text-deep-orange-8 text-weight-bold': esEgreso(row) }">
+                {{ esEgreso(row) ? '-' : '' }}{{ money(row.total) }}
+              </td>
             </tr>
           </tbody>
         </q-markup-table>
@@ -231,13 +260,15 @@
       <q-card style="width:min(96vw,700px)">
         <q-card-section class="row items-center bg-primary text-white q-py-sm">
           <q-icon name="receipt_long" size="20px" class="q-mr-sm" />
-          <span class="text-subtitle1 text-weight-bold">Detalle de venta #{{ detalleVenta?.id }}</span>
+          <span class="text-subtitle1 text-weight-bold">
+            {{ esEgreso(detalleVenta) ? 'Detalle de gasto' : 'Detalle de venta' }} #{{ detalleVenta?.id }}
+          </span>
           <q-space />
           <q-btn icon="close" flat round dense color="white" @click="dialogDetalle = false" />
         </q-card-section>
         <q-card-section style="max-height:70vh;overflow-y:auto">
           <div class="row q-col-gutter-sm q-mb-sm text-body2">
-            <div class="col-6"><b>Cliente:</b> {{ detalleVenta?.paciente?.nombre_completo || detalleVenta?.cliente || '—' }}</div>
+            <div class="col-6"><b>Cliente:</b> {{ clienteRow(detalleVenta) }}</div>
             <div class="col-6"><b>Doctor:</b> {{ detalleVenta?.doctor?.nombre || '—' }}</div>
             <div class="col-6"><b>Seguro:</b> {{ detalleVenta?.seguro?.nombre || 'PARTICULAR' }}</div>
             <div class="col-6"><b>Usuario:</b> {{ detalleVenta?.user?.name || '—' }}</div>
@@ -296,6 +327,39 @@
             <div class="row justify-end q-gutter-sm">
               <q-btn flat color="grey-7" label="Cancelar" no-caps @click="dialogCobrar = false" />
               <q-btn color="primary" label="Cobrar e imprimir" icon-right="payments" type="submit" no-caps :loading="cobrando" />
+            </div>
+          </q-form>
+        </q-card-section>
+      </q-card>
+    </q-dialog>
+
+    <!-- DIALOG NUEVO GASTO -->
+    <q-dialog v-model="dialogGasto" persistent>
+      <q-card style="width:min(96vw,420px)">
+        <q-card-section class="row items-center bg-deep-orange-8 text-white q-py-sm">
+          <q-icon name="shopping_bag" size="20px" class="q-mr-sm" />
+          <div>
+            <div class="text-subtitle1 text-weight-bold">Nuevo gasto</div>
+            <div class="text-caption">Dinero que sale de caja</div>
+          </div>
+          <q-space />
+          <q-btn icon="close" flat round dense color="white" v-close-popup />
+        </q-card-section>
+        <q-card-section>
+          <q-form @submit.prevent="guardarGasto">
+            <q-input v-model="gastoForm.descripcion" label="Descripción del gasto *" dense outlined
+                     v-uppercase autofocus class="q-mb-sm"
+                     hint="Ej.: COMPRA DE REFRESCO, PERIÓDICO, TAXI"
+                     :rules="[v => !!(v || '').trim() || 'Requerido']" />
+            <q-input v-model.number="gastoForm.monto" label="Monto Bs *" dense outlined type="number"
+                     step="0.01" min="0" input-class="text-right" class="q-mb-sm"
+                     :rules="[v => Number(v) > 0 || 'Indique el monto del gasto']" />
+            <q-input v-model="gastoForm.comentario" label="Comentario" dense outlined
+                     type="textarea" rows="2" v-uppercase />
+            <div class="row justify-end q-gutter-sm q-mt-md">
+              <q-btn flat color="grey-7" label="Cancelar" no-caps v-close-popup />
+              <q-btn color="deep-orange-8" label="Registrar gasto" icon-right="save" type="submit"
+                     no-caps :loading="guardandoGasto" />
             </div>
           </q-form>
         </q-card-section>
@@ -442,7 +506,23 @@ const canMontos   = computed(() => proxy.$store.hasPermission('Ver Montos Caja')
 
 const canCerrarCaja = computed(() => proxy.$store.hasPermission('Cerrar Caja'))
 
-const resumen = ref({ total_ventas: 0, total_pendientes: 0, total_anuladas: 0, cantidad: 0 })
+const resumen = ref({ total_ventas: 0, total_egresos: 0, total_pendientes: 0, total_anuladas: 0, cantidad: 0 })
+
+// Un movimiento puede ser una venta (INGRESO) o un gasto de caja (EGRESO).
+const opcionesTipo = [
+  { value: 'INGRESO', label: 'Ventas' },
+  { value: 'EGRESO', label: 'Gastos' },
+]
+
+function esEgreso (row) { return row?.tipo_movimiento === 'EGRESO' }
+
+/* El gasto no tiene cliente: en su lugar se muestra en qué se gastó (el único
+   ítem del movimiento), y si el detalle no viajó, un rótulo genérico. */
+function clienteRow (row) {
+  if (!row) return '—'
+  if (esEgreso(row)) return row.detalles?.[0]?.nombre || row.comentario || 'GASTO DE CAJA'
+  return row.paciente?.nombre_completo || row.cliente || '—'
+}
 
 // ── Cierre de caja del día ─────────────────────────────────────
 // ver_montos: el backend solo manda el total del sistema a quien puede verlo.
@@ -502,6 +582,38 @@ async function guardarCierre () {
   }
 }
 
+// ── Nuevo gasto (salida de dinero de caja) ─────────────────────
+const dialogGasto = ref(false)
+const guardandoGasto = ref(false)
+const gastoForm = ref({ descripcion: '', monto: null, comentario: '' })
+
+function abrirGasto () {
+  gastoForm.value = { descripcion: '', monto: null, comentario: '' }
+  dialogGasto.value = true
+}
+
+async function guardarGasto () {
+  if (!gastoForm.value.descripcion.trim()) {
+    proxy.$alert.error('Indique en qué se gastó')
+    return
+  }
+  if (!(Number(gastoForm.value.monto) > 0)) {
+    proxy.$alert.error('Indique el monto del gasto')
+    return
+  }
+  guardandoGasto.value = true
+  try {
+    await proxy.$axios.post('ventas/gasto', gastoForm.value)
+    proxy.$alert.success('Gasto registrado')
+    dialogGasto.value = false
+    loadVentas()
+  } catch (e) {
+    proxy.$alert.error(e.response?.data?.message || 'No se pudo registrar el gasto')
+  } finally {
+    guardandoGasto.value = false
+  }
+}
+
 function money (v) { return Number(v || 0).toFixed(2) }
 
 /**
@@ -556,6 +668,7 @@ const filtro = ref({
   paciente_id: null,
   user_id: null,
   estado: null,
+  tipo_movimiento: null,
 })
 
 /* Vendedores del rango: la lista llega con cada carga del historial y no se
@@ -566,6 +679,8 @@ const usuarios = ref([])
 const usuarioSel = ref(null)
 const pacienteSel = ref(null)
 
+const tipoDisplay = computed(() =>
+  opcionesTipo.find(o => o.value === filtro.value.tipo_movimiento)?.label || 'Tipo')
 const usuarioDisplay = computed(() => usuarioSel.value?.name || 'Usuario')
 const pacienteDisplay = computed(() => pacienteSel.value?.nombre_completo || 'Paciente')
 
@@ -627,11 +742,12 @@ async function loadVentas () {
         paciente_id: filtro.value.paciente_id,
         user_id: filtro.value.user_id,
         estado: filtro.value.estado,
+        tipo_movimiento: filtro.value.tipo_movimiento,
         solo_farmacia: props.soloFarmacia ? 1 : undefined,
       },
     })
     const data = res.data || {}
-    resumen.value = data.resumen || { total_ventas: 0, total_anuladas: 0, cantidad: 0 }
+    resumen.value = data.resumen || { total_ventas: 0, total_egresos: 0, total_anuladas: 0, cantidad: 0 }
     usuarios.value = data.usuarios || []
     ventas.value = data.ventas?.data || []
     totalVentas.value = data.ventas?.total || 0
@@ -664,9 +780,10 @@ async function imprimir (row) {
 }
 
 function anular (row) {
-  proxy.$alert.dialog('¿Desea anular la venta #' + row.id + '?').onOk(() => {
+  const que = esEgreso(row) ? 'el gasto' : 'la venta'
+  proxy.$alert.dialog('¿Desea anular ' + que + ' #' + row.id + '?').onOk(() => {
     proxy.$axios.delete('ventas/' + row.id)
-      .then(() => { proxy.$alert.success('Venta anulada'); loadVentas() })
+      .then(res => { proxy.$alert.success(res.data?.message || 'Anulado'); loadVentas() })
       .catch(e => proxy.$alert.error(e.response?.data?.message || 'Error al anular'))
   })
 }
@@ -798,7 +915,7 @@ watch(() => proxy.$store.isLogged, (val) => { if (val) init() }, { immediate: tr
   width: 100%;
   /* Suma de las columnas fijas + un mínimo para Cliente/Paciente:
      en pantallas angostas se desplaza en horizontal en vez de aplastarse. */
-  min-width: 1010px;
+  min-width: 1092px;
 }
 
 .tabla-ventas :deep(td) {

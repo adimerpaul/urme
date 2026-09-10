@@ -3,7 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <style>
-        @page { margin: 22px 32px 92px; }
+        @page { size: letter; margin: 22px 32px 92px; }
+        .description { margin: 5px 0 8px; line-height: 1.4; }
+        .description p { margin: 3px 0; }
         body { font-family: DejaVu Sans, sans-serif; color: #1f2937; font-size: 8.5px; }
         .header, .patient, .results { width: 100%; border-collapse: collapse; }
         .header { margin-bottom: 3px; border-bottom: 2px solid #2d82b7; }
@@ -36,7 +38,7 @@
 <body>
 <table class="header"><tr>
     <td style="width:42%">
-        <img class="laboratory-logo" src="{{ public_path('images/logo-laboratorio-urme.jpg') }}" alt="Laboratorio de Diagnóstico Clínico URME">
+        <img class="laboratory-logo" src="data:image/jpeg;base64,{{ base64_encode(file_get_contents(public_path('images/logo-laboratorio-urme.jpg'))) }}" alt="Laboratorio de Diagnóstico Clínico URME">
     </td>
     <td class="meta" style="width:58%;text-align:right">
         <strong class="document-code">{{ $solicitude->codigo_solicitud }}</strong><br>
@@ -56,8 +58,11 @@
     </tr>
     <tr><td colspan="3"><span class="label">DIAGNÓSTICO:</span> {{ $solicitude->diagnostico_clinico ?: '-' }}</td></tr>
 </table>
-@foreach($solicitude->laboratorioItems->filter(fn ($item) => $item->resultados->where('visible', true)->isNotEmpty()) as $item)
+@foreach($solicitude->laboratorioItems->filter(fn ($item) => $item->resultados->where('visible', true)->isNotEmpty() || filled($item->producto?->descripcion)) as $item)
     <div class="service-title">{{ $item->producto_nombre }}</div>
+    @if($item->producto?->descripcion)
+        <div class="description">{!! $item->producto->descripcion_html !!}</div>
+    @endif
     <table class="results">
         <thead><tr>
             <th style="width:25%">ANÁLISIS</th>

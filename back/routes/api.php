@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\BajaController;
 use App\Http\Controllers\CajaMovimientoController;
 use App\Http\Controllers\CierreCajaController;
 use App\Http\Controllers\CompraController;
@@ -8,13 +9,16 @@ use App\Http\Controllers\DerivacionController;
 use App\Http\Controllers\DoctorController;
 use App\Http\Controllers\InternacionController;
 use App\Http\Controllers\InternacionItemController;
+use App\Http\Controllers\LaboratorioReporteController;
 use App\Http\Controllers\PacienteController;
 use App\Http\Controllers\ProductoController;
 use App\Http\Controllers\ProductoFarmaciaController;
 use App\Http\Controllers\ProductoLaboratorioController;
+use App\Http\Controllers\ProductoLoteController;
 use App\Http\Controllers\ProductoVencimientoController;
 use App\Http\Controllers\ProveedorController;
 use App\Http\Controllers\ReactivoController;
+use App\Http\Controllers\ReactivoKardexController;
 use App\Http\Controllers\SeguroController;
 use App\Http\Controllers\SolicitudeController;
 use App\Http\Controllers\UserController;
@@ -66,6 +70,16 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/productos-farmacia/{id}', [ProductoFarmaciaController::class, 'update']);
     Route::delete('/productos-farmacia/{id}', [ProductoFarmaciaController::class, 'destroy']);
 
+    // Bajas de farmacia (las rutas fijas van antes de /bajas/{id})
+    Route::get('/bajas/catalogos', [BajaController::class, 'catalogos']);
+    Route::get('/bajas/resumen', [BajaController::class, 'resumen']);
+    Route::get('/bajas/productos', [BajaController::class, 'productos']);
+    Route::get('/bajas/productos/{producto}/lotes', [BajaController::class, 'lotes']);
+    Route::get('/bajas', [BajaController::class, 'index']);
+    Route::post('/bajas', [BajaController::class, 'store']);
+    Route::put('/bajas/{id}/anular', [BajaController::class, 'anular']);
+    Route::get('/bajas/{id}', [BajaController::class, 'show']);
+
     // Catálogos - Fabricantes
     Route::get('/fabricantes/export-pdf', [ProductoController::class, 'exportFabricantesPdf']);
     Route::get('/fabricantes/export-excel', [ProductoController::class, 'exportFabricantesExcel']);
@@ -92,6 +106,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/productos/export-pdf', [ProductoController::class, 'exportProductosPdf']);
     Route::get('/productos/export-excel', [ProductoController::class, 'exportProductosExcel']);
     Route::get('/productos/{id}/historial', [ProductoController::class, 'historial']);
+    Route::put('/productos/{producto}/historial/{tipo}/{detalle}', [ProductoLoteController::class, 'update']);
     Route::get('/productos/{id}/lotes-disponibles', [ProductoController::class, 'lotesDisponibles']);
     Route::get('/productos/{producto}/laboratorio-configuracion', [ProductoLaboratorioController::class, 'show']);
     Route::post('/productos/{producto}/laboratorio-datos', [ProductoLaboratorioController::class, 'storeDato']);
@@ -106,6 +121,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/producto-laboratorio-validaciones/{validacion}', [ProductoLaboratorioController::class, 'updateValidacion']);
     Route::delete('/producto-laboratorio-validaciones/{validacion}', [ProductoLaboratorioController::class, 'destroyValidacion']);
 
+    // Reportes generales de laboratorio
+    Route::get('/reportes-laboratorio', [LaboratorioReporteController::class, 'index']);
+    Route::get('/reportes-laboratorio/export-excel', [LaboratorioReporteController::class, 'excel']);
+    Route::get('/reportes-laboratorio/export-pdf', [LaboratorioReporteController::class, 'pdf']);
+
     // Solicitudes de laboratorio
     Route::get('/solicitudes-laboratorio/form-data', [SolicitudeController::class, 'formData']);
     Route::get('/solicitudes-laboratorio/pacientes', [SolicitudeController::class, 'pacientes']);
@@ -114,11 +134,14 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/solicitudes-laboratorio', [SolicitudeController::class, 'store']);
     Route::get('/solicitudes-laboratorio/{solicitude}/auditoria', [SolicitudeController::class, 'auditoria']);
     Route::get('/solicitudes-laboratorio/{solicitude}/pdf', [SolicitudeController::class, 'pdf']);
+    Route::get('/solicitudes-laboratorio/{solicitude}/impresion', [SolicitudeController::class, 'impresion']);
     Route::put('/solicitudes-laboratorio/{solicitude}', [SolicitudeController::class, 'update']);
     Route::get('/solicitudes-laboratorio/{solicitude}', [SolicitudeController::class, 'show']);
     Route::delete('/solicitudes-laboratorio/{solicitude}', [SolicitudeController::class, 'destroy']);
 
     // Reactivos y consumo por servicio de laboratorio
+    Route::get('/reactivos-kardex/pdf', [ReactivoKardexController::class, 'pdf']);
+    Route::get('/reactivos-kardex', [ReactivoKardexController::class, 'index']);
     Route::get('/reactivos/form-data', [ReactivoController::class, 'formData']);
     Route::apiResource('reactivos', ReactivoController::class);
 
@@ -146,6 +169,8 @@ Route::middleware('auth:sanctum')->group(function () {
     // Pacientes
     Route::get('/pacientes', [PacienteController::class, 'index']);
     Route::get('/pacientes/{id}/internaciones', [PacienteController::class, 'internaciones']);
+    Route::get('/pacientes/{id}/estado-cuenta-pdf', [PacienteController::class, 'estadoCuentaPdf']);
+    Route::post('/pacientes/{id}/cobrar-todo', [PacienteController::class, 'cobrarTodo']);
     Route::get('/pacientes/{id}', [PacienteController::class, 'show']);
     Route::post('/pacientes', [PacienteController::class, 'store']);
     Route::put('/pacientes/{id}', [PacienteController::class, 'update']);
@@ -155,6 +180,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/internaciones', [InternacionController::class, 'index']);
     Route::get('/internaciones/{id}/pdf', [InternacionController::class, 'pdf']);
     Route::put('/internaciones/{id}/cerrar', [InternacionController::class, 'cerrar']);
+    Route::post('/internaciones/{id}/pagar-total', [InternacionController::class, 'pagarTotal']);
     Route::put('/internaciones/{id}/seguimiento', [InternacionController::class, 'updateSeguimiento']);
     Route::post('/internaciones', [InternacionController::class, 'store']);
     Route::put('/internaciones/{id}', [InternacionController::class, 'update']);
@@ -182,6 +208,8 @@ Route::middleware('auth:sanctum')->group(function () {
     // Ventas
     Route::get('/ventas', [VentaController::class, 'index']);
     Route::get('/ventas/{id}', [VentaController::class, 'show']);
+    // Antes de POST /ventas: un gasto de caja se registra por su propia ruta.
+    Route::post('/ventas/gasto', [VentaController::class, 'gasto']);
     Route::post('/ventas', [VentaController::class, 'store']);
     Route::put('/ventas/{id}/completar', [VentaController::class, 'completar']);
     Route::delete('/ventas/{id}', [VentaController::class, 'destroy']);

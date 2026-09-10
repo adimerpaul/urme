@@ -195,6 +195,7 @@
                 <tr class="bg-grey-1 text-grey-7 text-uppercase">
                   <th class="text-left">N°</th>
                   <th class="text-left">Fecha y hora</th>
+                  <th class="text-center">Tipo</th>
                   <th class="text-left">Cliente / Paciente</th>
                   <th class="text-left">Detalle</th>
                   <th class="text-center">Estado</th>
@@ -205,15 +206,21 @@
               </thead>
               <tbody>
                 <tr v-if="loadingVentas">
-                  <td colspan="8" class="text-center q-pa-md"><q-spinner color="primary" size="24px" /></td>
+                  <td colspan="9" class="text-center q-pa-md"><q-spinner color="primary" size="24px" /></td>
                 </tr>
                 <tr v-else-if="!ventas.length">
-                  <td colspan="8" class="text-center text-grey-5 q-pa-md">Este cierre no tiene ventas</td>
+                  <td colspan="9" class="text-center text-grey-5 q-pa-md">Este cierre no tiene movimientos</td>
                 </tr>
                 <tr v-else v-for="v in ventas" :key="v.id">
                   <td>{{ v.id }}</td>
                   <td>{{ formatFecha(v.fecha_hora_cobro || v.fecha_hora) }}</td>
-                  <td>{{ v.paciente?.nombre_completo || v.cliente || 'SIN CLIENTE' }}</td>
+                  <td class="text-center">
+                    <q-badge rounded
+                             :color="esEgreso(v) ? 'deep-orange-1' : 'blue-1'"
+                             :text-color="esEgreso(v) ? 'deep-orange-9' : 'blue-9'"
+                             class="text-weight-bold">{{ esEgreso(v) ? 'GASTO' : 'VENTA' }}</q-badge>
+                  </td>
+                  <td>{{ v.paciente?.nombre_completo || v.cliente || (esEgreso(v) ? 'GASTO DE CAJA' : 'SIN CLIENTE') }}</td>
                   <td class="text-grey-7">{{ (v.detalles || []).map(d => d.nombre).join(', ') || '—' }}</td>
                   <td class="text-center">
                     <q-badge :color="v.estado === 'ACTIVO' ? 'positive'
@@ -223,7 +230,10 @@
                   </td>
                   <td>{{ v.tipo_pago || '—' }}</td>
                   <td class="text-right">{{ (v.detalles || []).length }}</td>
-                  <td class="text-right text-weight-bold">{{ money(v.total) }}</td>
+                  <!-- El gasto se muestra en negativo: es dinero que salió de caja -->
+                  <td class="text-right text-weight-bold" :class="{ 'text-deep-orange-8': esEgreso(v) }">
+                    {{ esEgreso(v) ? '-' : '' }}{{ money(v.total) }}
+                  </td>
                 </tr>
               </tbody>
             </q-markup-table>
@@ -384,6 +394,9 @@ async function cargarUsuarios () {
 const dialogVentas = ref(false)
 const cierreSel = ref(null)
 const ventas = ref([])
+
+// Un movimiento de caja puede ser una venta (INGRESO) o un gasto (EGRESO).
+function esEgreso (v) { return v?.tipo_movimiento === 'EGRESO' }
 const loadingVentas = ref(false)
 const pageVentas = ref(1)
 const totalVentas = ref(0)

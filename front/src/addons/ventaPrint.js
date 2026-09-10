@@ -106,7 +106,10 @@ function enteroALetras (n) {
 function buildHtml (venta) {
   const logoUrl = window.location.origin + '/logo.png'
   const fecha = (venta.fecha_hora || '').replace('T', ' ').slice(0, 19) || '—'
-  const cliente = venta.paciente?.nombre_completo || venta.cliente || 'SIN NOMBRE'
+  // Un gasto de caja no tiene cliente: el comprobante cambia de rótulos.
+  const egreso = venta.tipo_movimiento === 'EGRESO'
+  const cliente = venta.paciente?.nombre_completo || venta.cliente ||
+    (egreso ? 'GASTO DE CAJA' : 'SIN NOMBRE')
   const detalles = venta.detalles || []
 
   const filas = detalles.length
@@ -125,7 +128,7 @@ function buildHtml (venta) {
   return `
     <div class="proforma">
       ${venta.estado === 'ANULADO' ? '<div class="anulado">ANULADO</div>' : ''}
-      <div class="titulo-doc">PROFORMA DE PAGO</div>
+      <div class="titulo-doc">${egreso ? 'COMPROBANTE DE GASTO' : 'PROFORMA DE PAGO'}</div>
 
       <table class="head">
         <tr>
@@ -136,7 +139,7 @@ function buildHtml (venta) {
             <span class="bold">${esc(CLINICA.nombre)}</span><br>
             <span class="bold">Dirección:</span> ${esc(CLINICA.direccion)}<br>
             <span class="bold">Celular:</span> ${esc(CLINICA.celular)}<br>
-            <span class="bold">VENTA N° ${String(venta.id).padStart(6, '0')}</span>
+            <span class="bold">${egreso ? 'GASTO' : 'VENTA'} N° ${String(venta.id).padStart(6, '0')}</span>
           </td>
         </tr>
       </table>
@@ -159,7 +162,7 @@ function buildHtml (venta) {
         </tr>
       </table>
 
-      <div class="detalle-title">SERVICIOS SOLICITADOS</div>
+      <div class="detalle-title">${egreso ? 'DETALLE DEL GASTO' : 'SERVICIOS SOLICITADOS'}</div>
 
       <table class="items">
         <thead>
@@ -178,6 +181,7 @@ function buildHtml (venta) {
           <td style="width:68%" class="right">TOTAL Bs. :</td>
           <td style="width:32%" class="right monto">${money(venta.total)}</td>
         </tr>
+        ${egreso ? '' : `
         <tr>
           <td class="right">PAGO Bs. :</td>
           <td class="right">${money(venta.pago)}</td>
@@ -185,7 +189,7 @@ function buildHtml (venta) {
         <tr>
           <td class="right">CAMBIO Bs. :</td>
           <td class="right">${money(venta.cambio)}</td>
-        </tr>
+        </tr>`}
       </table>
 
       <div class="son">SON: ${esc(numeroALetras(Number(venta.total || 0)))}</div>

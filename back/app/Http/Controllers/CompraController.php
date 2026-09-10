@@ -63,8 +63,8 @@ class CompraController extends Controller
             'tipo_pago' => 'nullable|string|max:50',
             'comentario' => 'nullable|string|max:500',
             'detalles' => 'required|array|min:1',
-            'detalles.*.producto_id' => 'nullable|exists:productos,id',
-            'detalles.*.nombre' => 'required_without:detalles.*.producto_id|nullable|string|max:255',
+            // Solo se compran productos del catálogo de farmacia: el nombre libre ya no se acepta.
+            'detalles.*.producto_id' => 'required|exists:productos,id',
             'detalles.*.precio' => 'required|numeric|min:0',
             'detalles.*.cantidad' => 'required|numeric|min:0.0001',
             'detalles.*.factor' => 'nullable|numeric|min:0',
@@ -75,13 +75,11 @@ class CompraController extends Controller
 
         // Las compras son de farmacia: todo producto del catálogo debe ser tipo FARMACIA
         $productoIds = collect($request->detalles)->pluck('producto_id')->filter()->unique()->values();
-        if ($productoIds->isNotEmpty()) {
-            $noFarmacia = Producto::whereIn('id', $productoIds)
-                ->whereDoesntHave('tipoProducto', fn ($q) => $q->where('nombre', 'FARMACIA'))
-                ->pluck('nombre');
-            if ($noFarmacia->isNotEmpty()) {
-                abort(422, 'Solo se pueden comprar productos de tipo FARMACIA. No permitidos: '.$noFarmacia->implode(', '));
-            }
+        $noFarmacia = Producto::whereIn('id', $productoIds)
+            ->whereDoesntHave('tipoProducto', fn ($q) => $q->where('nombre', 'FARMACIA'))
+            ->pluck('nombre');
+        if ($noFarmacia->isNotEmpty()) {
+            abort(422, 'Solo se pueden comprar productos de tipo FARMACIA. No permitidos: '.$noFarmacia->implode(', '));
         }
 
         $compra = DB::transaction(function () use ($request) {
@@ -98,7 +96,7 @@ class CompraController extends Controller
 
             $total = 0;
             foreach ($request->detalles as $item) {
-                $producto = ! empty($item['producto_id']) ? Producto::find($item['producto_id']) : null;
+                $producto = Producto::find($item['producto_id']);
                 $precio = (float) $item['precio'];
                 $cantidad = (float) $item['cantidad'];
                 $lineaTotal = round($precio * $cantidad, 2);
@@ -106,8 +104,8 @@ class CompraController extends Controller
 
                 CompraDetalle::create([
                     'compra_id' => $compra->id,
-                    'producto_id' => $producto?->id,
-                    'nombre' => mb_strtoupper($item['nombre'] ?? $producto?->nombre ?? ''),
+                    'producto_id' => $producto->id,
+                    'nombre' => mb_strtoupper($producto->nombre),
                     'precio' => $precio,
                     'cantidad' => $cantidad,
                     'total' => $lineaTotal,

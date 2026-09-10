@@ -44,7 +44,7 @@
         </div>
         <q-space />
         <q-input v-model="search" dense outlined clearable debounce="400" style="width:240px"
-                 placeholder="Buscar por nombre, código o marca" @update:model-value="buscar">
+                 placeholder="Buscar por nombre, comercial, código o marca" @update:model-value="buscar">
           <template #prepend><q-icon name="search" size="16px" /></template>
         </q-input>
         <q-badge color="primary">{{ pagination.rowsNumber }}</q-badge>
@@ -98,6 +98,12 @@
             <q-td :props="props">
               <div class="text-weight-medium">{{ props.row.nombre }}</div>
               <div v-if="props.row.descripcion" class="prod-sub text-grey-6">{{ props.row.descripcion }}</div>
+            </q-td>
+          </template>
+          <template #body-cell-nombre_comercial="props">
+            <q-td :props="props">
+              <span v-if="props.row.nombre_comercial" class="text-indigo-8">{{ props.row.nombre_comercial }}</span>
+              <span v-else class="text-grey-5">—</span>
             </q-td>
           </template>
           <template #body-cell-unidad="props">
@@ -191,7 +197,11 @@
                   <td>{{ formatFechaHistorial(mov.fecha_hora) }}</td>
                   <td>{{ mov.documento }}</td>
                   <td>{{ mov.tercero }}</td>
-                  <td>{{ mov.lote || 'SIN LOTE' }}</td>
+                  <td>
+                    {{ mov.lote || 'SIN LOTE' }}
+                    <EditarLoteHistorial :producto="historialProducto" :movimiento="mov"
+                                        @actualizado="movimientos = $event.movimientos" />
+                  </td>
                   <td>{{ mov.fecha_vencimiento || 'SIN FECHA' }}</td>
                   <td class="text-right">{{ money(mov.cantidad) }}</td>
                   <td v-if="tabHistorial === 'compras'" class="text-right text-teal-8 text-weight-bold">
@@ -235,7 +245,11 @@
               <q-input v-model="form.codigo" v-uppercase dense outlined label="Código" />
             </div>
             <div class="col-12 col-sm-8">
-              <q-input v-model="form.nombre" v-uppercase dense outlined label="Nombre *" :rules="[required]" />
+              <q-input v-model="form.nombre" v-uppercase dense outlined label="Nombre genérico *" :rules="[required]" />
+            </div>
+            <div class="col-12 col-sm-6">
+              <q-input v-model="form.nombre_comercial" v-uppercase dense outlined label="Nombre comercial"
+                       hint="Marca con la que se vende" />
             </div>
             <div class="col-12 col-sm-6">
               <q-input v-model="form.marca" v-uppercase dense outlined label="Marca" />
@@ -274,6 +288,7 @@
 
 <script setup>
 import { computed, getCurrentInstance, ref, watch } from 'vue'
+import EditarLoteHistorial from '../../../components/EditarLoteHistorial.vue'
 
 const { proxy } = getCurrentInstance()
 
@@ -300,7 +315,8 @@ const tabHistorial = ref('compras')
 const columns = [
   { name: 'acciones', label: 'Opciones', field: 'id', align: 'left' },
   { name: 'codigo', label: 'Código', field: 'codigo', align: 'left' },
-  { name: 'nombre', label: 'Producto', field: 'nombre', align: 'left', sortable: true },
+  { name: 'nombre', label: 'Genérico', field: 'nombre', align: 'left', sortable: true },
+  { name: 'nombre_comercial', label: 'Comercial', field: row => row.nombre_comercial || '—', align: 'left', sortable: true },
   { name: 'marca', label: 'Marca', field: row => row.marca || '—', align: 'left' },
   { name: 'fabricante', label: 'Fabricante', field: row => row.fabricante?.nombre || '—', align: 'left' },
   { name: 'unidad', label: 'Unidad', field: row => row.unidad?.abreviatura, align: 'center' },
@@ -426,7 +442,7 @@ async function verHistorial (producto) {
 
 function nuevo () {
   form.value = {
-    codigo: '', nombre: '', descripcion: '', marca: '',
+    codigo: '', nombre: '', nombre_comercial: '', descripcion: '', marca: '',
     fabricante_id: null, unidad_id: null, precio: 0, precio_seguro: null,
   }
   dialog.value = true

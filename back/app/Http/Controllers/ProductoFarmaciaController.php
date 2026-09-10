@@ -37,15 +37,19 @@ class ProductoFarmaciaController extends Controller
             ->withSum(['ventaDetalles as vendido' => function ($detalle) {
                 $detalle->whereHas('venta', fn ($venta) => $venta->where('estado', '<>', 'ANULADO'));
             }], 'cantidad')
+            ->withSum(['bajaDetalles as dado_baja' => function ($detalle) {
+                $detalle->whereHas('baja', fn ($baja) => $baja->where('estado', 'ACTIVO'));
+            }], 'cantidad')
             ->orderBy('nombre');
 
         $this->aplicarBusqueda($query, $q);
 
         $productos = $query->paginate($perPage);
 
-        // El stock disponible es lo comprado en compras vigentes menos lo vendido.
+        // El stock disponible es lo comprado en compras vigentes menos lo vendido
+        // y lo dado de baja (vencimiento, cruce, bonificación…).
         $productos->getCollection()->transform(function ($producto) {
-            $producto->stock = (float) $producto->comprado - (float) $producto->vendido;
+            $producto->stock = (float) $producto->comprado - (float) $producto->vendido - (float) $producto->dado_baja;
 
             return $producto;
         });
@@ -64,12 +68,15 @@ class ProductoFarmaciaController extends Controller
             ->withSum(['ventaDetalles as vendido' => function ($detalle) {
                 $detalle->whereHas('venta', fn ($venta) => $venta->where('estado', '<>', 'ANULADO'));
             }], 'cantidad')
+            ->withSum(['bajaDetalles as dado_baja' => function ($detalle) {
+                $detalle->whereHas('baja', fn ($baja) => $baja->where('estado', 'ACTIVO'));
+            }], 'cantidad')
             ->get(['id', 'precio', 'tipo_producto_id']);
 
         $conStock = 0;
         $valorInventario = 0;
         foreach ($productos as $producto) {
-            $stock = (float) $producto->comprado - (float) $producto->vendido;
+            $stock = (float) $producto->comprado - (float) $producto->vendido - (float) $producto->dado_baja;
             if ($stock > 0) {
                 $conStock++;
                 $valorInventario += $stock * (float) $producto->precio;
@@ -188,6 +195,7 @@ class ProductoFarmaciaController extends Controller
 
         $query->where(function ($sq) use ($q) {
             $sq->where('nombre', 'like', "%$q%")
+                ->orWhere('nombre_comercial', 'like', "%$q%")
                 ->orWhere('codigo', 'like', "%$q%")
                 ->orWhere('marca', 'like', "%$q%");
         });
@@ -211,6 +219,7 @@ class ProductoFarmaciaController extends Controller
     {
         $request->validate([
             'nombre' => 'required|string|max:255',
+            'nombre_comercial' => 'nullable|string|max:255',
             'precio' => 'nullable|numeric|min:0',
             'precio_seguro' => 'nullable|numeric|min:0',
             'fabricante_id' => 'nullable|exists:fabricantes,id',
@@ -223,6 +232,7 @@ class ProductoFarmaciaController extends Controller
         return [
             'codigo' => $request->codigo ? mb_strtoupper($request->codigo) : null,
             'nombre' => mb_strtoupper($request->nombre),
+            'nombre_comercial' => $request->nombre_comercial ? mb_strtoupper($request->nombre_comercial) : null,
             'descripcion' => $request->descripcion ? mb_strtoupper($request->descripcion) : null,
             'marca' => $request->marca ? mb_strtoupper($request->marca) : null,
             'fabricante_id' => $request->fabricante_id ?: null,

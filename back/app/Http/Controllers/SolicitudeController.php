@@ -62,7 +62,7 @@ class SolicitudeController extends Controller
                 ->whereHas('tipoProducto', fn ($query) => $query->where('es_laboratorio', true))
                 ->with(['laboratorioDatos.formula', 'laboratorioDatos.opciones', 'laboratorioValidaciones' => fn ($query) => $query->where('activo', true)])
                 ->orderBy('nombre')
-                ->get(['id', 'codigo', 'nombre', 'precio']),
+                ->get(['id', 'codigo', 'nombre', 'precio', 'descripcion']),
         ]);
     }
 
@@ -175,7 +175,17 @@ class SolicitudeController extends Controller
 
     public function pdf(Request $request, Solicitude $solicitude)
     {
-        $this->authorizeAny($request, 'Ver Solicitudes Laboratorio');
+        return $this->informe($request, $solicitude);
+    }
+
+    public function impresion(Request $request, Solicitude $solicitude)
+    {
+        return $this->informe($request, $solicitude, true);
+    }
+
+    private function informe(Request $request, Solicitude $solicitude, bool $html = false)
+    {
+        $this->authorizeAny($request, ['Ver Solicitudes Laboratorio', 'Crear Solicitudes Laboratorio', 'Editar Solicitudes Laboratorio']);
         $solicitude->load([
             'paciente',
             'doctor.especialidades:id,nombre',
@@ -190,9 +200,14 @@ class SolicitudeController extends Controller
         $qrSvg = (new Writer($renderer))->writeString($urlVerificacion);
         $qrDataUri = 'data:image/svg+xml;base64,'.base64_encode($qrSvg);
 
-        $pdf = Pdf::loadView('reportes.solicitud-laboratorio', compact(
+        $datos = compact(
             'solicitude', 'impresoPor', 'urlVerificacion', 'qrDataUri'
-        ))
+        );
+        if ($html) {
+            return response()->view('reportes.solicitud-laboratorio', $datos);
+        }
+
+        $pdf = Pdf::loadView('reportes.solicitud-laboratorio', $datos)
             ->setPaper('letter');
         $pdf->render();
         $canvas = $pdf->getDomPDF()->getCanvas();

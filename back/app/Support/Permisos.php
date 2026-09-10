@@ -32,9 +32,13 @@ class Permisos
         'Productos Farmacia' => [
             'Ver Productos Farmacia', 'Crear Productos Farmacia',
             'Editar Productos Farmacia', 'Eliminar Productos Farmacia',
+            'Editar Lotes Farmacia',
         ],
         'Vencimientos' => [
             'Ver Productos por Vencer', 'Ver Productos Vencidos',
+        ],
+        'Bajas' => [
+            'Ver Bajas', 'Crear Bajas', 'Anular Bajas',
         ],
         'Compras' => [
             'Ver Compras', 'Crear Compras', 'Editar Compras', 'Eliminar Compras',
@@ -116,10 +120,16 @@ class Permisos
         'Crear Productos Farmacia' => 'Registrar nuevos productos en el inventario de farmacia.',
         'Editar Productos Farmacia' => 'Modificar los productos y existencias del inventario de farmacia.',
         'Eliminar Productos Farmacia' => 'Eliminar productos del inventario de farmacia.',
+        'Editar Lotes Farmacia' => 'Corregir únicamente el lote y la fecha de vencimiento desde el historial de compras y ventas. Actualiza los movimientos vinculados al mismo lote.',
 
         // Vencimientos
         'Ver Productos por Vencer' => 'Consultar el reporte de productos próximos a su fecha de vencimiento.',
         'Ver Productos Vencidos' => 'Consultar el reporte de productos que ya vencieron.',
+
+        // Bajas de farmacia
+        'Ver Bajas' => 'Consultar las bajas de inventario de farmacia y su detalle por lote.',
+        'Crear Bajas' => 'Registrar bajas de medicamentos (vencimiento, cruce, bonificación, deterioro…) descontando stock.',
+        'Anular Bajas' => 'Anular una baja registrada y devolver el stock a su lote.',
 
         // Compras
         'Ver Compras' => 'Consultar las compras a proveedores y el detalle de cada una.',

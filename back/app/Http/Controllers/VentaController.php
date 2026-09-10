@@ -6,6 +6,7 @@ use App\Models\CompraDetalle;
 use App\Models\Producto;
 use App\Models\Venta;
 use App\Models\VentaDetalle;
+use App\Services\StockLote;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -22,6 +23,7 @@ class VentaController extends Controller
         $pacienteId = $request->input('paciente_id', '');
         $userId = $request->input('user_id', '');
         $estado = $request->input('estado', '');
+        $tipoMovimiento = $request->input('tipo_movimiento', '');
         $perPage = (int) $request->input('per_page', 15);
 
         // Los ítems de cada venta solo viajan a quien puede ver el detalle;
@@ -43,15 +45,17 @@ class VentaController extends Controller
             ->withCount('detalles')
             ->orderByDesc('fecha_hora');
 
-        $this->applyFiltros($query, $fechaInicio, $fechaFin, $pacienteId, $userId, $estado, $horaInicio, $horaFin);
+        $this->applyFiltros($query, $fechaInicio, $fechaFin, $pacienteId, $userId, $estado, $horaInicio, $horaFin, $tipoMovimiento);
 
+        // El resumen ignora el filtro de estado y el de tipo: sus tarjetas
+        // separan ingresos de egresos por su cuenta.
         $resumenQuery = Venta::query();
         $this->applyFiltros($resumenQuery, $fechaInicio, $fechaFin, $pacienteId, $userId, '', $horaInicio, $horaFin);
 
         // Vendedores del rango: se arma sin el filtro de usuario para que el
         // selector siga ofreciendo a todos los que vendieron ese día.
         $usuariosQuery = Venta::query();
-        $this->applyFiltros($usuariosQuery, $fechaInicio, $fechaFin, $pacienteId, '', $estado, $horaInicio, $horaFin);
+        $this->applyFiltros($usuariosQuery, $fechaInicio, $fechaFin, $pacienteId, '', $estado, $horaInicio, $horaFin, $tipoMovimiento);
 
         // Pantalla de Farmacia: solo las ventas compuestas únicamente por productos de farmacia.
         if ($request->boolean('solo_farmacia')) {
@@ -66,13 +70,15 @@ class VentaController extends Controller
         return response()->json([
             'ver_montos' => $verMontos,
             'resumen' => $verMontos ? [
-                'total_ventas' => (clone $resumenQuery)->where(function ($query) {
+                'total_ventas' => (clone $resumenQuery)->where('tipo_movimiento', 'INGRESO')->where(function ($query) {
                     $query->where('estado', 'ACTIVO')
                         ->orWhere(fn ($pendiente) => $pendiente->where('estado', 'PENDIENTE')->whereNotNull('fecha_hora_cobro'));
                 })->sum('total'),
+                'total_egresos' => (clone $resumenQuery)->where('tipo_movimiento', 'EGRESO')->where('estado', 'ACTIVO')->sum('total'),
                 'total_pendientes' => (clone $resumenQuery)->where('estado', 'PENDIENTE')->whereNull('fecha_hora_cobro')->sum('total'),
                 'total_anuladas' => (clone $resumenQuery)->where('estado', 'ANULADO')->sum('total'),
                 'cantidad' => (clone $resumenQuery)->count(),
+                'cantidad_egresos' => (clone $resumenQuery)->where('tipo_movimiento', 'EGRESO')->where('estado', 'ACTIVO')->count(),
                 'cantidad_pendientes' => (clone $resumenQuery)->where('estado', 'PENDIENTE')->whereNull('fecha_hora_cobro')->count(),
             ] : null,
             'usuarios' => $this->usuariosVendedores($usuariosQuery),
@@ -142,6 +148,7 @@ class VentaController extends Controller
         $venta = DB::transaction(function () use ($request, $estado) {
             $venta = Venta::create([
                 'user_id' => $request->user()->id,
+                'tipo_movimiento' => 'INGRESO',
                 'paciente_id' => $request->paciente_id ?: null,
                 'doctor_id' => $request->doctor_id ?: null,
                 'seguro_id' => $request->seguro_id ?: null,
@@ -188,10 +195,8 @@ class VentaController extends Controller
                         abort(422, "El lote seleccionado para {$producto->nombre} no es válido");
                     }
 
-                    $cantidadVendida = VentaDetalle::where('compra_detalle_id', $loteCompra->id)
-                        ->whereHas('venta', fn ($query) => $query->where('estado', '<>', 'ANULADO'))
-                        ->sum('cantidad');
-                    $disponible = (float) $loteCompra->cantidad - (float) $cantidadVendida;
+                    // Descuenta ventas vigentes y bajas de inventario del lote.
+                    $disponible = StockLote::disponibleDe($loteCompra);
 
                     if ($cantidad > $disponible) {
                         abort(422, "Stock insuficiente en el lote {$loteCompra->lote} de {$producto->nombre}. Disponible: {$disponible}");
@@ -243,6 +248,62 @@ class VentaController extends Controller
             $venta->load(['paciente:id,nombre_completo,ci', 'doctor:id,nombre', 'seguro:id,nombre', 'user:id,name', 'detalles.producto:id,nombre,codigo']),
             201
         );
+    }
+
+    /**
+     * Gasto de caja: dinero que sale (un refresco, el periódico, un taxi).
+     * Se guarda como un movimiento de tipo EGRESO con un único ítem que lleva
+     * la descripción, para que salga en el historial y en el cierre de caja.
+     */
+    public function gasto(Request $request)
+    {
+        $this->req($request, 'Crear Ventas');
+
+        // Con la caja del día ya cerrada tampoco se registran salidas de dinero.
+        if (CierreCajaController::cierreDelDia($request->user()->id, now()->toDateString())) {
+            abort(422, 'Su caja de hoy ya fue cerrada: no puede registrar más movimientos hasta mañana');
+        }
+
+        $request->validate([
+            'descripcion' => 'required|string|max:255',
+            'monto' => 'required|numeric|min:0.01',
+            'tipo_pago' => 'nullable|string|max:50',
+            'comentario' => 'nullable|string|max:500',
+        ]);
+
+        $monto = round((float) $request->monto, 2);
+        $descripcion = mb_strtoupper(trim($request->descripcion));
+
+        $venta = DB::transaction(function () use ($request, $monto, $descripcion) {
+            $venta = Venta::create([
+                'user_id' => $request->user()->id,
+                'tipo_movimiento' => 'EGRESO',
+                // La fecha la pone el servidor (zona America/La_Paz), igual que en las ventas.
+                'fecha_hora' => now(),
+                'tipo_pago' => $request->tipo_pago ? mb_strtoupper($request->tipo_pago) : 'EFECTIVO',
+                'comentario' => $request->comentario ?: null,
+                'estado' => 'ACTIVO',
+                'total' => $monto,
+                'total_original' => $monto,
+                // Un gasto no da cambio: sale exactamente lo que se gastó.
+                'pago' => $monto,
+                'cambio' => 0,
+            ]);
+
+            VentaDetalle::create([
+                'venta_id' => $venta->id,
+                'nombre' => $descripcion,
+                'precio' => $monto,
+                'precio_original' => $monto,
+                'cantidad' => 1,
+                'total' => $monto,
+                'total_original' => $monto,
+            ]);
+
+            return $venta;
+        });
+
+        return response()->json($venta->load(['user:id,name', 'detalles']), 201);
     }
 
     public function completar(Request $request, $id)
@@ -297,12 +358,12 @@ class VentaController extends Controller
 
         $venta->update(['estado' => 'ANULADO']);
 
-        return response()->json(['message' => 'Venta anulada']);
+        return response()->json(['message' => $venta->esEgreso() ? 'Gasto anulado' : 'Venta anulada']);
     }
 
     // ── Helpers ───────────────────────────────────────────────────
 
-    private function applyFiltros($query, $fechaInicio, $fechaFin, $pacienteId, $userId, $estado, $horaInicio = '', $horaFin = ''): void
+    private function applyFiltros($query, $fechaInicio, $fechaFin, $pacienteId, $userId, $estado, $horaInicio = '', $horaFin = '', $tipoMovimiento = ''): void
     {
         if ($fechaInicio) {
             $query->where('fecha_hora', '>=', $fechaInicio.' '.($horaInicio ?: '00:00').':00');
@@ -318,6 +379,9 @@ class VentaController extends Controller
         }
         if ($estado) {
             $query->where('estado', $estado);
+        }
+        if ($tipoMovimiento) {
+            $query->where('tipo_movimiento', $tipoMovimiento);
         }
     }
 

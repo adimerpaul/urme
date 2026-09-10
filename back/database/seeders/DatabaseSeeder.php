@@ -25,6 +25,7 @@ class DatabaseSeeder extends Seeder
         $this->call(PacienteSeeder::class);
         $this->call(InternacionSeeder::class);
         $this->call(LaboratorioTipoSeeder::class);
+        $this->call(ProductoNombreComercialSeeder::class);
 
         // Admin
         $admin = User::create([

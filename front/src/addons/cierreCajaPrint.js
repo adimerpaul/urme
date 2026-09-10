@@ -105,13 +105,21 @@ function leerDiferencia (valor) {
   return { etiqueta: 'DIFERENCIA', monto: money(0) }
 }
 
-/** Totales por forma de pago de las ventas que entraron a la caja. */
+/** Un gasto de caja resta: es dinero que salió, no que entró. */
+function esEgreso (venta) { return venta?.tipo_movimiento === 'EGRESO' }
+
+function importe (venta) {
+  const total = Number(venta.total || 0)
+  return esEgreso(venta) ? -total : total
+}
+
+/** Totales por forma de pago de los movimientos que entraron a la caja. */
 function porFormaDePago (ventas) {
   const mapa = new Map()
   for (const venta of ventas) {
     const clave = venta.tipo_pago || 'SIN DEFINIR'
     const acumulado = mapa.get(clave) || { total: 0, cantidad: 0 }
-    acumulado.total += Number(venta.total || 0)
+    acumulado.total += importe(venta)
     acumulado.cantidad += 1
     mapa.set(clave, acumulado)
   }
@@ -125,11 +133,14 @@ function buildHtml (cierre, ventas, completo, verMontos) {
   const cantidad = cierre.cantidad_ventas ?? ventas.length
   const formas = completo ? porFormaDePago(ventas) : []
 
+  const gastos = ventas.filter(esEgreso)
+
   const filasVentas = ventas.map(v => `<tr>
     <td>${esc(v.id)}</td>
     <td>${esc(hora(v.fecha_hora_cobro || v.fecha_hora))}</td>
-    <td>${esc(v.paciente?.nombre_completo || v.cliente || 'SIN CLIENTE')}</td>
-    <td class="num">${money(v.total)}</td>
+    <td>${esc(v.paciente?.nombre_completo || v.cliente ||
+      (esEgreso(v) ? 'GASTO: ' + (v.detalles?.[0]?.nombre || 'SIN DETALLE') : 'SIN CLIENTE'))}</td>
+    <td class="num">${esEgreso(v) ? '-' : ''}${money(v.total)}</td>
   </tr>`).join('')
 
   return `<div class="voucher">
@@ -157,6 +168,7 @@ function buildHtml (cierre, ventas, completo, verMontos) {
 
     <table class="montos">
       <tr><td class="etiqueta">Ventas del día</td><td class="valor">${cantidad}</td></tr>
+      ${gastos.length ? `<tr><td class="etiqueta">Gastos del día (${gastos.length}) (Bs)</td><td class="valor">-${money(gastos.reduce((suma, g) => suma + Number(g.total || 0), 0))}</td></tr>` : ''}
       ${verMontos ? `<tr><td class="etiqueta">Total según el sistema (Bs)</td><td class="valor">${money(cierre.monto_sistema)}</td></tr>
       <tr><td class="etiqueta">${dif.etiqueta} (Bs)</td><td class="valor">${dif.monto}</td></tr>` : ''}
       <tr class="fuerte"><td>EFECTIVO DECLARADO (Bs)</td><td class="right">${money(cierre.monto)}</td></tr>
@@ -168,13 +180,13 @@ function buildHtml (cierre, ventas, completo, verMontos) {
       ${formas.map(f => `<tr><td class="etiqueta">${esc(f.forma)} (${f.cantidad})</td><td class="valor">${money(f.total)}</td></tr>`).join('')}
     </table>` : ''}
 
-    ${ventas.length ? `<div class="sub">Ventas incluidas</div>
+    ${ventas.length ? `<div class="sub">Movimientos incluidos</div>
     <table class="items">
       <thead><tr><th>N°</th><th>Hora</th><th>Cliente / Paciente</th><th class="num">Total</th></tr></thead>
       <tbody>${filasVentas}</tbody>
     </table>
-    ${completo ? '' : `<div class="nota">Se listan las primeras ${ventas.length} de ${cantidad} ventas. El detalle completo está en el PDF del cierre.</div>`}`
-      : '<div class="nota">Este cierre no tiene ventas registradas.</div>'}
+    ${completo ? '' : `<div class="nota">Se listan los primeros ${ventas.length} movimientos. El detalle completo está en el PDF del cierre.</div>`}`
+      : '<div class="nota">Este cierre no tiene movimientos registrados.</div>'}
 
     ${cierre.comentario ? `<hr class="dashed"><span class="bold">Comentario:</span> ${esc(cierre.comentario)}` : ''}
 

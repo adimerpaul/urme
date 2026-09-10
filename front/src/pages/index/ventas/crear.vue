@@ -28,6 +28,14 @@
       </div>
       <q-separator class="q-mb-sm" />
 
+      <q-banner v-if="ultimaVenta" dense rounded class="bg-green-1 text-green-10 q-mb-sm">
+        Venta #{{ ultimaVenta.id }} guardada{{ ultimaVenta.estado === 'PENDIENTE' ? ' pendiente de cobro' : '' }}.
+        Puede volver a imprimir su comprobante sin registrar otra venta.
+        <template v-slot:action>
+          <q-btn flat dense no-caps icon="print" label="Imprimir última venta" @click="imprimirUltimaVenta" />
+        </template>
+      </q-banner>
+
       <q-banner v-if="cajaCerrada" dense rounded class="bg-orange-1 text-orange-10 q-mb-sm">
         <template v-slot:avatar><q-icon name="lock" color="orange-9" /></template>
         Su caja de hoy ya fue cerrada: no puede registrar más ventas hasta mañana.
@@ -550,10 +558,20 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, getCurrentInstance } from 'vue'
+import { ref, computed, watch, getCurrentInstance, nextTick } from 'vue'
 import { imprimirVenta } from '../../../addons/ventaPrint'
 
 const { proxy } = getCurrentInstance()
+const ultimaVenta = ref(null)
+
+function imprimirUltimaVenta () {
+  if (!ultimaVenta.value) return
+  try {
+    imprimirVenta(ultimaVenta.value)
+  } catch {
+    proxy.$alert.warning('La venta está guardada. No se pudo abrir la impresión; use Imprimir última venta para reintentar.')
+  }
+}
 
 // soloFarmacia: la misma pantalla acotada a vender únicamente productos de farmacia.
 const props = defineProps({
@@ -721,7 +739,9 @@ function iconoTipo (nombre) {
 function cantidadDisponibleProducto (producto) {
   return Math.max(
     0,
-    Number(producto.cantidad_con_lote || 0) - Number(producto.cantidad_vendida_lote || 0),
+    Number(producto.cantidad_con_lote || 0) -
+      Number(producto.cantidad_vendida_lote || 0) -
+      Number(producto.cantidad_baja_lote || 0),
   )
 }
 
@@ -1015,6 +1035,7 @@ async function registrarVenta (estado = 'ACTIVO') {
       })),
     }
     const res = await proxy.$axios.post('ventas', payload)
+    ultimaVenta.value = res.data
     proxy.$alert.success(
       estado === 'PENDIENTE'
         ? 'Venta guardada — se cobra luego desde la lista de ventas'
@@ -1023,9 +1044,8 @@ async function registrarVenta (estado = 'ACTIVO') {
     dialogDatos.value = false
     cobrarLuego.value = false
     nueva.value = nuevaVentaVacia()
-    if (estado !== 'PENDIENTE') {
-      imprimirVenta(res.data)
-    }
+    await nextTick()
+    imprimirUltimaVenta()
     // Se queda en la pantalla para seguir vendiendo: solo se refrescan los
     // productos, porque la venta ya descontó stock de los lotes.
     loadProductos()

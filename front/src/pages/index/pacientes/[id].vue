@@ -32,6 +32,18 @@
                   class="q-ma-none text-weight-bold">
             {{ estadoLabel(paciente.estado_internacion) }}
           </q-chip>
+          <q-btn dense outline no-caps size="sm" color="blue-grey-8"
+                 icon="print" label="Imprimir pendientes"
+                 :loading="printingCuenta" @click="imprimirEstadoCuenta">
+            <q-tooltip>Estado de cuenta: internaciones y productos pendientes</q-tooltip>
+          </q-btn>
+          <q-btn v-if="canCrearVenta" dense unelevated no-caps size="sm" color="positive"
+                 icon="payments" label="Cobrar todo" :disable="!hayDeuda" @click="cobrarTodoNew">
+            <q-tooltip v-if="hayDeuda">
+              Cobra todas las ventas pendientes existentes
+            </q-tooltip>
+            <q-tooltip v-else>El paciente no tiene ventas pendientes de cobro</q-tooltip>
+          </q-btn>
           <q-btn v-if="canEditar" dense outline no-caps size="sm" color="grey-7"
                  icon="edit" label="Editar" @click="pacEdit" />
           <q-btn v-if="canEliminar" dense outline no-caps size="sm" color="negative"
@@ -104,11 +116,19 @@
               </q-chip>
               <q-chip v-if="int.fecha_alta" dense square color="white" text-color="grey-8"
                        icon="logout" class="q-ma-none">
-                Cerrada · {{ int.fecha_alta }}
+                Alta · {{ int.fecha_alta }}
                 <q-tooltip>Fecha de alta</q-tooltip>
               </q-chip>
               <q-chip v-else dense square color="orange-1" text-color="orange-9" icon="pending" class="q-ma-none">
                 Sin alta
+              </q-chip>
+              <q-chip v-if="int.pagada" dense square color="green-1" text-color="green-9"
+                      icon="paid" class="q-ma-none text-weight-bold">
+                Pagada
+                <q-tooltip>
+                  {{ formatMoney(int.monto_pagado) }} Bs · {{ int.pago_tipo || 'EFECTIVO' }}
+                  <template v-if="int.pagado_por"> · {{ int.pagado_por.name }}</template>
+                </q-tooltip>
               </q-chip>
               <q-chip v-if="int.tipo_paciente" dense square color="amber-1" text-color="orange-9" class="q-ma-none">
                 {{ int.tipo_paciente }}
@@ -128,15 +148,19 @@
                      :loading="printingId === int.id" @click="imprimir(int.id)">
                 <q-tooltip>Imprimir proforma</q-tooltip>
               </q-btn>
-              <q-btn v-if="canCrearInt && !int.fecha_alta" dense flat round size="sm" icon="add_circle" color="positive"
+              <q-btn v-if="canCrearVenta && !int.pagada && int.items && int.items.length" dense flat round size="sm"
+                     icon="paid" color="green-8" @click="pagoNew(int)">
+                <q-tooltip>Cobrar internación</q-tooltip>
+              </q-btn>
+              <q-btn v-if="canCrearInt && !int.pagada" dense flat round size="sm" icon="add_circle" color="positive"
                      @click="itemNew(int)">
                 <q-tooltip>Agregar cargo</q-tooltip>
               </q-btn>
-              <q-btn v-if="canEditarInt && !int.fecha_alta" dense flat round size="sm" icon="edit" color="grey-7"
+              <q-btn v-if="canEditarInt && !int.pagada" dense flat round size="sm" icon="edit" color="grey-7"
                      @click="intEdit(int)">
                 <q-tooltip>Editar internación</q-tooltip>
               </q-btn>
-              <q-btn v-if="canEliminarInt && !int.fecha_alta" dense flat round size="sm" icon="delete" color="negative"
+              <q-btn v-if="canEliminarInt && !int.pagada" dense flat round size="sm" icon="delete" color="negative"
                      @click="intDelete(int.id)">
                 <q-tooltip>Eliminar internación</q-tooltip>
               </q-btn>
@@ -166,8 +190,8 @@
                   <td class="text-grey-6">{{ item.user?.name || '—' }}</td>
                   <td>{{ formatHora(item.created_at) }}</td>
                   <td class="text-right">
-                    <q-btn v-if="canEditarInt && !int.fecha_alta" dense flat round icon="edit" size="xs" color="grey-7" @click="itemEdit(int, item)" />
-                    <q-btn v-if="canEliminarInt && !int.fecha_alta" dense flat round icon="delete" size="xs" color="negative" @click="itemDelete(int, item.id)" />
+                    <q-btn v-if="canEditarInt && !int.pagada" dense flat round icon="edit" size="xs" color="grey-7" @click="itemEdit(int, item)" />
+                    <q-btn v-if="canEliminarInt && !int.pagada" dense flat round icon="delete" size="xs" color="negative" @click="itemDelete(int, item.id)" />
                   </td>
                 </tr>
               </tbody>
@@ -202,6 +226,7 @@
                   <th class="text-left" style="width:120px">Fecha</th>
                   <th class="text-left">Doctor</th>
                   <th class="text-left">Seguro</th>
+                  <th class="text-left" style="width:120px">Usuario</th>
                   <th class="text-right" style="width:60px">Ítems</th>
                   <th class="text-left" style="width:90px">Pago</th>
                   <th class="text-center" style="width:90px">Estado</th>
@@ -211,7 +236,7 @@
               </thead>
               <tbody>
                 <tr v-if="!ventas.length && !loadingVentas">
-                  <td colspan="10" class="text-center text-grey-5 q-pa-md">Sin ventas registradas</td>
+                  <td colspan="11" class="text-center text-grey-5 q-pa-md">Sin ventas registradas</td>
                 </tr>
                 <template v-for="v in ventas" :key="v.id">
                   <tr :class="[
@@ -228,6 +253,8 @@
                     <td>{{ formatFecha(v.fecha_hora) }}</td>
                     <td>{{ v.doctor?.nombre || '—' }}</td>
                     <td>{{ v.seguro?.nombre || 'PARTICULAR' }}</td>
+                    <!-- Quien registró la venta; si otro la cobró, se ve al desplegar la fila -->
+                    <td class="ellipsis" :title="v.user?.name || ''">{{ v.user?.name || '—' }}</td>
                     <td class="text-right">{{ v.detalles_count ?? (v.detalles?.length || 0) }}</td>
                     <td>{{ v.tipo_pago || '—' }}</td>
                     <td class="text-center">
@@ -247,7 +274,7 @@
                     </td>
                   </tr>
                   <tr v-if="expandidas.includes(v.id)" class="bg-grey-1">
-                    <td colspan="10">
+                    <td colspan="11">
                       <div v-for="d in v.detalles || []" :key="d.id" class="row items-center no-wrap">
                         <div class="col ellipsis">
                           {{ d.nombre }}
@@ -261,6 +288,9 @@
                         </div>
                       </div>
                       <div v-if="!v.detalles?.length" class="text-grey-6">Sin ítems registrados</div>
+                      <div class="text-caption text-grey-7 q-mt-xs">
+                        Registrada por {{ v.user?.name || '—' }} el {{ formatFecha(v.fecha_hora) }}
+                      </div>
                       <div v-if="v.fecha_hora_cobro" class="text-caption text-positive q-mt-xs">
                         Cobrado por {{ v.cobrado_por?.name || '—' }} el {{ formatFecha(v.fecha_hora_cobro) }}
                       </div>
@@ -353,7 +383,8 @@
                 </q-input>
               </div>
               <div class="col-6">
-                <q-input v-model="int.fecha_alta" label="Fecha de alta" dense outlined type="date" readonly>
+                <q-input v-model="int.fecha_alta" label="Fecha de alta" dense outlined type="date" clearable
+                         hint="La internación se cierra al cobrarla, no al dar el alta">
                   <template v-slot:prepend><q-icon name="logout" /></template>
                 </q-input>
               </div>
@@ -382,11 +413,113 @@
               </div>
             </div>
             <div class="row justify-end q-gutter-sm">
-              <q-btn v-if="int.id && !int.fecha_alta" outline color="negative" label="Cerrar internación"
-                     icon="lock" no-caps :loading="closingInt" @click="intClose" />
+              <q-btn v-if="int.id && !int.fecha_alta" outline color="primary" label="Dar de alta hoy"
+                     icon="logout" no-caps :loading="closingInt" @click="intClose" />
               <q-btn flat color="grey-7" label="Cancelar" no-caps @click="dialogInt = false" />
               <q-btn color="primary" :label="int.id ? 'Guardar' : 'Crear'"
                      type="submit" no-caps :loading="savingInt" icon-right="save" />
+            </div>
+          </q-form>
+        </q-card-section>
+      </q-card>
+    </q-dialog>
+
+    <!-- DIALOG COBRO DE LA INTERNACION -->
+    <q-dialog v-model="dialogPago" persistent>
+      <q-card style="width:min(96vw,440px)">
+        <q-card-section class="row items-center bg-green-8 text-white q-py-sm">
+          <q-icon name="paid" size="20px" class="q-mr-sm" />
+          <span class="text-subtitle1 text-weight-bold">Cobrar internación</span>
+          <q-space />
+          <q-btn icon="close" flat round dense color="white" @click="dialogPago = false" />
+        </q-card-section>
+        <q-card-section style="padding:14px 16px">
+          <q-banner dense class="bg-amber-1 text-orange-10 q-mb-sm" style="font-size:11px">
+            <template v-slot:avatar><q-icon name="lock" color="orange-9" size="18px" /></template>
+            Al cobrarla se genera una venta y la internación queda cerrada: no admite más cargos ni cambios.
+          </q-banner>
+          <q-form @submit.prevent="pagoSave">
+            <div class="row items-center q-mb-sm">
+              <div class="text-caption text-grey-7">Total de cargos</div>
+              <q-space />
+              <div class="text-h6 text-weight-bold text-green-9">{{ formatMoney(pagoTotal) }} Bs</div>
+            </div>
+            <q-select v-model="pago.tipo_pago" label="Tipo de pago" dense outlined class="q-mb-sm"
+                      :options="['EFECTIVO', 'TRANSFERENCIA', 'TARJETA', 'QR']">
+              <template v-slot:prepend><q-icon name="account_balance_wallet" /></template>
+            </q-select>
+            <q-input v-model.number="pago.pago" label="Monto recibido" dense outlined type="number"
+                     min="0" step="0.01" class="q-mb-sm" :rules="[pagoSuficiente]">
+              <template v-slot:prepend><q-icon name="payments" /></template>
+            </q-input>
+            <div class="row items-center q-mb-sm">
+              <div class="text-caption text-grey-7">Cambio</div>
+              <q-space />
+              <div class="text-weight-bold" :class="pagoCambio < 0 ? 'text-negative' : 'text-primary'">
+                {{ formatMoney(pagoCambio) }} Bs
+              </div>
+            </div>
+            <q-input v-model="pago.observacion" label="Observación" dense outlined class="q-mb-md" maxlength="255">
+              <template v-slot:prepend><q-icon name="notes" /></template>
+            </q-input>
+            <div class="row justify-end q-gutter-sm">
+              <q-btn flat color="grey-7" label="Cancelar" no-caps @click="dialogPago = false" />
+              <q-btn color="green-8" label="Cobrar" type="submit" no-caps
+                     :loading="savingPago" icon-right="paid" />
+            </div>
+          </q-form>
+        </q-card-section>
+      </q-card>
+    </q-dialog>
+
+    <!-- DIALOG COBRO DE TODA LA CUENTA -->
+    <q-dialog v-model="dialogTodo" persistent>
+      <q-card style="width:min(96vw,460px)">
+        <q-card-section class="row items-center bg-green-8 text-white q-py-sm">
+          <q-icon name="payments" size="20px" class="q-mr-sm" />
+          <span class="text-subtitle1 text-weight-bold">Cobrar toda la cuenta</span>
+          <q-space />
+          <q-btn icon="close" flat round dense color="white" @click="dialogTodo = false" />
+        </q-card-section>
+        <q-card-section style="padding:14px 16px">
+          <q-banner dense class="bg-amber-1 text-orange-10 q-mb-sm" style="font-size:11px">
+            <template v-slot:avatar><q-icon name="lock" color="orange-9" size="18px" /></template>
+            Las ventas existentes se marcan cobradas por su importe exacto.
+            Las internaciones quedan pendientes. La acción no se puede deshacer.
+          </q-banner>
+
+          <q-markup-table dense flat bordered separator="horizontal" class="q-mb-sm tabla-compacta">
+            <tbody>
+              <tr>
+                <td><q-icon name="local_hospital" size="14px" color="primary" /> Internaciones pendientes
+                  ({{ internacionesPorCobrar.length }})</td>
+                <td class="text-right text-weight-bold">{{ formatMoney(totalCargos) }} Bs</td>
+              </tr>
+              <tr>
+                <td><q-icon name="medication" size="14px" color="orange-9" /> Ventas pendientes
+                  ({{ resumenVentas.cantidad_pendientes || 0 }})</td>
+                <td class="text-right text-weight-bold">
+                  {{ formatMoney(resumenVentas.total_pendientes) }} Bs
+                </td>
+              </tr>
+            </tbody>
+          </q-markup-table>
+
+          <div class="row items-center q-mb-sm">
+            <div class="text-caption text-grey-7">Total a cobrar</div>
+            <q-space />
+            <div class="text-h6 text-weight-bold text-green-9">{{ formatMoney(totalACobrar) }} Bs</div>
+          </div>
+
+          <q-form @submit.prevent="cobrarTodoSave">
+            <q-select v-model="cobroTodo.tipo_pago" label="Tipo de pago" dense outlined class="q-mb-sm"
+                      :options="['EFECTIVO', 'TRANSFERENCIA', 'TARJETA', 'QR']">
+              <template v-slot:prepend><q-icon name="account_balance_wallet" /></template>
+            </q-select>
+            <div class="row justify-end q-gutter-sm">
+              <q-btn flat color="grey-7" label="Cancelar" no-caps @click="dialogTodo = false" />
+              <q-btn color="green-8" label="Cobrar todo" type="submit" no-caps
+                     :loading="cobrandoTodo" icon-right="payments" />
             </div>
           </q-form>
         </q-card-section>
@@ -405,8 +538,9 @@
         <q-card-section style="padding:14px 16px">
           <q-form @submit.prevent="itemSave">
             <q-select v-model="filtroTipoProducto" label="Categoría" dense outlined clearable
-                      class="q-mb-sm" :options="allTipoProductos" option-value="id" option-label="nombre"
-                      emit-value map-options @update:model-value="onFiltroTipoChange">
+                      class="q-mb-sm" use-input input-debounce="0"
+                      :options="tipoProductoOptions" option-value="id" option-label="nombre"
+                      emit-value map-options @filter="filterTipoProductos" @update:model-value="onFiltroTipoChange">
               <template v-slot:prepend><q-icon name="category" /></template>
               <template v-slot:option="scope">
                 <q-item v-bind="scope.itemProps">
@@ -569,8 +703,13 @@ function totalItems (int) {
   return (int.items || []).reduce((s, it) => s + Number(it.total || 0), 0)
 }
 
+// Una internación pagada ya viajó a ventas: sumarla aquí la contaría dos veces.
+const internacionesPorCobrar = computed(() => (
+  (paciente.value.internaciones || []).filter(int => !int.pagada && totalItems(int) > 0)
+))
+
 const totalCargos = computed(() => (
-  (paciente.value.internaciones || []).reduce((s, int) => s + totalItems(int), 0)
+  internacionesPorCobrar.value.reduce((s, int) => s + totalItems(int), 0)
 ))
 
 // Lo que el paciente aun debe: cargos de internacion + ventas sin cobrar
@@ -685,7 +824,9 @@ const closingInt = ref(false)
 const actionInt = ref('Nueva')
 const int       = ref({})
 
-function intNew ()     { int.value = { paciente_id: paciente.value.id, seguro_id: paciente.value.seguro_id || null, fecha_ingreso: '', tipo_paciente: '', fecha_alta: '', codigo_hc: '', sala: '' }; actionInt.value = 'Nueva';  dialogInt.value = true }
+function hoy () { return new Date().toLocaleDateString('sv-SE') }
+
+function intNew ()     { int.value = { paciente_id: paciente.value.id, seguro_id: paciente.value.seguro_id || null, fecha_ingreso: hoy(), tipo_paciente: '', fecha_alta: '', codigo_hc: '', sala: '' }; actionInt.value = 'Nueva';  dialogInt.value = true }
 function intEdit (row) { int.value = { ...row }; actionInt.value = 'Editar'; dialogInt.value = true }
 
 async function intSave () {
@@ -709,13 +850,13 @@ async function intSave () {
 
 function intClose () {
   proxy.$alert.dialog(
-    '¿Cerrar internación?',
-    'Después de cerrarla no se podrán agregar, modificar ni eliminar datos o cargos.'
+    '¿Dar de alta al paciente hoy?',
+    'La internación sigue editable: se cierra recién cuando se cobre.'
   ).onOk(async () => {
     closingInt.value = true
     try {
       await proxy.$axios.put('internaciones/' + int.value.id + '/cerrar')
-      proxy.$alert.success('Internación cerrada')
+      proxy.$alert.success('Paciente dado de alta')
       dialogInt.value = false
       await fetchPaciente()
     } catch (err) {
@@ -737,8 +878,94 @@ function intDelete (id) {
   })
 }
 
+// ── Cobro total de la internación ────────────────────────────
+// Cobrar es lo que cierra la internación: genera la venta y la congela.
+const dialogPago = ref(false)
+const savingPago = ref(false)
+const pago       = ref({})
+
+const pagoTotal  = computed(() => totalItems(pago.value.internacion || {}))
+const pagoCambio = computed(() => Number(pago.value.pago || 0) - pagoTotal.value)
+
+function pagoSuficiente (v) {
+  return Number(v || 0) >= pagoTotal.value || 'El monto no puede ser menor al total'
+}
+
+function pagoNew (row) {
+  pago.value = { internacion: row, tipo_pago: 'EFECTIVO', pago: totalItems(row), observacion: '' }
+  dialogPago.value = true
+}
+
+async function pagoSave () {
+  savingPago.value = true
+  try {
+    await proxy.$axios.post('internaciones/' + pago.value.internacion.id + '/pagar-total', {
+      tipo_pago: pago.value.tipo_pago,
+      pago: pago.value.pago,
+      observacion: pago.value.observacion || null,
+    })
+    proxy.$alert.success('Internación cobrada')
+    dialogPago.value = false
+    await fetchPaciente()
+    fetchVentas()
+  } catch (err) {
+    proxy.$alert.error(err.response?.data?.message || 'Error al cobrar la internación')
+  } finally {
+    savingPago.value = false
+  }
+}
+
+// ── Cobro de toda la cuenta ──────────────────────────────────
+// Cobro de ventas e internaciones pendientes del paciente.
+const dialogTodo    = ref(false)
+const cobrandoTodo  = ref(false)
+const cobroTodo     = ref({ tipo_pago: 'EFECTIVO' })
+
+const hayDeuda = computed(() => internacionesPorCobrar.value.length > 0 || Number(resumenVentas.value.cantidad_pendientes || 0) > 0)
+
+function cobrarTodoNew () {
+  cobroTodo.value = { tipo_pago: 'EFECTIVO' }
+  dialogTodo.value = true
+}
+
+async function cobrarTodoSave () {
+  cobrandoTodo.value = true
+  try {
+    const res = await proxy.$axios.post('pacientes/' + paciente.value.id + '/cobrar-todo', {
+      tipo_pago: cobroTodo.value.tipo_pago,
+    })
+    const { ventas_cobradas: vtas, internaciones_cobradas: ints, total } = res.data
+    proxy.$alert.success(
+      `Cobrado ${formatMoney(total)} Bs · ${vtas} venta(s) y ${ints} internaci?n(es)`
+    )
+    dialogTodo.value = false
+    await fetchPaciente()
+    fetchVentas()
+  } catch (err) {
+    proxy.$alert.error(err.response?.data?.message || 'Error al cobrar la cuenta del paciente')
+  } finally {
+    cobrandoTodo.value = false
+  }
+}
+
 // ── Imprimir proforma ────────────────────────────────────────
 const printingId = ref(null)
+const printingCuenta = ref(false)
+
+/** Estado de cuenta: todas las internaciones y productos que siguen pendientes. */
+async function imprimirEstadoCuenta () {
+  printingCuenta.value = true
+  try {
+    const res = await proxy.$axios.get('pacientes/' + proxy.$route.params.id + '/estado-cuenta-pdf', {
+      responseType: 'blob',
+    })
+    window.open(window.URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' })), '_blank')
+  } catch (err) {
+    proxy.$alert.error('Error al generar el estado de cuenta')
+  } finally {
+    printingCuenta.value = false
+  }
+}
 
 async function imprimir (internacionId) {
   printingId.value = internacionId
@@ -760,8 +987,21 @@ const item            = ref({})
 const currentInt      = ref(null)
 const productoOptions = ref([])
 const allTipoProductos = ref([])
+const tipoProductoSearch = ref('')
+const tipoProductoOptions = computed(() => {
+  const query = normalizarBusqueda(tipoProductoSearch.value)
+  return allTipoProductos.value.filter(tipo => normalizarBusqueda(tipo.nombre).includes(query))
+})
 const filtroTipoProducto = ref(null)
 let lastProductoFilter = ''
+
+function normalizarBusqueda (value) {
+  return (value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()
+}
+
+function filterTipoProductos (val, update) {
+  update(() => { tipoProductoSearch.value = val })
+}
 
 function fetchTipoProductos () {
   proxy.$axios.get('tipo-productos').then(res => {

@@ -20,6 +20,8 @@
 
         <q-space />
 
+        <CampanaVencimientos class="q-mr-sm" />
+
         <q-btn-dropdown flat unelevated no-caps dropdown-icon="expand_more">
           <template v-slot:label>
             <div class="header-user row items-center no-wrap">
@@ -146,6 +148,7 @@
 <script setup>
 import { computed, getCurrentInstance, ref } from 'vue'
 import { permissionForPath, hasPermission } from '../router/permissions'
+import CampanaVencimientos from '../components/CampanaVencimientos.vue'
 
 const { proxy } = getCurrentInstance()
 
@@ -186,6 +189,7 @@ const menuSections = [
       { title: 'Productos de farmacia', icon: 'medication', link: '/productos-farmacia' },
       { title: 'Productos por vencer', icon: 'hourglass_bottom', link: '/productos-por-vencer' },
       { title: 'Productos vencidos', icon: 'warning', link: '/productos-vencidos' },
+      { title: 'Bajas', icon: 'remove_shopping_cart', link: '/bajas' },
       { title: 'Compras',   icon: 'shopping_cart', link: '/compras' },
       { title: 'Nueva compra', icon: 'add_shopping_cart', link: '/compras/crear' },
       { title: 'Proveedores', icon: 'local_shipping', link: '/proveedores' },
@@ -230,7 +234,9 @@ const menuSections = [
     links: [
       { title: 'Catálogo de pruebas', icon: 'science', link: '/laboratorio' },
       { title: 'Reactivos', icon: 'vaccines', link: '/reactivos' },
+      { title: 'Kardex de reactivos', icon: 'table_chart', link: '/reactivos-kardex' },
       { title: 'Laboratorios creados', icon: 'assignment', link: '/solicitudes-laboratorio' },
+      { title: 'Reportes generales', icon: 'assessment', link: '/reportes-laboratorio' },
       { title: 'Crear laboratorio', icon: 'post_add', link: '/solicitudes-laboratorio/nueva' },
       { title: 'Derivaciones', icon: 'image_search', link: '/derivaciones' },
     ],

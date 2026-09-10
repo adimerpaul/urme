@@ -2,8 +2,13 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Internacion;
 use App\Models\Paciente;
+use App\Models\Venta;
+use App\Services\CobroInternacion;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class PacienteController extends Controller
 {
@@ -71,9 +76,118 @@ class PacienteController extends Controller
     public function show(Request $request, $id)
     {
         $this->req($request, 'Ver Pacientes');
-        $paciente = Paciente::with(['seguro', 'internaciones.seguro:id,nombre', 'internaciones.items.producto:id,nombre', 'internaciones.items.user:id,name'])->findOrFail($id);
+        $paciente = Paciente::with(['seguro', 'internaciones.seguro:id,nombre', 'internaciones.pagadoPor:id,name', 'internaciones.items.producto:id,nombre', 'internaciones.items.user:id,name'])->findOrFail($id);
 
         return response()->json($paciente);
+    }
+
+    /**
+     * Cobra las ventas pendientes y todas las internaciones con cargos por su importe exacto.
+     */
+    public function cobrarTodo(Request $request, $id)
+    {
+        $this->req($request, 'Crear Ventas');
+
+        $request->validate([
+            'tipo_pago' => 'nullable|string|max:30',
+            'observacion' => 'nullable|string|max:255',
+        ]);
+
+        if (CierreCajaController::cierreDelDia($request->user()->id, now()->toDateString())) {
+            abort(422, 'Su caja de hoy ya fue cerrada: no puede registrar más cobros hasta mañana');
+        }
+
+        $paciente = Paciente::findOrFail($id);
+        $tipoPago = $request->tipo_pago ? mb_strtoupper($request->tipo_pago) : 'EFECTIVO';
+
+        $resumen = DB::transaction(function () use ($paciente, $request, $tipoPago) {
+            $usuario = $request->user();
+
+            $pendientes = $this->ventasPendientes($paciente->id)->lockForUpdate()->get();
+            $internaciones = $this->internacionesPorCobrar($paciente->id)->lockForUpdate()->get()
+                ->filter(fn ($internacion) => CobroInternacion::total($internacion) > 0);
+            if ($pendientes->isEmpty() && $internaciones->isEmpty()) {
+                abort(422, 'El paciente no tiene ventas ni internaciones pendientes de cobro');
+            }
+
+            $totalVentas = 0;
+            foreach ($pendientes as $venta) {
+                $venta->update([
+                    'cobrado_por_id' => $usuario->id,
+                    'fecha_hora_cobro' => now(),
+                    'tipo_pago' => $tipoPago,
+                    'pago' => $venta->total,
+                    'cambio' => 0,
+                ]);
+                $totalVentas += (float) $venta->total;
+            }
+
+            $totalInternaciones = 0;
+            foreach ($internaciones as $internacion) {
+                $venta = CobroInternacion::registrar($internacion, $usuario, $tipoPago, null, $request->observacion);
+                $totalInternaciones += (float) $venta->total;
+            }
+
+            return [
+                'internaciones_cobradas' => $internaciones->count(),
+                'ventas_cobradas' => $pendientes->count(),
+                'total_internaciones' => round($totalInternaciones, 2),
+                'total_ventas' => round($totalVentas, 2),
+                'total' => round($totalVentas + $totalInternaciones, 2),
+            ];
+        });
+
+        return response()->json(array_merge(['message' => 'Cuenta del paciente cobrada'], $resumen));
+    }
+
+    /** Estado de cuenta: internaciones sin pagar y productos de farmacia pendientes. */
+    public function estadoCuentaPdf(Request $request, $id)
+    {
+        $this->req($request, ['Ver Pacientes', 'Ver Ventas']);
+
+        $paciente = Paciente::with('seguro:id,nombre')->findOrFail($id);
+
+        $internaciones = $this->internacionesPorCobrar($paciente->id)
+            ->with(['seguro:id,nombre', 'items.user:id,name'])
+            ->get();
+
+        $ventas = $this->ventasPendientes($paciente->id)
+            ->with(['doctor:id,nombre', 'seguro:id,nombre', 'detalles:id,venta_id,nombre,lote,precio,cantidad,total'])
+            ->orderBy('fecha_hora')
+            ->get();
+
+        $totalInternaciones = $internaciones->sum(fn ($internacion) => (float) $internacion->items->sum('total'));
+        $totalVentas = (float) $ventas->sum('total');
+
+        $pdf = Pdf::loadView('reportes.estado-cuenta', [
+            'paciente' => $paciente,
+            'internaciones' => $internaciones,
+            'ventas' => $ventas,
+            'totalInternaciones' => round($totalInternaciones, 2),
+            'totalVentas' => round($totalVentas, 2),
+            'total' => round($totalInternaciones + $totalVentas, 2),
+        ])->setPaper('letter', 'portrait');
+
+        return $pdf->stream('estado_cuenta_'.$paciente->id.'_'.now()->format('Ymd_His').'.pdf');
+    }
+
+    /** Internaciones que todavía no se cobraron. */
+    private function internacionesPorCobrar(int $pacienteId)
+    {
+        return Internacion::with('items')
+            ->where('paciente_id', $pacienteId)
+            ->whereNull('pagado_en')
+            ->orderBy('fecha_ingreso')
+            ->orderBy('id');
+    }
+
+    /** Ventas de farmacia dejadas en pendiente (los egresos de caja no son deuda del paciente). */
+    private function ventasPendientes(int $pacienteId)
+    {
+        return Venta::where('paciente_id', $pacienteId)
+            ->where('estado', 'PENDIENTE')
+            ->whereNull('fecha_hora_cobro')
+            ->where('tipo_movimiento', '<>', 'EGRESO');
     }
 
     public function store(Request $request)

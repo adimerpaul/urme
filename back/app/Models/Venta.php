@@ -14,7 +14,7 @@ class Venta extends Model implements AuditableContract
     protected $table = 'ventas';
 
     protected $fillable = [
-        'user_id', 'cobrado_por_id', 'paciente_id', 'doctor_id', 'seguro_id', 'cliente', 'fecha_hora',
+        'user_id', 'cobrado_por_id', 'tipo_movimiento', 'paciente_id', 'doctor_id', 'seguro_id', 'cliente', 'fecha_hora',
         'fecha_hora_cobro',
         'tipo_pago', 'comentario', 'estado', 'total', 'total_original', 'pago', 'cambio',
     ];
@@ -29,6 +29,12 @@ class Venta extends Model implements AuditableContract
         'pago' => 'decimal:2',
         'cambio' => 'decimal:2',
     ];
+
+    /** Gasto de caja (refresco, periódico, etc.): dinero que sale de caja, no que entra. */
+    public function esEgreso(): bool
+    {
+        return $this->tipo_movimiento === 'EGRESO';
+    }
 
     public function setClienteAttribute($value): void
     {

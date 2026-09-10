@@ -21,12 +21,13 @@
         table.items th { background: #00695C; color: #fff; font-size: 7.5px; font-weight: bold; text-transform: uppercase; padding: 4px 3px; text-align: left; }
         table.items td { padding: 3px; border-bottom: 1px solid #dbe4ee; }
         table.items tbody tr:nth-child(even) td { background: #F1F8F7; }
-        .c-cod  { width:  7%; }
-        .c-nom  { width: 25%; }
-        .c-marc { width: 10%; }
-        .c-desc { width: 18%; }
-        .c-fab  { width: 14%; }
-        .c-unid { width:  7%; }
+        .c-cod  { width:  6%; }
+        .c-nom  { width: 19%; }
+        .c-com  { width: 15%; }
+        .c-marc { width:  9%; }
+        .c-desc { width: 14%; }
+        .c-fab  { width: 12%; }
+        .c-unid { width:  6%; }
         .c-cat  { width: 12%; }
         .c-prec { width:  7%; text-align: right; }
     </style>
@@ -56,7 +57,8 @@
             <thead>
                 <tr>
                     <th class="c-cod">Código</th>
-                    <th class="c-nom">Nombre</th>
+                    <th class="c-nom">Nombre genérico</th>
+                    <th class="c-com">Nombre comercial</th>
                     <th class="c-marc">Marca</th>
                     <th class="c-desc">Descripción</th>
                     <th class="c-fab">Fabricante</th>
@@ -70,6 +72,7 @@
                     <tr>
                         <td class="c-cod">{{ $item->codigo ?: '—' }}</td>
                         <td class="c-nom">{{ $item->nombre }}</td>
+                        <td class="c-com">{{ $item->nombre_comercial ?: '—' }}</td>
                         <td class="c-marc">{{ $item->marca ?: '—' }}</td>
                         <td class="c-desc">{{ $item->descripcion ?: '—' }}</td>
                         <td class="c-fab">{{ $item->fabricante?->nombre ?: '—' }}</td>

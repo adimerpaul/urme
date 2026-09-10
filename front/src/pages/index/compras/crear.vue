@@ -60,13 +60,18 @@
           <q-space />
           <q-btn rounded unelevated dense no-caps color="teal-1" text-color="primary" class="text-weight-bold"
                  label="Agregar línea" icon="add" @click="agregarLinea" />
+          <q-btn v-if="canCrearProducto" rounded unelevated dense no-caps color="indigo-1" text-color="indigo-8"
+                 class="text-weight-bold q-ml-sm" label="Nuevo producto de farmacia" icon="medication"
+                 @click="abrirNuevoProducto()">
+            <q-tooltip>Crear un producto de farmacia y agregarlo a la compra</q-tooltip>
+          </q-btn>
         </div>
 
         <q-markup-table dense flat bordered separator="horizontal" class="full-width q-mb-sm rounded-borders tabla-compra">
           <thead>
             <tr class="bg-grey-1 text-grey-7 text-uppercase">
               <th style="width:40px"></th>
-              <th class="text-left" style="min-width:190px">Producto / Nombre</th>
+              <th class="text-left" style="min-width:190px">Producto de farmacia</th>
               <th class="text-right" style="width:90px">Cantidad</th>
               <th class="text-right" style="width:100px">Precio unit.</th>
               <th class="text-right" style="width:110px">Total</th>
@@ -88,14 +93,24 @@
                 <q-select v-model="linea.producto_id" dense outlined use-input clearable
                           input-debounce="300" :options="opcionesProducto"
                           option-value="id" option-label="nombre" emit-value map-options
+                          :rules="[v => !!v || 'Seleccione un producto de farmacia']"
                           @filter="filtrarProductos" @update:model-value="v => onProductoSeleccionado(linea, v)"
-                          placeholder="Buscar producto de farmacia (o dejar vacío y escribir nombre)">
+                          placeholder="Buscar producto de farmacia">
                   <template v-slot:no-option>
-                    <q-item><q-item-section class="text-grey">Sin resultados</q-item-section></q-item>
+                    <q-item>
+                      <q-item-section class="text-grey">
+                        <div>Sin resultados en el catálogo de farmacia</div>
+                        <q-btn v-if="canCrearProducto" flat dense no-caps size="sm" color="primary" icon="add"
+                               label="Crear producto de farmacia" @click="abrirNuevoProducto(linea)" />
+                      </q-item-section>
+                    </q-item>
+                  </template>
+                  <template v-if="canCrearProducto" v-slot:after>
+                    <q-btn flat round dense icon="add" color="primary" @click="abrirNuevoProducto(linea)">
+                      <q-tooltip>Nuevo producto de farmacia</q-tooltip>
+                    </q-btn>
                   </template>
                 </q-select>
-                <q-input v-if="!linea.producto_id" v-model="linea.nombre" dense outlined class="q-mt-xs"
-                         placeholder="Nombre del ítem (si no está en catálogo)" v-uppercase />
               </td>
               <td><q-input v-model.number="linea.cantidad" dense outlined type="number" step="0.0001" min="0"
                            input-class="text-right" @update:model-value="recalcularLinea(linea)" /></td>
@@ -122,6 +137,50 @@
       </q-form>
 
     </template>
+
+    <!-- Quick producto de farmacia -->
+    <q-dialog v-model="prodQuick" persistent>
+      <q-card style="width:min(96vw,620px)">
+        <q-card-section class="row items-center bg-primary text-white q-py-sm">
+          <q-icon name="medication" class="q-mr-sm" />
+          <span class="text-subtitle2 text-weight-bold">Nuevo producto de farmacia</span>
+          <q-space /><q-btn flat round dense icon="close" v-close-popup />
+        </q-card-section>
+        <q-form @submit.prevent="prodQuickSave">
+          <q-card-section class="row q-col-gutter-sm">
+            <div class="col-12 col-sm-4">
+              <q-input v-model="prodForm.codigo" v-uppercase dense outlined label="Código" />
+            </div>
+            <div class="col-12 col-sm-8">
+              <q-input v-model="prodForm.nombre" v-uppercase dense outlined label="Nombre *"
+                       :rules="[v => !!v || 'Requerido']" autofocus />
+            </div>
+            <div class="col-12 col-sm-6">
+              <q-input v-model="prodForm.nombre_comercial" v-uppercase dense outlined label="Nombre comercial" />
+            </div>
+            <div class="col-12 col-sm-6">
+              <q-input v-model="prodForm.marca" v-uppercase dense outlined label="Marca" />
+            </div>
+            <div class="col-12 col-sm-4">
+              <q-select v-model="prodForm.fabricante_id" dense outlined clearable emit-value map-options
+                        label="Fabricante" :options="opcionesFabricantes" />
+            </div>
+            <div class="col-12 col-sm-4">
+              <q-select v-model="prodForm.unidad_id" dense outlined clearable emit-value map-options
+                        label="Unidad de medida" :options="opcionesUnidades" />
+            </div>
+            <div class="col-12 col-sm-4">
+              <q-input v-model.number="prodForm.precio" dense outlined type="number" min="0" step="0.01"
+                       label="P. Venta (Bs)" hint="Se actualiza al registrar la compra" />
+            </div>
+          </q-card-section>
+          <q-card-actions align="right" class="q-pa-sm">
+            <q-btn flat color="grey-7" label="Cancelar" no-caps v-close-popup />
+            <q-btn type="submit" color="primary" icon="save" label="Crear y agregar" no-caps :loading="savingProd" />
+          </q-card-actions>
+        </q-form>
+      </q-card>
+    </q-dialog>
 
     <!-- Quick proveedor -->
     <q-dialog v-model="provQuick" persistent>
@@ -155,6 +214,7 @@ const router = useRouter()
 
 // ── Permisos ───────────────────────────────────────────────────
 const canCrear = computed(() => proxy.$store.hasPermission('Crear Compras'))
+const canCrearProducto = computed(() => proxy.$store.hasPermission('Crear Productos Farmacia'))
 
 const allProveedores = ref([])
 
@@ -240,9 +300,74 @@ function onProductoSeleccionado (linea, productoId) {
   }
 }
 
+// ── Alta rápida de producto de farmacia ────────────────────────
+const prodQuick    = ref(false)
+const savingProd   = ref(false)
+const fabricantes  = ref([])
+const unidades     = ref([])
+const prodForm     = ref(productoVacio())
+let lineaDestino   = null
+
+const opcionesFabricantes = computed(() => fabricantes.value.map(f => ({ label: f.nombre, value: f.id })))
+const opcionesUnidades = computed(() => unidades.value.map(u => ({
+  label: u.abreviatura ? `${u.nombre} (${u.abreviatura})` : u.nombre,
+  value: u.id,
+})))
+
+function productoVacio () {
+  return {
+    codigo: '', nombre: '', nombre_comercial: '', marca: '',
+    fabricante_id: null, unidad_id: null, precio: 0,
+  }
+}
+
+async function loadCatalogosProducto () {
+  if (fabricantes.value.length || unidades.value.length) return
+  try {
+    const { data } = await proxy.$axios.get('productos-farmacia/catalogos')
+    fabricantes.value = data.fabricantes || []
+    unidades.value = data.unidades || []
+  } catch (e) { /* los selects quedan vacíos, el nombre alcanza para crear */ }
+}
+
+/** `linea` indica en qué línea colocar el producto creado; sin ella se agrega una nueva. */
+function abrirNuevoProducto (linea = null) {
+  lineaDestino = linea
+  prodForm.value = productoVacio()
+  prodQuick.value = true
+  loadCatalogosProducto()
+}
+
+async function prodQuickSave () {
+  savingProd.value = true
+  try {
+    const { data: producto } = await proxy.$axios.post('productos-farmacia', prodForm.value)
+    opcionesProducto.value = [producto, ...opcionesProducto.value.filter(p => p.id !== producto.id)]
+
+    if (!lineaDestino) {
+      agregarLinea()
+      lineaDestino = nueva.value.detalles[nueva.value.detalles.length - 1]
+    }
+    lineaDestino.producto_id = producto.id
+    onProductoSeleccionado(lineaDestino, producto.id)
+
+    prodQuick.value = false
+    lineaDestino = null
+    proxy.$alert.success('Producto de farmacia creado')
+  } catch (e) {
+    proxy.$alert.error(e.response?.data?.message || 'No se pudo crear el producto')
+  } finally {
+    savingProd.value = false
+  }
+}
+
 async function registrarCompra () {
   if (!nueva.value.detalles.length) {
     proxy.$alert.error('Agregue al menos una línea de compra')
+    return
+  }
+  if (nueva.value.detalles.some(l => !l.producto_id)) {
+    proxy.$alert.error('Todas las líneas deben tener un producto de farmacia seleccionado')
     return
   }
   registrando.value = true
@@ -254,8 +379,7 @@ async function registrarCompra () {
       tipo_pago: nueva.value.tipo_pago,
       comentario: nueva.value.comentario,
       detalles: nueva.value.detalles.map(l => ({
-        producto_id: l.producto_id || null,
-        nombre: l.nombre,
+        producto_id: l.producto_id,
         cantidad: l.cantidad,
         precio: l.precio,
         factor: l.factor || null,

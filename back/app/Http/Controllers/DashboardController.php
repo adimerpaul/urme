@@ -10,6 +10,7 @@ use App\Models\Producto;
 use App\Models\Solicitude;
 use App\Models\Venta;
 use App\Models\VentaDetalle;
+use App\Services\StockLote;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
@@ -142,7 +143,8 @@ class DashboardController extends Controller
         $resumen = [];
 
         if ($verVentas) {
-            $ventas = Venta::where('estado', 'ACTIVO')->whereBetween('fecha_hora', [$inicio, $fin]);
+            // Los gastos de caja no son ventas: quedan fuera de todos los indicadores.
+            $ventas = Venta::where('tipo_movimiento', 'INGRESO')->where('estado', 'ACTIVO')->whereBetween('fecha_hora', [$inicio, $fin]);
 
             $total = (float) (clone $ventas)->sum('total');
             $cantidad = (clone $ventas)->count();
@@ -150,8 +152,8 @@ class DashboardController extends Controller
             $resumen['ventas_total'] = $total;
             $resumen['ventas_cantidad'] = $cantidad;
             $resumen['ticket_promedio'] = $cantidad > 0 ? round($total / $cantidad, 2) : 0;
-            $resumen['ventas_pendientes'] = (float) Venta::where('estado', 'PENDIENTE')->whereNull('fecha_hora_cobro')->sum('total');
-            $resumen['ventas_pendientes_cantidad'] = Venta::where('estado', 'PENDIENTE')->whereNull('fecha_hora_cobro')->count();
+            $resumen['ventas_pendientes'] = (float) Venta::where('tipo_movimiento', 'INGRESO')->where('estado', 'PENDIENTE')->whereNull('fecha_hora_cobro')->sum('total');
+            $resumen['ventas_pendientes_cantidad'] = Venta::where('tipo_movimiento', 'INGRESO')->where('estado', 'PENDIENTE')->whereNull('fecha_hora_cobro')->count();
         }
 
         if ($verCompras) {
@@ -202,7 +204,8 @@ class DashboardController extends Controller
         };
 
         $ventas = $verVentas
-            ? Venta::where('estado', 'ACTIVO')
+            ? Venta::where('tipo_movimiento', 'INGRESO')
+                ->where('estado', 'ACTIVO')
                 ->whereBetween('fecha_hora', [$inicio, $fin])
                 ->selectRaw("$expresion as clave, SUM(total) as total, COUNT(*) as cantidad")
                 ->groupBy('clave')
@@ -263,7 +266,8 @@ class DashboardController extends Controller
 
     private function ventasPorHora(Carbon $inicio, Carbon $fin): array
     {
-        $filas = Venta::where('estado', 'ACTIVO')
+        $filas = Venta::where('tipo_movimiento', 'INGRESO')
+            ->where('estado', 'ACTIVO')
             ->whereBetween('fecha_hora', [$inicio, $fin])
             ->selectRaw('HOUR(fecha_hora) as hora, COUNT(*) as cantidad, SUM(total) as total')
             ->groupBy('hora')
@@ -286,7 +290,8 @@ class DashboardController extends Controller
 
     private function tipoPago(Carbon $inicio, Carbon $fin): array
     {
-        $filas = Venta::where('estado', 'ACTIVO')
+        $filas = Venta::where('tipo_movimiento', 'INGRESO')
+            ->where('estado', 'ACTIVO')
             ->whereBetween('fecha_hora', [$inicio, $fin])
             ->selectRaw('COALESCE(tipo_pago, ?) as tipo_pago, SUM(total) as total, COUNT(*) as cantidad', ['SIN DEFINIR'])
             ->groupBy('tipo_pago')
@@ -368,6 +373,7 @@ class DashboardController extends Controller
     {
         return Venta::query()
             ->join('users', 'users.id', '=', 'ventas.user_id')
+            ->where('ventas.tipo_movimiento', 'INGRESO')
             ->where('ventas.estado', 'ACTIVO')
             ->whereBetween('ventas.fecha_hora', [$inicio, $fin])
             ->selectRaw('users.name as nombre, SUM(ventas.total) as total, COUNT(*) as cantidad')
@@ -392,6 +398,7 @@ class DashboardController extends Controller
         return Venta::query()
             ->join('doctores', 'doctores.id', '=', 'ventas.doctor_id')
             ->whereNull('doctores.deleted_at')
+            ->where('ventas.tipo_movimiento', 'INGRESO')
             ->where('ventas.estado', 'ACTIVO')
             ->whereBetween('ventas.fecha_hora', [$inicio, $fin])
             ->selectRaw('doctores.nombre as nombre, SUM(ventas.total) as total, COUNT(*) as cantidad')
@@ -501,15 +508,7 @@ class DashboardController extends Controller
     {
         return CompraDetalle::query()
             ->whereHas('compra', fn (Builder $compra) => $compra->where('estado', 'ACTIVO'))
-            ->whereRaw('compra_detalles.cantidad > (
-                SELECT COALESCE(SUM(vd.cantidad), 0)
-                FROM venta_detalles vd
-                INNER JOIN ventas v ON v.id = vd.venta_id
-                WHERE vd.compra_detalle_id = compra_detalles.id
-                  AND vd.deleted_at IS NULL
-                  AND v.deleted_at IS NULL
-                  AND v.estado != ?
-            )', ['ANULADO']);
+            ->whereRaw(StockLote::conSaldoSql());
     }
 
     /**
@@ -517,14 +516,6 @@ class DashboardController extends Controller
      */
     private function existenciaSql(): string
     {
-        return "GREATEST(compra_detalles.cantidad - (
-            SELECT COALESCE(SUM(vd.cantidad), 0)
-            FROM venta_detalles vd
-            INNER JOIN ventas v ON v.id = vd.venta_id
-            WHERE vd.compra_detalle_id = compra_detalles.id
-              AND vd.deleted_at IS NULL
-              AND v.deleted_at IS NULL
-              AND v.estado != 'ANULADO'
-        ), 0)";
+        return StockLote::existenciaSql();
     }
 }

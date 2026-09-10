@@ -10,8 +10,9 @@ use App\Models\Fabricante;
 use App\Models\Producto;
 use App\Models\TipoProducto;
 use App\Models\Unidad;
-use App\Models\VentaDetalle;
 use App\Services\ProductoHistorial;
+use App\Services\StockLote;
+use App\Support\DescripcionHtml;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Maatwebsite\Excel\Facades\Excel;
@@ -122,15 +123,13 @@ class ProductoController extends Controller
             ->orderBy('id')
             ->get();
 
-        $vendidoPorDetalle = VentaDetalle::query()
-            ->whereIn('compra_detalle_id', $lotes->pluck('id'))
-            ->whereHas('venta', fn ($query) => $query->where('estado', '<>', 'ANULADO'))
-            ->selectRaw('compra_detalle_id, SUM(cantidad) as cantidad_vendida')
-            ->groupBy('compra_detalle_id')
-            ->pluck('cantidad_vendida', 'compra_detalle_id');
+        $vendidoPorDetalle = StockLote::vendidoPorLote($lotes->pluck('id'));
+        $bajadoPorDetalle = StockLote::bajadoPorLote($lotes->pluck('id'));
 
-        return response()->json($lotes->map(function ($detalle) use ($vendidoPorDetalle) {
-            $disponible = max(0, (float) $detalle->cantidad - (float) ($vendidoPorDetalle[$detalle->id] ?? 0));
+        return response()->json($lotes->map(function ($detalle) use ($vendidoPorDetalle, $bajadoPorDetalle) {
+            $disponible = max(0, (float) $detalle->cantidad
+                - (float) ($vendidoPorDetalle[$detalle->id] ?? 0)
+                - (float) ($bajadoPorDetalle[$detalle->id] ?? 0));
 
             return [
                 'compra_detalle_id' => $detalle->id,
@@ -375,6 +374,10 @@ class ProductoController extends Controller
                 $detalle->whereNotNull('compra_detalle_id')
                     ->whereHas('venta', fn ($venta) => $venta->where('estado', '<>', 'ANULADO'));
             }], 'cantidad')
+            ->withSum(['bajaDetalles as cantidad_baja_lote' => function ($detalle) {
+                $detalle->whereNotNull('compra_detalle_id')
+                    ->whereHas('baja', fn ($baja) => $baja->where('estado', 'ACTIVO'));
+            }], 'cantidad')
             ->orderBy('nombre');
 
         if ($q) {
@@ -405,6 +408,7 @@ class ProductoController extends Controller
     {
         $this->req($request, 'Crear Productos');
         $request->validate([
+            'descripcion' => 'nullable|string|max:60000',
             'nombre' => 'required|string|max:255',
             'precio' => 'nullable|numeric|min:0',
             'precio_seguro' => 'nullable|numeric|min:0',
@@ -413,7 +417,7 @@ class ProductoController extends Controller
         $producto = Producto::create([
             'codigo' => $request->codigo ? mb_strtoupper($request->codigo) : null,
             'nombre' => mb_strtoupper($request->nombre),
-            'descripcion' => $request->descripcion ? mb_strtoupper($request->descripcion) : null,
+            'descripcion' => $request->descripcion ? DescripcionHtml::guardar($request->descripcion) : null,
             'marca' => $request->marca ? mb_strtoupper($request->marca) : null,
             'fabricante_id' => $request->fabricante_id ?: null,
             'unidad_id' => $request->unidad_id ?: null,
@@ -430,6 +434,7 @@ class ProductoController extends Controller
         $this->req($request, 'Editar Productos');
         $producto = Producto::findOrFail($id);
         $request->validate([
+            'descripcion' => 'nullable|string|max:60000',
             'nombre' => 'required|string|max:255',
             'precio' => 'nullable|numeric|min:0',
             'precio_seguro' => 'nullable|numeric|min:0',
@@ -438,7 +443,7 @@ class ProductoController extends Controller
         $producto->update([
             'codigo' => $request->codigo ? mb_strtoupper($request->codigo) : null,
             'nombre' => mb_strtoupper($request->nombre),
-            'descripcion' => $request->descripcion ? mb_strtoupper($request->descripcion) : null,
+            'descripcion' => $request->descripcion ? DescripcionHtml::guardar($request->descripcion) : null,
             'marca' => $request->marca ? mb_strtoupper($request->marca) : null,
             'fabricante_id' => $request->fabricante_id ?: null,
             'unidad_id' => $request->unidad_id ?: null,

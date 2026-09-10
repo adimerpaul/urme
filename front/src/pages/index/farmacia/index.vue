@@ -516,7 +516,11 @@
                   <td>{{ formatFechaHistorial(mov.fecha_hora) }}</td>
                   <td>{{ mov.documento }}</td>
                   <td>{{ mov.tercero }}</td>
-                  <td>{{ mov.lote || 'SIN LOTE' }}</td>
+                  <td>
+                    {{ mov.lote || 'SIN LOTE' }}
+                    <EditarLoteHistorial :producto="historialProducto" :movimiento="mov"
+                                        @actualizado="movimientosHistorial = $event.movimientos" />
+                  </td>
                   <td>{{ mov.fecha_vencimiento || 'SIN FECHA' }}</td>
                   <td class="text-right">{{ Number(mov.cantidad).toFixed(2) }}</td>
                   <td v-if="tabHistorial === 'compras'" class="text-right text-teal-8 text-weight-bold">
@@ -710,6 +714,7 @@
 
 <script setup>
 import { ref, computed, watch, getCurrentInstance } from 'vue'
+import EditarLoteHistorial from '../../../components/EditarLoteHistorial.vue'
 
 const { proxy } = getCurrentInstance()
 

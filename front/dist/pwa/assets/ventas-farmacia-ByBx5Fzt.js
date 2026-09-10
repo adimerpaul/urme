@@ -1,0 +1,1 @@
+import{R as e,lt as t}from"./QSpinner-BVeVv9ms.js";import n from"./ventas-D9FzYHVM.js";var r={__name:`index`,setup(r){return(r,i)=>(t(),e(n,{"solo-farmacia":``}))}};export{r as default};

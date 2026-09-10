@@ -78,7 +78,7 @@
           <template #body-cell-nombre="props">
             <q-td :props="props">
               <div class="text-weight-medium">{{ props.row.nombre }}</div>
-              <div v-if="props.row.descripcion" class="lab-sub text-grey-6">{{ props.row.descripcion }}</div>
+              <div v-if="props.row.descripcion" class="lab-sub text-grey-6" v-html="props.row.descripcion_html" />
             </q-td>
           </template>
           <template #body-cell-tipo="props">
@@ -133,7 +133,9 @@
                        label="P. Seguro (Bs)" hint="Precio de convenio" />
             </div>
             <div class="col-12">
-              <q-input v-model="productoForm.descripcion" v-uppercase dense outlined type="textarea" rows="2" label="Descripción" />
+              <div class="text-caption text-grey-7 q-mb-xs">Descripción</div>
+              <q-editor v-model="productoForm.descripcion" min-height="140px"
+                        :toolbar="[['bold', 'italic', 'underline', 'strike'], ['left', 'center', 'right', 'justify'], ['unordered', 'ordered'], ['undo', 'redo']]" />
             </div>
           </q-card-section>
           <q-card-actions align="right" class="q-pa-sm">
@@ -336,6 +338,7 @@ function nuevoProducto () {
 function editarProducto (producto) {
   productoForm.value = {
     ...producto,
+    descripcion: producto.descripcion_html || '',
     precio: Number(producto.precio),
     precio_seguro: producto.precio_seguro !== null && producto.precio_seguro !== undefined
       ? Number(producto.precio_seguro)

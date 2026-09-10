@@ -250,14 +250,20 @@ class CierreCajaController extends Controller
         });
     }
 
-    /** Ventas ACTIVO del usuario en el día. */
+    /**
+     * Movimientos ACTIVO del usuario en el día. El total del sistema es lo que
+     * debería quedar en caja: los ingresos menos los gastos registrados.
+     */
     private function totalesDelDia(int $userId, string $fecha): array
     {
         $ventas = self::ventasDelDia($userId, $fecha);
 
+        $ingresos = (float) (clone $ventas)->where('tipo_movimiento', 'INGRESO')->sum('total');
+        $egresos = (float) (clone $ventas)->where('tipo_movimiento', 'EGRESO')->sum('total');
+
         return [
-            'total' => round((float) (clone $ventas)->sum('total'), 2),
-            'cantidad' => (clone $ventas)->count(),
+            'total' => round($ingresos - $egresos, 2),
+            'cantidad' => (clone $ventas)->where('tipo_movimiento', 'INGRESO')->count(),
         ];
     }
 

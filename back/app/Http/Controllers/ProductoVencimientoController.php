@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\CompraDetalle;
+use App\Services\StockLote;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
@@ -73,18 +74,15 @@ class ProductoVencimientoController extends Controller
                 'ventaDetalles as cantidad_vendida' => fn (Builder $venta) => $venta
                     ->whereHas('venta', fn (Builder $v) => $v->where('estado', '!=', 'ANULADO')),
             ], 'cantidad')
+            ->withSum([
+                'bajaDetalles as cantidad_baja' => fn (Builder $detalle) => $detalle
+                    ->whereHas('baja', fn (Builder $b) => $b->where('estado', 'ACTIVO')),
+            ], 'cantidad')
             ->whereNotNull('fecha_vencimiento')
             ->whereHas('compra', fn (Builder $compra) => $compra->where('estado', 'ACTIVO'))
             ->whereHas('producto.tipoProducto', fn (Builder $tipo) => $tipo->whereRaw('UPPER(nombre) = ?', ['FARMACIA']))
-            ->whereRaw('compra_detalles.cantidad > (
-                SELECT COALESCE(SUM(vd.cantidad), 0)
-                FROM venta_detalles vd
-                INNER JOIN ventas v ON v.id = vd.venta_id
-                WHERE vd.compra_detalle_id = compra_detalles.id
-                  AND vd.deleted_at IS NULL
-                  AND v.deleted_at IS NULL
-                  AND v.estado != ?
-            )', ['ANULADO']);
+            // Solo lotes con saldo: descuenta ventas vigentes y bajas activas.
+            ->whereRaw(StockLote::conSaldoSql());
 
         $filtroFecha($query);
 
@@ -109,8 +107,10 @@ class ProductoVencimientoController extends Controller
 
         $paginator->through(function (CompraDetalle $detalle) use ($hoy) {
             $vendida = (float) ($detalle->cantidad_vendida ?? 0);
+            $baja = (float) ($detalle->cantidad_baja ?? 0);
             $detalle->setAttribute('cantidad_vendida', $vendida);
-            $detalle->setAttribute('existencia', max(0, (float) $detalle->cantidad - $vendida));
+            $detalle->setAttribute('cantidad_baja', $baja);
+            $detalle->setAttribute('existencia', max(0, (float) $detalle->cantidad - $vendida - $baja));
             $detalle->setAttribute('dias_vencimiento', $hoy->diffInDays($detalle->fecha_vencimiento, false));
 
             return $detalle;

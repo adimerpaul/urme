@@ -4,8 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Models\Internacion;
 use App\Models\Paciente;
-use App\Models\Venta;
-use App\Models\VentaDetalle;
+use App\Services\CobroInternacion;
+use App\Support\PdfTema;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -47,6 +47,10 @@ class InternacionController extends Controller
             'fecha_alta' => 'nullable|date',
         ]);
         $datos = $request->only(['paciente_id', 'seguro_id', 'fecha_ingreso', 'tipo_paciente', 'fecha_alta', 'codigo_hc', 'sala']);
+        // Casi siempre se registra el mismo día del ingreso: si no la mandan, es hoy.
+        $datos['fecha_ingreso'] = ($datos['fecha_ingreso'] ?? null) ?: now()->toDateString();
+        $datos['fecha_alta'] = ($datos['fecha_alta'] ?? null) ?: null;
+        self::validarAlta($datos['fecha_ingreso'], $datos['fecha_alta']);
         if (! $request->exists('seguro_id')) {
             $datos['seguro_id'] = Paciente::findOrFail($request->paciente_id)->seguro_id;
         }
@@ -65,24 +69,33 @@ class InternacionController extends Controller
             'fecha_alta' => 'nullable|date',
         ]);
         $internacion = Internacion::findOrFail($id);
-        self::bloqueadaSiCerrada($internacion);
-        $internacion->update($request->only(['paciente_id', 'seguro_id', 'fecha_ingreso', 'tipo_paciente', 'codigo_hc', 'sala']));
+        self::bloqueadaSiPagada($internacion);
+
+        $datos = $request->only(['paciente_id', 'seguro_id', 'fecha_ingreso', 'tipo_paciente', 'fecha_alta', 'codigo_hc', 'sala']);
+        // El formulario manda '' al limpiar la fecha; en la columna debe ir NULL.
+        $datos['fecha_alta'] = ($datos['fecha_alta'] ?? null) ?: null;
+        $datos['fecha_ingreso'] = ($datos['fecha_ingreso'] ?? null) ?: $internacion->fecha_ingreso;
+        self::validarAlta($datos['fecha_ingreso'], $datos['fecha_alta']);
+
+        $internacion->update($datos);
 
         return response()->json($internacion->load(['paciente:id,nombre_completo', 'seguro:id,nombre']));
     }
 
+    /**
+     * Da de alta al paciente. El alta es solo la fecha de salida: la internación
+     * sigue editable y se le pueden seguir cargando ítems hasta que se cobre.
+     */
     public function cerrar(Request $request, $id)
     {
         $this->req($request, 'Editar Internaciones');
         $request->validate(['fecha_alta' => 'nullable|date']);
 
         $internacion = Internacion::findOrFail($id);
-        self::bloqueadaSiCerrada($internacion);
+        self::bloqueadaSiPagada($internacion);
 
         $fechaAlta = $request->input('fecha_alta') ?: now()->toDateString();
-        if ($internacion->fecha_ingreso && $fechaAlta < $internacion->fecha_ingreso) {
-            abort(422, 'La fecha de alta no puede ser anterior a la fecha de ingreso');
-        }
+        self::validarAlta($internacion->fecha_ingreso, $fechaAlta);
 
         $internacion->update(['fecha_alta' => $fechaAlta]);
 
@@ -93,7 +106,7 @@ class InternacionController extends Controller
     {
         $this->req($request, 'Eliminar Internaciones');
         $internacion = Internacion::findOrFail($id);
-        self::bloqueadaSiCerrada($internacion);
+        self::bloqueadaSiPagada($internacion);
         $internacion->delete();
 
         return response()->json(['message' => 'Internación eliminada']);
@@ -152,65 +165,17 @@ class InternacionController extends Controller
 
         $internacion = Internacion::with('items')->findOrFail($id);
 
-        if ($internacion->pagado_en) {
-            abort(422, 'Esta internación ya fue pagada');
-        }
-        if ($internacion->items->isEmpty()) {
-            abort(422, 'La internación no tiene cargos que cobrar');
-        }
         if (CierreCajaController::cierreDelDia($request->user()->id, now()->toDateString())) {
             abort(422, 'Su caja de hoy ya fue cerrada: no puede registrar más cobros hasta mañana');
         }
 
-        $total = round((float) $internacion->items->sum('total'), 2);
-        $pago = $request->pago !== null && $request->pago !== ''
-            ? round((float) $request->pago, 2)
-            : $total;
-
-        if ($pago < $total) {
-            abort(422, 'El pago no puede ser menor al total de la internación');
-        }
-
-        $tipoPago = $request->tipo_pago ? mb_strtoupper($request->tipo_pago) : 'EFECTIVO';
-
-        $venta = DB::transaction(function () use ($internacion, $request, $total, $pago, $tipoPago) {
-            $venta = Venta::create([
-                'user_id' => $request->user()->id,
-                'paciente_id' => $internacion->paciente_id,
-                'seguro_id' => $internacion->seguro_id,
-                'fecha_hora' => now(),
-                'tipo_pago' => $tipoPago,
-                'comentario' => 'Pago total de la internación #'.$internacion->id,
-                'estado' => 'ACTIVO',
-                'total' => $total,
-                'pago' => $pago,
-                'cambio' => round($pago - $total, 2),
-            ]);
-
-            // Los cargos viajan como ítems sueltos: la internación no mueve lotes,
-            // así que la venta no debe descontar stock de farmacia.
-            foreach ($internacion->items as $item) {
-                VentaDetalle::create([
-                    'venta_id' => $venta->id,
-                    'producto_id' => null,
-                    'nombre' => $item->nombre,
-                    'precio' => $item->precio,
-                    'cantidad' => $item->cantidad,
-                    'total' => $item->total,
-                ]);
-            }
-
-            $internacion->update([
-                'pagado_en' => now(),
-                'pagado_por_id' => $request->user()->id,
-                'venta_id' => $venta->id,
-                'monto_pagado' => $total,
-                'pago_tipo' => $tipoPago,
-                'pago_observacion' => $request->observacion ?: null,
-            ]);
-
-            return $venta;
-        });
+        $venta = DB::transaction(fn () => CobroInternacion::registrar(
+            $internacion,
+            $request->user(),
+            $request->tipo_pago ?: 'EFECTIVO',
+            $request->pago !== null && $request->pago !== '' ? (float) $request->pago : null,
+            $request->observacion
+        ));
 
         return response()->json([
             'message' => 'Internación cobrada',
@@ -229,30 +194,70 @@ class InternacionController extends Controller
         ]);
     }
 
-    /** Una internación cerrada o pagada queda congelada: ni sus datos ni sus cargos cambian. */
-    public static function bloqueadaSiCerrada(Internacion $internacion): void
+    /**
+     * Una internación pagada queda congelada: ni sus datos ni sus cargos cambian.
+     * Dar de alta NO congela nada; el cierre real de la internación es el cobro.
+     */
+    public static function bloqueadaSiPagada(Internacion $internacion): void
     {
-        if ($internacion->fecha_alta) {
-            abort(422, 'La internación está cerrada: no admite más cambios');
-        }
-
         if ($internacion->pagado_en) {
             abort(422, 'La internación ya fue pagada: no admite más cambios');
+        }
+    }
+
+    /** El alta nunca puede ser anterior al ingreso. */
+    private static function validarAlta(?string $fechaIngreso, ?string $fechaAlta): void
+    {
+        if ($fechaIngreso && $fechaAlta && $fechaAlta < $fechaIngreso) {
+            abort(422, 'La fecha de alta no puede ser anterior a la fecha de ingreso');
         }
     }
 
     public function pdf(Request $request, $id)
     {
         $this->req($request, 'Ver Internaciones');
-        $internacion = Internacion::with(['paciente', 'seguro:id,nombre', 'items.producto:id,nombre', 'items.user:id,name'])->findOrFail($id);
+        $internacion = Internacion::with([
+            'paciente',
+            'seguro:id,nombre',
+            'pagadoPor:id,name',
+            'items.producto:id,nombre,tipo_producto_id',
+            'items.producto.tipoProducto:id,nombre,color,es_laboratorio',
+            'items.user:id,name',
+        ])->findOrFail($id);
         $total = $internacion->items->sum('total');
 
         $pdf = Pdf::loadView('reportes.internacion', [
             'internacion' => $internacion,
             'total' => $total,
+            'grupos' => self::agruparPorTipo($internacion),
         ])->setPaper('letter', 'portrait');
 
         return $pdf->stream('proforma_'.$internacion->id.'_'.now()->format('Ymd_His').'.pdf');
+    }
+
+    /**
+     * Agrupa los cargos por área (el tipo de producto del catálogo) para que la
+     * proforma se lea por bloques: internación, laboratorio, imágenes, etc.
+     * Los cargos escritos a mano, sin producto, caen en "OTROS CARGOS".
+     */
+    private static function agruparPorTipo(Internacion $internacion)
+    {
+        return $internacion->items
+            ->groupBy(fn ($item) => $item->producto?->tipoProducto?->nombre ?: 'OTROS CARGOS')
+            ->map(function ($items, $nombre) {
+                $tipo = $items->first()->producto?->tipoProducto;
+
+                return [
+                    'nombre' => $nombre,
+                    'color' => PdfTema::color($tipo?->color),
+                    'icono' => PdfTema::iconoDeTipo($nombre, (bool) $tipo?->es_laboratorio),
+                    'items' => $items,
+                    'cantidad' => $items->count(),
+                    'subtotal' => (float) $items->sum('total'),
+                ];
+            })
+            ->sortByDesc('subtotal')
+            ->values();
     }
 
     private function req(Request $request, string|array $permission): void

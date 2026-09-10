@@ -47,15 +47,16 @@
     </table>
 
     @if ($ventas->isEmpty())
-        <div class="empty">Este cierre no tiene ventas registradas.</div>
+        <div class="empty">Este cierre no tiene movimientos registrados.</div>
     @else
         <table class="items">
             <thead>
                 <tr>
                     <th width="6%">N°</th>
                     <th width="13%">Fecha y hora</th>
-                    <th width="28%">Cliente / Paciente</th>
-                    <th width="10%">Estado</th>
+                    <th width="24%">Cliente / Paciente</th>
+                    <th width="9%">Tipo</th>
+                    <th width="9%">Estado</th>
                     <th width="10%">Pago</th>
                     <th width="7%" class="num">Ítems</th>
                     <th width="12%" class="num">Total (Bs)</th>
@@ -67,20 +68,21 @@
                         <td>{{ $venta->id }}</td>
                         <td>{{ optional($venta->fecha_hora_cobro ?: $venta->fecha_hora)->format('d/m/Y H:i') }}</td>
                         <td>
-                            {{ $venta->paciente?->nombre_completo ?: ($venta->cliente ?: 'SIN CLIENTE') }}
+                            {{ $venta->paciente?->nombre_completo ?: ($venta->cliente ?: ($venta->esEgreso() ? 'GASTO DE CAJA' : 'SIN CLIENTE')) }}
                             <div class="det">{{ $venta->detalles->pluck('nombre')->implode(', ') }}</div>
                         </td>
+                        <td>{{ $venta->esEgreso() ? 'GASTO' : 'VENTA' }}</td>
                         <td>{{ $venta->estado }}</td>
                         <td>{{ $venta->tipo_pago ?: '—' }}</td>
                         <td class="num">{{ $venta->detalles->count() }}</td>
-                        <td class="num">{{ number_format((float) $venta->total, 2) }}</td>
+                        <td class="num">{{ number_format($venta->esEgreso() ? -(float) $venta->total : (float) $venta->total, 2) }}</td>
                     </tr>
                 @endforeach
             </tbody>
             <tfoot>
                 <tr>
-                    <td colspan="6" class="num">Total del cierre</td>
-                    <td class="num">{{ number_format((float) $ventas->sum('total'), 2) }} Bs</td>
+                    <td colspan="7" class="num">Total del cierre (ventas menos gastos)</td>
+                    <td class="num">{{ number_format((float) $ventas->sum(fn ($venta) => $venta->esEgreso() ? -(float) $venta->total : (float) $venta->total), 2) }} Bs</td>
                 </tr>
             </tfoot>
         </table>

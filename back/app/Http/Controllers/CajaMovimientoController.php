@@ -19,6 +19,7 @@ class CajaMovimientoController extends Controller
     {
         [$caja, $tipo] = $this->contexto($request);
         $this->autorizar($request, 'Ver', $caja);
+        $this->validarRango($request);
 
         $query = CajaMovimiento::with(['user:id,name,username', 'anuladoPor:id,name,username'])
             ->where('caja', $caja)
@@ -51,7 +52,7 @@ class CajaMovimientoController extends Controller
     }
 
     /**
-     * Reporte semanal de una caja: ingresos y gastos del rango, con su saldo.
+     * Reporte por fechas de una caja: ingresos y gastos del rango, con su saldo.
      * A diferencia de index(), no se acota a un solo tipo: el reporte es de ambos.
      */
     public function reporte(Request $request)
@@ -84,14 +85,10 @@ class CajaMovimientoController extends Controller
         $caja = mb_strtoupper((string) $request->input('caja'));
         abort_unless(in_array($caja, self::CAJAS, true), 422, 'Caja no válida');
         $this->autorizar($request, 'Ver', $caja);
+        $this->validarRango($request);
 
-        // Por defecto, la semana en curso (lunes a domingo).
-        $desde = $request->input('desde')
-            ? Carbon::parse($request->input('desde'))->startOfDay()
-            : now()->startOfWeek();
-        $hasta = $request->input('hasta')
-            ? Carbon::parse($request->input('hasta'))->endOfDay()
-            : now()->endOfWeek();
+        $desde = Carbon::parse($request->input('desde') ?: now()->toDateString())->startOfDay();
+        $hasta = Carbon::parse($request->input('hasta') ?: now()->toDateString())->endOfDay();
 
         $movimientos = CajaMovimiento::with('user:id,name,username')
             ->where('caja', $caja)
@@ -122,6 +119,14 @@ class CajaMovimientoController extends Controller
                 'saldo' => round($totalIngresos - $totalGastos, 2),
             ],
         ];
+    }
+
+    private function validarRango(Request $request): void
+    {
+        $request->validate([
+            'desde' => 'nullable|required_with:hasta|date_format:Y-m-d',
+            'hasta' => 'nullable|required_with:desde|date_format:Y-m-d|after_or_equal:desde',
+        ]);
     }
 
     private function nombreArchivo(array $datos, string $extension): string

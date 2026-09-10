@@ -139,6 +139,7 @@
 import { computed, getCurrentInstance, ref } from 'vue'
 import { nowBoliviaDateTimeInput } from '../../../addons/dateTime'
 import { imprimirRotuloSolicitudLaboratorio } from '../../../addons/solicitudLaboratorioRotuloPrint'
+import { imprimirSolicitudLaboratorio } from '../../../addons/solicitudLaboratorioPrint'
 
 const { proxy } = getCurrentInstance()
 const tableRef = ref(null)
@@ -206,16 +207,10 @@ function editar (row) {
   proxy.$router.push({ path: '/solicitudes-laboratorio/nueva', query: { id: row.id } })
 }
 async function imprimir (row) {
-  const ventana = window.open('', '_blank')
   try {
-    const response = await proxy.$axios.get(`solicitudes-laboratorio/${row.id}/pdf`, { responseType: 'blob' })
-    const url = URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }))
-    if (ventana) ventana.location.href = url
-    else window.open(url, '_blank')
-    setTimeout(() => URL.revokeObjectURL(url), 60000)
+    await imprimirSolicitudLaboratorio(proxy.$axios, row.id)
   } catch (error) {
-    ventana?.close()
-    proxy.$alert.error(error.response?.data?.message || 'No se pudo generar el PDF')
+    proxy.$alert.error(error.response?.data?.message || 'No se pudo abrir la impresión')
   }
 }
 async function imprimirRotulo (row) {

@@ -19,7 +19,7 @@ class InternacionItemController extends Controller
         ]);
 
         $internacion = Internacion::findOrFail($internacionId);
-        InternacionController::bloqueadaSiCerrada($internacion);
+        InternacionController::bloqueadaSiPagada($internacion);
 
         $item = InternacionItem::create([
             'internacion_id' => $internacionId,
@@ -44,7 +44,7 @@ class InternacionItemController extends Controller
         ]);
 
         $item = InternacionItem::findOrFail($id);
-        InternacionController::bloqueadaSiCerrada($item->internacion);
+        InternacionController::bloqueadaSiPagada($item->internacion);
         $item->update([
             'nombre' => $request->nombre,
             'cantidad' => $request->cantidad,
@@ -59,7 +59,7 @@ class InternacionItemController extends Controller
     {
         $this->req($request, 'Eliminar Internaciones');
         $item = InternacionItem::findOrFail($id);
-        InternacionController::bloqueadaSiCerrada($item->internacion);
+        InternacionController::bloqueadaSiPagada($item->internacion);
         $item->delete();
 
         return response()->json(['message' => 'Cargo eliminado']);

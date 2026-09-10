@@ -11,6 +11,7 @@ export const routePermissions = [
   { path: '/productos-farmacia', can: 'Ver Productos Farmacia' },
   { path: '/productos-por-vencer', can: 'Ver Productos por Vencer' },
   { path: '/productos-vencidos', can: 'Ver Productos Vencidos' },
+  { path: '/bajas', can: 'Ver Bajas' },
   { path: '/compras/crear', can: 'Crear Compras' },
   { path: '/compras', can: 'Ver Compras' },
   { path: '/proveedores', can: 'Ver Compras' },
@@ -27,7 +28,9 @@ export const routePermissions = [
   { path: '/doctores', can: 'Ver Doctores' },
 
   { path: '/laboratorio', can: 'Ver Productos' },
+  { path: '/reportes-laboratorio', can: 'Ver Solicitudes Laboratorio' },
   { path: '/reactivos', can: 'Ver Reactivos' },
+  { path: '/reactivos-kardex', can: 'Ver Reactivos' },
   { path: '/solicitudes-laboratorio/nueva', can: 'Crear Solicitudes Laboratorio' },
   { path: '/solicitudes-laboratorio', can: 'Ver Solicitudes Laboratorio' },
   { path: '/derivaciones', can: 'Ver Derivaciones' },

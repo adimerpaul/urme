@@ -152,6 +152,7 @@
                     <q-tooltip>Quitar prueba</q-tooltip>
                   </q-btn>
                 </div>
+                <div v-if="laboratorio.descripcion_html" class="q-pa-xs text-caption" v-html="laboratorio.descripcion_html" />
                 <div class="row q-col-gutter-xs q-mt-none">
                   <div v-for="dato in laboratorio.laboratorio_datos" :key="dato.id"
                        :class="compacto ? 'col-6 col-md-3' : 'col-12 col-md-6'">
@@ -417,6 +418,7 @@
 <script setup>
 import { computed, getCurrentInstance, ref } from 'vue'
 import { imprimirRotuloSolicitudLaboratorio } from '../../../addons/solicitudLaboratorioRotuloPrint'
+import { imprimirSolicitudLaboratorio } from '../../../addons/solicitudLaboratorioPrint'
 
 const { proxy } = getCurrentInstance()
 const pacientesOpciones = ref([])
@@ -793,7 +795,6 @@ function continuarGuardado () {
 async function guardarConfirmado () {
   confirmandoGuardado.value = false
   saving.value = true
-  const ventanaImpresion = window.open('', '_blank')
   try {
     const resultados = seleccionados.value.flatMap(laboratorio =>
       (laboratorio.laboratorio_datos || []).map(dato => ({
@@ -809,22 +810,18 @@ async function guardarConfirmado () {
     const { data } = editId.value
       ? await proxy.$axios.put(`solicitudes-laboratorio/${editId.value}`, payload)
       : await proxy.$axios.post('solicitudes-laboratorio', payload)
-    await abrirPdf(data.id, ventanaImpresion)
     proxy.$alert.success(`Laboratorio ${data.codigo_solicitud} ${editId.value ? 'actualizado' : 'creado'}`)
+    try {
+      await imprimirSolicitudLaboratorio(proxy.$axios, data.id)
+    } catch {
+      proxy.$alert.warning('La solicitud está guardada. Puede reintentar la impresión desde la lista de solicitudes.')
+    }
     proxy.$router.push('/solicitudes-laboratorio')
   } catch (error) {
-    ventanaImpresion?.close()
     proxy.$alert.error(error.response?.data?.message || firstValidationError(error) || 'No se pudo crear el laboratorio')
   } finally {
     saving.value = false
   }
-}
-async function abrirPdf (id, ventana) {
-  const response = await proxy.$axios.get(`solicitudes-laboratorio/${id}/pdf`, { responseType: 'blob' })
-  const url = URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }))
-  if (ventana) ventana.location.href = url
-  else window.open(url, '_blank')
-  setTimeout(() => URL.revokeObjectURL(url), 60000)
 }
 async function imprimirRotulo () {
   try {

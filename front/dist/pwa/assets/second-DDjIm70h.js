@@ -1,1 +1,0 @@
-import{G as e,ut as t,yt as n,z as r}from"./QSpinner-CcU-XJjC.js";import{t as i}from"./QBtn-Hudoozpn.js";import{t as a}from"./QPage-DJEuNcOT.js";var o={__name:`second`,setup(o){return(o,s)=>(t(),r(a,{class:`flex flex-center`},{default:n(()=>[e(i,{color:`secondary`,to:`/`,label:`Go to Index Page`,"no-caps":``})]),_:1}))}};export{o as default};

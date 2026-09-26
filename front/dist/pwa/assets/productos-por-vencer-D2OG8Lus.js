@@ -1,1 +1,0 @@
-import{R as e,ut as t}from"./QSpinner-g8DV5F1Y.js";import{t as n}from"./ProductosVencimiento-DV6CJSnM.js";var r={__name:`index`,setup(r){return(r,i)=>(t(),e(n,{tipo:`por-vencer`}))}};export{r as default};

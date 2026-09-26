@@ -19,6 +19,7 @@ export const routePermissions = [
   { path: '/ventas-farmacia/crear', can: 'Crear Ventas' },
   { path: '/ventas-farmacia', can: 'Ver Ventas' },
   { path: '/ventas-clientes', can: 'Ver Ventas Clientes' },
+  { path: '/compras-pacientes', can: 'Ver Compras Pacientes' },
   { path: '/ventas/crear', can: 'Crear Ventas' },
   { path: '/ventas', can: 'Ver Ventas' },
   { path: '/cierres-caja', can: 'Ver Cierres Caja' },

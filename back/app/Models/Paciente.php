@@ -50,6 +50,11 @@ class Paciente extends Model implements AuditableContract
         return $this->belongsTo(Seguro::class);
     }
 
+    public function ventas()
+    {
+        return $this->hasMany(Venta::class);
+    }
+
     public function latestInternacion()
     {
         return $this->hasOne(Internacion::class)->latestOfMany('id');

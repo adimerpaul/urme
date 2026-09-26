@@ -10,6 +10,7 @@ use App\Http\Controllers\DoctorController;
 use App\Http\Controllers\InternacionController;
 use App\Http\Controllers\InternacionItemController;
 use App\Http\Controllers\LaboratorioReporteController;
+use App\Http\Controllers\PacienteCompraController;
 use App\Http\Controllers\PacienteController;
 use App\Http\Controllers\ProductoController;
 use App\Http\Controllers\ProductoFarmaciaController;
@@ -216,6 +217,10 @@ Route::middleware('auth:sanctum')->group(function () {
     // Ventas por cliente (para facturar): no expone el listado general
     Route::get('/ventas-clientes/clientes', [VentaClienteController::class, 'clientes']);
     Route::get('/ventas-clientes', [VentaClienteController::class, 'index']);
+
+    // Compras por paciente: historial completo y total acumulado de un paciente
+    Route::get('/compras-pacientes/pacientes', [PacienteCompraController::class, 'pacientes']);
+    Route::get('/compras-pacientes/{pacienteId}', [PacienteCompraController::class, 'show']);
 
     // Ventas
     Route::get('/ventas', [VentaController::class, 'index']);

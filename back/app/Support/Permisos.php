@@ -45,7 +45,7 @@ class Permisos
         ],
         'Ventas' => [
             'Ver Ventas', 'Ver Detalle Ventas', 'Crear Ventas', 'Editar Ventas', 'Eliminar Ventas',
-            'Ver Montos Caja', 'Ver Ventas Clientes',
+            'Ver Montos Caja', 'Ver Ventas Clientes', 'Ver Compras Pacientes',
         ],
         'Caja' => [
             'Ver Cierres Caja', 'Cerrar Caja', 'Validar Cierres Caja',
@@ -145,6 +145,7 @@ class Permisos
         'Eliminar Ventas' => 'Anular ventas registradas.',
         'Ver Montos Caja' => 'Ver los importes de dinero en las pantallas de caja. Sin este permiso los montos se ocultan.',
         'Ver Ventas Clientes' => 'Buscar un cliente y ver el historial de lo que compró por fechas (para facturar). No da acceso al listado general de ventas.',
+        'Ver Compras Pacientes' => 'Buscar un paciente y ver todas sus compras con el total acumulado. No da acceso al listado general de ventas.',
 
         // Caja
         'Ver Cierres Caja' => 'Consultar los cierres de caja realizados y el estado del turno actual.',

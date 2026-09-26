@@ -181,6 +181,7 @@ const menuSections = [
       { title: 'Actualizar productos', icon: 'edit_note', link: '/productos' },
       { title: 'Cierres de caja', icon: 'lock_clock', link: '/cierres-caja' },
       { title: 'Ventas de clientes', icon: 'receipt_long', link: '/ventas-clientes' },
+      { title: 'Compras por paciente', icon: 'manage_search', link: '/compras-pacientes' },
     ],
   },
   {

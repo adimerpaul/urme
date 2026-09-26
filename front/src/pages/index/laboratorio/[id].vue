@@ -113,7 +113,10 @@
                 </span>
                 <span v-else class="text-grey-6">TEXTO LIBRE</span>
               </td>
-              <td class="lab-rangos">{{ dato.rango_referencia || '—' }}</td>
+              <td class="lab-rangos">
+                <div v-if="dato.rango_referencia" class="html-rango" v-html="dato.rango_referencia_html" />
+                <template v-else>—</template>
+              </td>
               <td>
                 <code v-if="dato.formula" class="text-deep-purple">{{ dato.formula.formula }}</code>
                 <span v-else class="text-grey-6">INGRESO MANUAL</span>
@@ -219,8 +222,10 @@
                        hint="Ej.: SUERO, PLASMA, ORINA" />
             </div>
             <div class="col-12">
-              <q-input v-model="datoForm.rango_referencia" v-uppercase dense outlined type="textarea" rows="2"
-                       label="Rangos de referencia" hint="Ej.: HOMBRES: 13–17 | MUJERES: 12–15" />
+              <div class="text-caption text-grey-7 q-mb-xs">Rangos de referencia</div>
+              <q-editor v-model="datoForm.rango_referencia" min-height="110px" max-height="260px" dense
+                        placeholder="Ej.: HOMBRES: 13–17 | MUJERES: 12–15"
+                        :toolbar="[['bold', 'italic', 'underline', 'strike'], ['subscript', 'superscript'], ['left', 'center', 'right', 'justify'], ['unordered', 'ordered'], ['removeFormat'], ['undo', 'redo']]" />
             </div>
 
             <!-- Lista de valores posibles -->
@@ -491,6 +496,8 @@ function nuevoDato () {
 function editarDato (dato) {
   datoForm.value = {
     ...dato,
+    // El editor trabaja con HTML: los rangos antiguos en texto plano llegan convertidos.
+    rango_referencia: dato.rango_referencia_html || '',
     // El backend devuelve objetos {id, valor}; el formulario trabaja con texto.
     opciones: (dato.opciones || []).map(o => o.valor),
   }

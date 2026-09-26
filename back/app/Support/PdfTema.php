@@ -103,6 +103,25 @@ class PdfTema
         return $esLaboratorio ? 'matraz' : 'etiqueta';
     }
 
+    /**
+     * Icono del PDF para un tipo de producto padre. El padre guarda un ícono de
+     * Material (el que se ve en pantalla); si no tiene equivalente aquí, se
+     * busca por el nombre como con los tipos.
+     */
+    public static function iconoDePadre(?string $icono, ?string $nombre, bool $esLaboratorio = false): string
+    {
+        $equivalentes = [
+            'science' => 'matraz', 'biotech' => 'matraz', 'bloodtype' => 'matraz',
+            'medication' => 'pastilla', 'local_pharmacy' => 'pastilla', 'vaccines' => 'pastilla',
+            'medical_services' => 'maletin', 'health_and_safety' => 'maletin', 'healing' => 'maletin',
+            'local_hospital' => 'cama', 'emergency' => 'cama',
+            'monitor_heart' => 'escaner', 'visibility' => 'escaner',
+            'airport_shuttle' => 'ambulancia', 'child_care' => 'bebe',
+        ];
+
+        return $equivalentes[(string) $icono] ?? self::iconoDeTipo($nombre, $esLaboratorio);
+    }
+
     /** Convierte el color guardado (nombre de Quasar o hex) en hexadecimal. */
     public static function color(?string $color, string $defecto = self::AZUL): string
     {

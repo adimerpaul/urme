@@ -1,0 +1,1 @@
+import{ut as e,z as t}from"./QSpinner-CcU-XJjC.js";import n from"./crear-BCj4-hVf.js";var r={__name:`crear`,setup(r){return(r,i)=>(e(),t(n,{"solo-farmacia":``}))}};export{r as default};

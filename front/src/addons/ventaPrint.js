@@ -111,6 +111,8 @@ function buildHtml (venta) {
   const cliente = venta.paciente?.nombre_completo || venta.cliente ||
     (egreso ? 'GASTO DE CAJA' : 'SIN NOMBRE')
   const detalles = venta.detalles || []
+  // La API manda el doctor como relación ({ id, nombre }); se acepta también texto plano.
+  const doctor = typeof venta.doctor === 'string' ? venta.doctor : venta.doctor?.nombre
 
   const filas = detalles.length
     ? detalles.map(det => {
@@ -152,7 +154,7 @@ function buildHtml (venta) {
             <span class="bold">Cajero:</span> ${esc(venta.user?.name || '—')}<br>
             <span class="bold">Fecha:</span> ${esc(fecha)}<br>
             <span class="bold">Cliente:</span> ${esc(cliente)}<br>
-            ${venta.doctor ? `<span class="bold">Doctor:</span> ${esc(venta.doctor)}<br>` : ''}
+            ${doctor ? `<span class="bold">Doctor:</span> ${esc(doctor)}<br>` : ''}
             <span class="bold">Pago:</span> ${esc(venta.tipo_pago || '—')}
           </td>
           <td style="width:35%">

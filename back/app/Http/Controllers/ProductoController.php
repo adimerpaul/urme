@@ -9,6 +9,7 @@ use App\Models\CompraDetalle;
 use App\Models\Fabricante;
 use App\Models\Producto;
 use App\Models\TipoProducto;
+use App\Models\TipoProductoPadre;
 use App\Models\Unidad;
 use App\Services\ProductoHistorial;
 use App\Services\StockLote;
@@ -29,12 +30,15 @@ class ProductoController extends Controller
         $qFabricantes = $request->input('q_fab', '');
         $qUnidades = $request->input('q_unid', '');
         $qTipos = $request->input('q_tipo', '');
+        $qPadres = $request->input('q_padre', '');
+        $tipoProductoPadreId = $request->input('tipo_producto_padre_id', '');
         $tipoProductoId = $request->input('tipo_producto_id', '');
         $perPage = (int) $request->input('per_page', 15);
         $pageProductos = (int) $request->input('page_prod', 1);
         $pageFabrican = (int) $request->input('page_fab', 1);
         $pageUnidades = (int) $request->input('page_unid', 1);
         $pageTipos = (int) $request->input('page_tipo', 1);
+        $pagePadres = (int) $request->input('page_padre', 1);
 
         $productosQuery = Producto::with(['fabricante:id,nombre', 'unidad:id,nombre,abreviatura', 'tipoProducto:id,nombre,color,es_laboratorio'])
             ->withSum(['compraDetalles as stock' => function ($q) {
@@ -68,9 +72,19 @@ class ProductoController extends Controller
             });
         }
 
-        $tiposQuery = TipoProducto::orderBy('nombre');
+        $tiposQuery = TipoProducto::with('padre:id,nombre,color,icono')
+            ->withCount('productos')
+            ->orderBy('nombre');
         if ($qTipos) {
             $tiposQuery->where('nombre', 'like', "%$qTipos%");
+        }
+        if ($tipoProductoPadreId) {
+            $tiposQuery->where('tipo_producto_padre_id', $tipoProductoPadreId);
+        }
+
+        $padresQuery = TipoProductoPadre::withCount('tipos')->orderBy('orden')->orderBy('nombre');
+        if ($qPadres) {
+            $padresQuery->where('nombre', 'like', "%$qPadres%");
         }
 
         return response()->json([
@@ -79,14 +93,20 @@ class ProductoController extends Controller
                 'fabricantes' => Fabricante::count(),
                 'unidades' => Unidad::count(),
                 'tipos' => TipoProducto::count(),
+                'padres' => TipoProductoPadre::count(),
             ],
             'productos' => $productosQuery->paginate($perPage, ['*'], 'page_prod', $pageProductos),
             'fabricantes' => $fabricantesQuery->paginate($perPage, ['*'], 'page_fab', $pageFabrican),
             'unidades' => $unidadesQuery->paginate($perPage, ['*'], 'page_unid', $pageUnidades),
             'tipos' => $tiposQuery->paginate($perPage, ['*'], 'page_tipo', $pageTipos),
+            'padres' => $padresQuery->paginate($perPage, ['*'], 'page_padre', $pagePadres),
             'allFabricantes' => Fabricante::orderBy('nombre')->get(['id', 'nombre', 'pais']),
             'allUnidades' => Unidad::orderBy('nombre')->get(['id', 'nombre', 'abreviatura']),
-            'allTipoProductos' => TipoProducto::orderBy('nombre')->get(['id', 'nombre', 'color']),
+            'allTipoProductos' => TipoProducto::with('padre:id,nombre,color,icono')
+                ->orderBy('nombre')
+                ->get(['id', 'tipo_producto_padre_id', 'nombre', 'color']),
+            'allTipoProductoPadres' => TipoProductoPadre::orderBy('orden')->orderBy('nombre')
+                ->get(['id', 'nombre', 'color', 'icono', 'es_laboratorio']),
         ]);
     }
 
@@ -99,6 +119,7 @@ class ProductoController extends Controller
             'fabricantes' => Fabricante::count(),
             'unidades' => Unidad::count(),
             'tipos' => TipoProducto::count(),
+            'padres' => TipoProductoPadre::count(),
         ]);
     }
 
@@ -261,7 +282,11 @@ class ProductoController extends Controller
         $q = $request->input('q', '');
         $perPage = $request->input('per_page');
 
-        $query = TipoProducto::withCount('productos');
+        $query = TipoProducto::with('padre:id,nombre,color,icono')->withCount('productos');
+
+        if ($request->filled('tipo_producto_padre_id')) {
+            $query->where('tipo_producto_padre_id', $request->input('tipo_producto_padre_id'));
+        }
 
         // ?laboratorio=1 devuelve solo las áreas de laboratorio; ?laboratorio=0
         // solo el resto. Sin el parámetro se devuelve todo, como antes.
@@ -286,12 +311,14 @@ class ProductoController extends Controller
     {
         $this->req($request, 'Crear Productos');
         $request->validate([
+            'tipo_producto_padre_id' => 'nullable|exists:tipo_producto_padres,id',
             'nombre' => 'required|string|max:255',
             'color' => 'nullable|string|max:30',
             'es_laboratorio' => 'nullable|boolean',
             'orden' => 'nullable|integer|min:0',
         ]);
         $tipo = TipoProducto::create([
+            'tipo_producto_padre_id' => $request->input('tipo_producto_padre_id'),
             'nombre' => mb_strtoupper($request->nombre),
             'color' => $request->color ?: 'primary',
             'es_laboratorio' => $request->boolean('es_laboratorio'),
@@ -299,13 +326,14 @@ class ProductoController extends Controller
             'orden' => (int) $request->input('orden', TipoProducto::max('orden') + 1),
         ]);
 
-        return response()->json($tipo, 201);
+        return response()->json($tipo->load('padre:id,nombre,color,icono'), 201);
     }
 
     public function updateTipoProducto(Request $request, $id)
     {
         $this->req($request, 'Editar Productos');
         $request->validate([
+            'tipo_producto_padre_id' => 'nullable|exists:tipo_producto_padres,id',
             'nombre' => 'required|string|max:255',
             'color' => 'nullable|string|max:30',
             'es_laboratorio' => 'nullable|boolean',
@@ -313,6 +341,10 @@ class ProductoController extends Controller
         ]);
         $tipo = TipoProducto::findOrFail($id);
         $tipo->update([
+            // Sin el campo en la petición (p. ej. pantalla de laboratorio) se conserva el padre.
+            'tipo_producto_padre_id' => $request->has('tipo_producto_padre_id')
+                ? $request->input('tipo_producto_padre_id')
+                : $tipo->tipo_producto_padre_id,
             'nombre' => mb_strtoupper($request->nombre),
             'color' => $request->color ?: 'primary',
             'es_laboratorio' => $request->has('es_laboratorio')
@@ -321,7 +353,7 @@ class ProductoController extends Controller
             'orden' => (int) $request->input('orden', $tipo->orden),
         ]);
 
-        return response()->json($tipo);
+        return response()->json($tipo->load('padre:id,nombre,color,icono'));
     }
 
     public function destroyTipoProducto(Request $request, $id)
@@ -339,6 +371,91 @@ class ProductoController extends Controller
         $tipo->delete();
 
         return response()->json(['message' => 'Tipo de producto eliminado']);
+    }
+
+    // ── Catálogos - Tipos de producto padre ─────────────────────────
+
+    public function tiposProductoPadre(Request $request)
+    {
+        $this->req($request, 'Ver Productos');
+        $q = $request->input('q', '');
+        $perPage = $request->input('per_page');
+
+        $query = TipoProductoPadre::withCount('tipos')->orderBy('orden')->orderBy('nombre');
+
+        if ($q) {
+            $query->where('nombre', 'like', "%$q%");
+        }
+
+        if ($perPage) {
+            return response()->json($query->paginate((int) $perPage));
+        }
+
+        return response()->json($query->get());
+    }
+
+    public function storeTipoProductoPadre(Request $request)
+    {
+        $this->req($request, 'Crear Productos');
+        $datos = $this->validarTipoProductoPadre($request);
+
+        $padre = TipoProductoPadre::create([
+            ...$datos,
+            'orden' => (int) $request->input('orden', TipoProductoPadre::max('orden') + 1),
+        ]);
+
+        return response()->json($padre, 201);
+    }
+
+    public function updateTipoProductoPadre(Request $request, $id)
+    {
+        $this->req($request, 'Editar Productos');
+        $datos = $this->validarTipoProductoPadre($request);
+
+        $padre = TipoProductoPadre::findOrFail($id);
+        $padre->update([
+            ...$datos,
+            'orden' => (int) $request->input('orden', $padre->orden),
+        ]);
+
+        // Los hijos heredan la marca de laboratorio del padre.
+        $padre->tipos()->update(['es_laboratorio' => $padre->es_laboratorio]);
+
+        return response()->json($padre->loadCount('tipos'));
+    }
+
+    public function destroyTipoProductoPadre(Request $request, $id)
+    {
+        $this->req($request, 'Eliminar Productos');
+        $padre = TipoProductoPadre::withCount('tipos')->findOrFail($id);
+
+        if ($padre->tipos_count > 0) {
+            return response()->json([
+                'message' => "No se puede eliminar: {$padre->nombre} tiene {$padre->tipos_count} tipo(s) de producto asignado(s).",
+            ], 422);
+        }
+
+        $padre->delete();
+
+        return response()->json(['message' => 'Tipo de producto padre eliminado']);
+    }
+
+    private function validarTipoProductoPadre(Request $request): array
+    {
+        $request->validate([
+            'nombre' => 'required|string|max:255',
+            'color' => 'nullable|string|max:30',
+            'icono' => 'nullable|string|max:60',
+            'es_laboratorio' => 'nullable|boolean',
+            'orden' => 'nullable|integer|min:0',
+        ]);
+
+        return [
+            'nombre' => mb_strtoupper($request->nombre),
+            'color' => $request->color ?: 'primary',
+            'icono' => $request->icono ?: 'category',
+            'es_laboratorio' => $request->boolean('es_laboratorio'),
+        ];
     }
 
     // ── Productos ─────────────────────────────────────────────────

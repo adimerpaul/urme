@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\DescripcionHtml;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use OwenIt\Auditing\Auditable as AuditableTrait;
@@ -29,6 +30,13 @@ class ProductoLaboratorioDato extends Model implements AuditableContract
     protected $hidden = ['created_at', 'updated_at', 'deleted_at'];
 
     protected $casts = ['visible' => 'boolean'];
+
+    protected $appends = ['rango_referencia_html'];
+
+    public function getRangoReferenciaHtmlAttribute(): string
+    {
+        return DescripcionHtml::mostrar($this->rango_referencia);
+    }
 
     public function producto()
     {

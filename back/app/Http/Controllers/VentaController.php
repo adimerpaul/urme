@@ -303,7 +303,8 @@ class VentaController extends Controller
             return $venta;
         });
 
-        return response()->json($venta->load(['user:id,name', 'detalles']), 201);
+        // Mismas relaciones que show(): la venta recién creada se imprime con este JSON.
+        return response()->json($venta->load(['paciente:id,nombre_completo,ci', 'doctor:id,nombre', 'seguro:id,nombre', 'user:id,name', 'detalles.producto:id,nombre,codigo']), 201);
     }
 
     public function completar(Request $request, $id)

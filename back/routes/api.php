@@ -102,6 +102,12 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/tipo-productos/{id}', [ProductoController::class, 'updateTipoProducto']);
     Route::delete('/tipo-productos/{id}', [ProductoController::class, 'destroyTipoProducto']);
 
+    // Catálogos - Tipos de producto padre
+    Route::get('/tipo-producto-padres', [ProductoController::class, 'tiposProductoPadre']);
+    Route::post('/tipo-producto-padres', [ProductoController::class, 'storeTipoProductoPadre']);
+    Route::put('/tipo-producto-padres/{id}', [ProductoController::class, 'updateTipoProductoPadre']);
+    Route::delete('/tipo-producto-padres/{id}', [ProductoController::class, 'destroyTipoProductoPadre']);
+
     // Productos
     Route::get('/productos/export-pdf', [ProductoController::class, 'exportProductosPdf']);
     Route::get('/productos/export-excel', [ProductoController::class, 'exportProductosExcel']);
@@ -170,6 +176,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/pacientes', [PacienteController::class, 'index']);
     Route::get('/pacientes/{id}/internaciones', [PacienteController::class, 'internaciones']);
     Route::get('/pacientes/{id}/estado-cuenta-pdf', [PacienteController::class, 'estadoCuentaPdf']);
+    Route::get('/pacientes/{id}/estado-cuenta-categoria-pdf', [PacienteController::class, 'estadoCuentaCategoriaPdf']);
     Route::post('/pacientes/{id}/cobrar-todo', [PacienteController::class, 'cobrarTodo']);
     Route::get('/pacientes/{id}', [PacienteController::class, 'show']);
     Route::post('/pacientes', [PacienteController::class, 'store']);

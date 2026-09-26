@@ -165,13 +165,13 @@
                               :label="dato.nombre" :suffix="dato.unidad || undefined"
                               :options="dato.opciones.map(o => o.valor)"
                               @update:model-value="valor => valores[dato.id] = valor">
-                      <q-tooltip v-if="dato.rango_referencia">Referencia: {{ dato.rango_referencia }}</q-tooltip>
+                      <q-tooltip v-if="dato.rango_referencia"><div>Referencia:</div><div class="html-rango" v-html="dato.rango_referencia_html" /></q-tooltip>
                     </q-select>
                     <q-input v-else-if="!dato.formula" :model-value="valores[dato.id] || ''"
                              dense outlined :label="dato.nombre" hide-bottom-space
                              :suffix="dato.unidad || undefined"
                              @update:model-value="valor => valores[dato.id] = valor">
-                      <q-tooltip v-if="dato.rango_referencia">Referencia: {{ dato.rango_referencia }}</q-tooltip>
+                      <q-tooltip v-if="dato.rango_referencia"><div>Referencia:</div><div class="html-rango" v-html="dato.rango_referencia_html" /></q-tooltip>
                     </q-input>
                     <q-input v-else :model-value="calcularDato(laboratorio, dato)"
                              dense outlined readonly color="deep-purple" hide-bottom-space

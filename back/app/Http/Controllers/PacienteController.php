@@ -6,8 +6,10 @@ use App\Models\Internacion;
 use App\Models\Paciente;
 use App\Models\Venta;
 use App\Services\CobroInternacion;
+use App\Support\PdfTema;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 class PacienteController extends Controller
@@ -169,6 +171,92 @@ class PacienteController extends Controller
         ])->setPaper('letter', 'portrait');
 
         return $pdf->stream('estado_cuenta_'.$paciente->id.'_'.now()->format('Ymd_His').'.pdf');
+    }
+
+    /**
+     * Estado de cuenta agrupado por categoría (tipo de producto padre): junta los
+     * cargos de internaciones y ventas pendientes en LABORATORIO, FARMACIA, etc.
+     */
+    public function estadoCuentaCategoriaPdf(Request $request, $id)
+    {
+        $this->req($request, ['Ver Pacientes', 'Ver Ventas']);
+
+        $paciente = Paciente::with('seguro:id,nombre')->findOrFail($id);
+        $producto = fn (string $rel) => [
+            $rel.'.producto:id,nombre,tipo_producto_id',
+            $rel.'.producto.tipoProducto:id,tipo_producto_padre_id,nombre,color,es_laboratorio',
+            $rel.'.producto.tipoProducto.padre:id,nombre,color,icono,es_laboratorio,orden',
+        ];
+
+        $internaciones = $this->internacionesPorCobrar($paciente->id)
+            ->with($producto('items'))
+            ->get();
+
+        $ventas = $this->ventasPendientes($paciente->id)
+            ->with(['detalles:id,venta_id,producto_id,nombre,lote,precio,cantidad,total', ...$producto('detalles')])
+            ->orderBy('fecha_hora')
+            ->get();
+
+        $cargos = collect();
+        foreach ($internaciones as $internacion) {
+            foreach ($internacion->items as $item) {
+                $cargos->push($this->cargo($item, 'Internación Nº '.str_pad($internacion->id, 6, '0', STR_PAD_LEFT), $internacion->fecha_ingreso ? Carbon::parse($internacion->fecha_ingreso)->format('d/m/Y') : null));
+            }
+        }
+        foreach ($ventas as $venta) {
+            foreach ($venta->detalles as $detalle) {
+                $cargos->push($this->cargo($detalle, 'Venta Nº '.str_pad($venta->id, 6, '0', STR_PAD_LEFT), optional($venta->fecha_hora)->format('d/m/Y'), $detalle->lote));
+            }
+        }
+
+        $grupos = $cargos
+            ->groupBy(fn ($cargo) => $cargo['padre']?->id ?? 0)
+            ->map(function ($items) {
+                $padre = $items->first()['padre'];
+
+                return [
+                    'nombre' => $padre?->nombre ?? 'SIN CATEGORÍA',
+                    'color' => PdfTema::color($padre?->color, '#607D8B'),
+                    'icono' => $padre
+                        ? PdfTema::iconoDePadre($padre->icono, $padre->nombre, (bool) $padre->es_laboratorio)
+                        : 'etiqueta',
+                    'orden' => $padre?->orden ?? PHP_INT_MAX,
+                    'items' => $items->sortBy([['tipo', 'asc'], ['nombre', 'asc']])->values(),
+                    'cantidad' => $items->count(),
+                    'subtotal' => round((float) $items->sum('total'), 2),
+                ];
+            })
+            ->sortBy([['orden', 'asc'], ['nombre', 'asc']])
+            ->values();
+
+        $pdf = Pdf::loadView('reportes.estado-cuenta-categoria', [
+            'paciente' => $paciente,
+            'grupos' => $grupos,
+            'internaciones' => $internaciones->count(),
+            'ventas' => $ventas->count(),
+            'total' => round((float) $cargos->sum('total'), 2),
+        ])->setPaper('letter', 'portrait');
+
+        return $pdf->stream('estado_cuenta_categoria_'.$paciente->id.'_'.now()->format('Ymd_His').'.pdf');
+    }
+
+    /** Fila del estado de cuenta por categoría, venga de una internación o de una venta. */
+    private function cargo($fila, string $origen, ?string $fecha, ?string $lote = null): array
+    {
+        $tipo = $fila->producto?->tipoProducto;
+
+        return [
+            'nombre' => $fila->nombre,
+            'lote' => $lote,
+            'tipo' => $tipo?->nombre,
+            'tipo_color' => $tipo ? PdfTema::color($tipo->color) : null,
+            'padre' => $tipo?->padre,
+            'origen' => $origen,
+            'fecha' => $fecha,
+            'cantidad' => (float) $fila->cantidad,
+            'precio' => (float) $fila->precio,
+            'total' => (float) $fila->total,
+        ];
     }
 
     /** Internaciones que todavía no se cobraron. */

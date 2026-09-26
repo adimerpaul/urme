@@ -56,7 +56,7 @@
                 <tbody><tr v-for="resultado in laboratorio.resultados" :key="resultado.nombre">
                   <td>{{ resultado.nombre }}</td>
                   <td class="text-weight-bold">{{ resultado.valor || '-' }} {{ resultado.unidad || '' }}</td>
-                  <td>{{ resultado.rango_referencia || '-' }}</td>
+                  <td><div v-if="resultado.rango_referencia" class="html-rango" v-html="resultado.rango_referencia_html" /><template v-else>-</template></td>
                   <td>{{ resultado.metodo || '-' }}</td>
                   <td>{{ resultado.muestra || '-' }}</td>
                 </tr></tbody>

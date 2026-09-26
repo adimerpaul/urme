@@ -316,6 +316,7 @@ class SolicitudeController extends Controller
                         'valor' => $resultado->valor,
                         'unidad' => $resultado->unidad,
                         'rango_referencia' => $resultado->rango_referencia,
+                        'rango_referencia_html' => $resultado->rango_referencia_html,
                         'metodo' => $resultado->metodo,
                         'muestra' => $resultado->muestra,
                     ]),

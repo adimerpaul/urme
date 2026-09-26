@@ -21,7 +21,8 @@
 
         /* ── Membrete ─────────────────────────────────────────── */
         .head td { vertical-align: middle; }
-        .mark { width: 30px; }
+        .mark { width: 76px; padding-right: 8px; }
+        .logo { width: 72px; height: auto; display: block; }
         .mark-box { width: 26px; height: 26px; background: {{ $azul }}; text-align: center; line-height: 26px; }
         .brand { font-size: 13px; font-weight: bold; color: {{ $azul }}; letter-spacing: 0.6px; }
         .brand-sub { font-size: 7.2px; color: #64748b; }
@@ -82,7 +83,7 @@
     {{-- ── Membrete ────────────────────────────────────────────── --}}
     <table class="head">
         <tr>
-            <td class="mark"><div class="mark-box">{!! PdfTema::icono('cruz', '#ffffff', 16) !!}</div></td>
+            <td class="mark"><img class="logo" src="{{ public_path('images/logo-clinica-urme.png') }}" alt="Clínica URME"></td>
             <td>
                 <div class="brand">CLÍNICA URME</div>
                 <div class="brand-sub">Calle Cochabamba entre Soria Galvarro y 6 de Octubre · Oruro · Cel. 70431083</div>

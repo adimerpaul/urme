@@ -13,28 +13,34 @@
 
       <!-- Tarjetas resumen -->
       <div class="row q-col-gutter-xs q-mb-xs">
-        <div class="col-3">
+        <div class="col">
           <q-card flat bordered class="text-center q-pa-xs">
             <div class="text-caption text-grey-6">Productos</div>
             <div class="text-h6 text-teal text-weight-bold">{{ resumen.productos }}</div>
           </q-card>
         </div>
-        <div class="col-3">
+        <div class="col">
           <q-card flat bordered class="text-center q-pa-xs">
             <div class="text-caption text-grey-6">Fabricantes</div>
             <div class="text-h6 text-deep-orange text-weight-bold">{{ resumen.fabricantes }}</div>
           </q-card>
         </div>
-        <div class="col-3">
+        <div class="col">
           <q-card flat bordered class="text-center q-pa-xs">
             <div class="text-caption text-grey-6">Unidades</div>
             <div class="text-h6 text-purple text-weight-bold">{{ resumen.unidades }}</div>
           </q-card>
         </div>
-        <div class="col-3">
+        <div class="col">
           <q-card flat bordered class="text-center q-pa-xs">
             <div class="text-caption text-grey-6">Tipos</div>
             <div class="text-h6 text-indigo text-weight-bold">{{ resumen.tipos }}</div>
+          </q-card>
+        </div>
+        <div class="col">
+          <q-card flat bordered class="text-center q-pa-xs">
+            <div class="text-caption text-grey-6">Tipos padre</div>
+            <div class="text-h6 text-deep-purple text-weight-bold">{{ resumen.padres }}</div>
           </q-card>
         </div>
       </div>
@@ -45,6 +51,7 @@
         <q-tab name="productos"   icon="medication"  label="Productos" no-caps />
         <q-tab name="fabricantes" icon="factory"     label="Fabricantes" no-caps />
         <q-tab name="unidades"    icon="straighten"  label="Unidades" no-caps />
+        <q-tab name="padres"      icon="account_tree" label="Tipos padre" no-caps />
         <q-tab name="tipos"       icon="category"    label="Tipos de producto" no-caps />
       </q-tabs>
       <q-separator class="q-mb-xs" />
@@ -60,9 +67,12 @@
             <template v-slot:option="scope">
               <q-item v-bind="scope.itemProps">
                 <q-item-section avatar>
-                  <q-badge :color="scope.opt.color || 'primary'" style="width:16px;height:16px" />
+                  <q-badge v-bind="colorAttrs(scope.opt.color)" style="width:16px;height:16px" />
                 </q-item-section>
-                <q-item-section>{{ scope.opt.nombre }}</q-item-section>
+                <q-item-section>
+                  <q-item-label>{{ scope.opt.nombre }}</q-item-label>
+                  <q-item-label v-if="scope.opt.padre" caption>{{ scope.opt.padre.nombre }}</q-item-label>
+                </q-item-section>
               </q-item>
             </template>
           </q-select>
@@ -125,7 +135,7 @@
                 </td>
                 <td>{{ row.nombre }}</td>
                 <td>
-                  <q-badge v-if="row.tipo_producto" :color="row.tipo_producto.color || 'primary'">
+                  <q-badge v-if="row.tipo_producto" v-bind="colorAttrs(row.tipo_producto.color)">
                     {{ row.tipo_producto.nombre }}
                   </q-badge>
                   <span v-else>—</span>
@@ -300,11 +310,110 @@
         </div>
       </div>
 
+      <!-- ══ TAB TIPOS DE PRODUCTO PADRE ═══════════════════════════ -->
+      <div v-show="tab === 'padres'">
+        <div class="row items-center q-gutter-xs q-mb-xs">
+          <span class="text-subtitle2 text-grey-7">Tipos de producto padre (agrupan tipos de producto)</span>
+          <q-space />
+          <q-input v-model="filterPadre" label="Buscar" dense outlined clearable
+                   style="width:160px" @update:model-value="onFilterPadre">
+            <template v-slot:append><q-icon name="search" /></template>
+          </q-input>
+          <q-btn v-if="canCrear" color="positive" label="Nuevo" icon="add_circle_outline"
+                 no-caps dense @click="padreNew" />
+        </div>
+
+        <div class="tabla-wrap">
+          <q-markup-table dense flat bordered separator="cell" class="tabla-fija full-width">
+            <thead>
+              <tr class="bg-grey-2">
+                <th class="text-left" style="width:64px"></th>
+                <th class="text-left">Nombre</th>
+                <th class="text-left">Vista</th>
+                <th class="text-center" style="width:100px">Laboratorio</th>
+                <th class="text-right" style="width:70px">Orden</th>
+                <th class="text-right" style="width:90px">Tipos</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-if="!padres.length && !loadingTipo">
+                <td colspan="6" class="text-center text-grey-5 q-pa-md">Sin datos</td>
+              </tr>
+              <tr v-for="row in padres" :key="row.id">
+                <td class="q-pa-xs">
+                  <q-btn-dropdown
+                    v-if="canEditar || canEliminar || canVer"
+                    label="Opciones"
+                    no-caps
+                    size="10px"
+                    dense
+                    color="primary"
+                  >
+                    <q-list>
+                      <q-item clickable v-close-popup @click="padreVerTipos(row)">
+                        <q-item-section avatar><q-icon name="category" color="indigo" /></q-item-section>
+                        <q-item-section><q-item-label>Ver tipos</q-item-label></q-item-section>
+                      </q-item>
+                      <q-item v-if="canEditar" clickable v-close-popup @click="padreEdit(row)">
+                        <q-item-section avatar><q-icon name="edit" /></q-item-section>
+                        <q-item-section><q-item-label>Editar</q-item-label></q-item-section>
+                      </q-item>
+                      <q-item v-if="canEliminar" clickable v-close-popup @click="padreDelete(row.id)">
+                        <q-item-section avatar><q-icon name="delete" color="negative" /></q-item-section>
+                        <q-item-section><q-item-label class="text-negative">Eliminar</q-item-label></q-item-section>
+                      </q-item>
+                    </q-list>
+                  </q-btn-dropdown>
+                </td>
+                <td>
+                  <q-icon :name="row.icono || 'category'" size="18px" class="q-mr-xs" v-bind="iconAttrs(row.color)" />
+                  {{ row.nombre }}
+                </td>
+                <td>
+                  <q-chip dense square size="12px" text-color="white"
+                          :icon="row.icono || 'category'" v-bind="colorAttrs(row.color)">
+                    {{ row.nombre }}
+                  </q-chip>
+                </td>
+                <td class="text-center">
+                  <q-icon v-if="row.es_laboratorio" name="check_circle" color="positive" size="18px" />
+                  <span v-else class="text-grey-5">—</span>
+                </td>
+                <td class="text-right">{{ row.orden }}</td>
+                <td class="text-right">{{ row.tipos_count ?? 0 }}</td>
+              </tr>
+            </tbody>
+          </q-markup-table>
+          <q-inner-loading :showing="loadingTipo" color="deep-purple" />
+        </div>
+
+        <div class="row items-center justify-between q-mt-xs q-px-xs">
+          <div class="text-caption text-grey-6">
+            Total: {{ totalPadre }} | Página {{ pagePadre }} de {{ pagesPadre }}
+          </div>
+          <q-pagination v-model="pagePadre" :max="pagesPadre" :max-pages="6"
+                        boundary-links direction-links size="sm"
+                        @update:model-value="loadFarmaciaData" />
+        </div>
+      </div>
+
       <!-- ══ TAB TIPOS DE PRODUCTO ═════════════════════════════════ -->
       <div v-show="tab === 'tipos'">
         <div class="row items-center q-gutter-xs q-mb-xs">
           <span class="text-subtitle2 text-grey-7">Tipos de producto (categorías)</span>
           <q-space />
+          <q-select v-model="filterTipoPadre" label="Tipo padre" dense outlined clearable
+                    :options="allTipoProductoPadres" option-value="id" option-label="nombre"
+                    emit-value map-options style="width:200px" @update:model-value="onFilterTipo">
+            <template v-slot:option="scope">
+              <q-item v-bind="scope.itemProps">
+                <q-item-section avatar>
+                  <q-icon :name="scope.opt.icono || 'category'" v-bind="iconAttrs(scope.opt.color)" />
+                </q-item-section>
+                <q-item-section>{{ scope.opt.nombre }}</q-item-section>
+              </q-item>
+            </template>
+          </q-select>
           <q-input v-model="filterTipo" label="Buscar" dense outlined clearable
                    style="width:160px" @update:model-value="onFilterTipo">
             <template v-slot:append><q-icon name="search" /></template>
@@ -319,12 +428,14 @@
               <tr class="bg-grey-2">
                 <th class="text-left" style="width:64px"></th>
                 <th class="text-left">Nombre</th>
+                <th class="text-left">Tipo padre</th>
                 <th class="text-left">Tipo</th>
+                <th class="text-right" style="width:90px">Productos</th>
               </tr>
             </thead>
             <tbody>
               <tr v-if="!tipos.length && !loadingTipo">
-                <td colspan="3" class="text-center text-grey-5 q-pa-md">Sin datos</td>
+                <td colspan="5" class="text-center text-grey-5 q-pa-md">Sin datos</td>
               </tr>
               <tr v-for="row in tipos" :key="row.id">
                 <td class="q-pa-xs">
@@ -349,7 +460,15 @@
                   </q-btn-dropdown>
                 </td>
                 <td>{{ row.nombre }}</td>
-                <td><q-badge :color="row.color || 'primary'">{{ row.nombre }}</q-badge></td>
+                <td>
+                  <q-chip v-if="row.padre" dense square size="12px" text-color="white"
+                          :icon="row.padre.icono || 'category'" v-bind="colorAttrs(row.padre.color)">
+                    {{ row.padre.nombre }}
+                  </q-chip>
+                  <span v-else class="text-grey-5">Sin padre</span>
+                </td>
+                <td><q-badge v-bind="colorAttrs(row.color)">{{ row.nombre }}</q-badge></td>
+                <td class="text-right">{{ row.productos_count ?? 0 }}</td>
               </tr>
             </tbody>
           </q-markup-table>
@@ -398,9 +517,12 @@
                   <template v-slot:option="scope">
                     <q-item v-bind="scope.itemProps">
                       <q-item-section avatar>
-                        <q-badge :color="scope.opt.color || 'primary'" style="width:16px;height:16px" />
+                        <q-badge v-bind="colorAttrs(scope.opt.color)" style="width:16px;height:16px" />
                       </q-item-section>
-                      <q-item-section>{{ scope.opt.nombre }}</q-item-section>
+                      <q-item-section>
+                        <q-item-label>{{ scope.opt.nombre }}</q-item-label>
+                        <q-item-label v-if="scope.opt.padre" caption>{{ scope.opt.padre.nombre }}</q-item-label>
+                      </q-item-section>
                     </q-item>
                   </template>
                   <template v-slot:after>
@@ -610,6 +732,18 @@
           <q-form @submit.prevent="tipoSave">
             <q-input v-model="tipoItem.nombre" label="Nombre *" dense outlined class="q-mb-sm"
                      :rules="[v => !!v || 'Requerido']" v-uppercase />
+            <q-select v-model="tipoItem.tipo_producto_padre_id" label="Tipo padre" dense outlined clearable class="q-mb-sm"
+                      :options="allTipoProductoPadres" option-value="id" option-label="nombre"
+                      emit-value map-options>
+              <template v-slot:option="scope">
+                <q-item v-bind="scope.itemProps">
+                  <q-item-section avatar>
+                    <q-icon :name="scope.opt.icono || 'category'" v-bind="iconAttrs(scope.opt.color)" />
+                  </q-item-section>
+                  <q-item-section>{{ scope.opt.nombre }}</q-item-section>
+                </q-item>
+              </template>
+            </q-select>
             <q-select v-model="tipoItem.color" label="Color" dense outlined class="q-mb-md"
                       :options="quasarColors" emit-value map-options>
               <template v-slot:option="scope">
@@ -635,6 +769,82 @@
       </q-card>
     </q-dialog>
 
+    <!-- DIALOG TIPO DE PRODUCTO PADRE -->
+    <q-dialog v-model="dialogPadre" persistent>
+      <q-card style="width:min(96vw,440px)">
+        <q-card-section class="row items-center bg-deep-purple text-white q-py-sm">
+          <q-icon name="account_tree" size="20px" class="q-mr-sm" />
+          <span class="text-subtitle1 text-weight-bold">{{ padreAction }} tipo de producto padre</span>
+          <q-space />
+          <q-btn icon="close" flat round dense color="white" @click="dialogPadre = false" />
+        </q-card-section>
+        <q-card-section style="padding:14px 16px">
+          <q-form @submit.prevent="padreSave">
+            <q-input v-model="padreItem.nombre" label="Nombre *" dense outlined class="q-mb-sm"
+                     :rules="[v => !!v || 'Requerido']" v-uppercase />
+            <div class="row q-col-gutter-sm q-mb-sm">
+              <div class="col-6">
+                <q-select v-model="padreItem.color" label="Color" dense outlined
+                          :options="quasarColors" emit-value map-options>
+                  <template v-slot:option="scope">
+                    <q-item v-bind="scope.itemProps">
+                      <q-item-section avatar>
+                        <q-badge :color="scope.opt.value" style="width:16px;height:16px" />
+                      </q-item-section>
+                      <q-item-section>{{ scope.opt.label }}</q-item-section>
+                    </q-item>
+                  </template>
+                  <template v-slot:selected-item="scope">
+                    <q-badge :color="scope.opt.value" class="q-mr-xs" style="width:12px;height:12px" />
+                    {{ scope.opt.label }}
+                  </template>
+                </q-select>
+              </div>
+              <div class="col-6">
+                <q-select v-model="padreItem.icono" label="Ícono" dense outlined
+                          :options="iconosPadre" use-input fill-input hide-selected
+                          input-debounce="0" new-value-mode="add-unique"
+                          @input-value="v => { if (v) padreItem.icono = v }">
+                  <template v-slot:prepend>
+                    <q-icon :name="padreItem.icono || 'category'" v-bind="iconAttrs(padreItem.color)" />
+                  </template>
+                  <template v-slot:option="scope">
+                    <q-item v-bind="scope.itemProps">
+                      <q-item-section avatar><q-icon :name="scope.opt" /></q-item-section>
+                      <q-item-section>{{ scope.opt }}</q-item-section>
+                    </q-item>
+                  </template>
+                </q-select>
+              </div>
+            </div>
+            <div class="row items-center q-col-gutter-sm q-mb-md">
+              <div class="col-6">
+                <q-input v-model.number="padreItem.orden" label="Orden" type="number" min="0" dense outlined />
+              </div>
+              <div class="col-6">
+                <q-toggle v-model="padreItem.es_laboratorio" label="Es laboratorio" color="deep-purple" />
+              </div>
+              <div class="col-12 text-caption text-grey-7">
+                Los tipos de producto de este padre heredan la marca de laboratorio.
+              </div>
+            </div>
+            <div class="q-mb-md">
+              <span class="text-caption text-grey-7 q-mr-sm">Vista previa:</span>
+              <q-chip dense square size="12px" text-color="white"
+                      :icon="padreItem.icono || 'category'" v-bind="colorAttrs(padreItem.color)">
+                {{ padreItem.nombre || 'NOMBRE' }}
+              </q-chip>
+            </div>
+            <div class="row justify-end q-gutter-sm">
+              <q-btn flat color="grey-7" label="Cancelar" no-caps @click="dialogPadre = false" />
+              <q-btn color="deep-purple" :label="padreItem.id ? 'Guardar' : 'Crear'"
+                     type="submit" no-caps :loading="savingPadre" icon-right="save" />
+            </div>
+          </q-form>
+        </q-card-section>
+      </q-card>
+    </q-dialog>
+
     <!-- Quick tipo de producto -->
     <q-dialog v-model="tipoQuick" persistent>
       <q-card style="width:min(96vw,380px)">
@@ -645,6 +855,18 @@
           <q-form @submit.prevent="tipoQuickSave">
             <q-input v-model="tipoQNombre" label="Nombre *" dense outlined class="q-mb-sm"
                      :rules="[v => !!v || 'Requerido']" v-uppercase autofocus />
+            <q-select v-model="tipoQPadre" label="Tipo padre" dense outlined clearable class="q-mb-sm"
+                      :options="allTipoProductoPadres" option-value="id" option-label="nombre"
+                      emit-value map-options>
+              <template v-slot:option="scope">
+                <q-item v-bind="scope.itemProps">
+                  <q-item-section avatar>
+                    <q-icon :name="scope.opt.icono || 'category'" v-bind="iconAttrs(scope.opt.color)" />
+                  </q-item-section>
+                  <q-item-section>{{ scope.opt.nombre }}</q-item-section>
+                </q-item>
+              </template>
+            </q-select>
             <q-select v-model="tipoQColor" label="Color" dense outlined class="q-mb-md"
                       :options="quasarColors" emit-value map-options>
               <template v-slot:option="scope">
@@ -726,6 +948,25 @@ const quasarColors = [
   'grey', 'blue-grey',
 ].map(c => ({ label: c, value: c }))
 
+// Las áreas de laboratorio guardan colores hex (#rrggbb), que la prop color de
+// Quasar no entiende: esos se aplican como estilo.
+function colorAttrs (color) {
+  const c = color || 'primary'
+  return c.startsWith('#') ? { style: { backgroundColor: c, color: '#fff' } } : { color: c }
+}
+
+function iconAttrs (color) {
+  const c = color || 'primary'
+  return c.startsWith('#') ? { style: { color: c } } : { color: c }
+}
+
+const iconosPadre = [
+  'science', 'biotech', 'bloodtype', 'medication', 'local_pharmacy', 'vaccines',
+  'medical_services', 'local_hospital', 'emergency', 'monitor_heart', 'healing',
+  'health_and_safety', 'airport_shuttle', 'child_care', 'visibility', 'psychology',
+  'inventory_2', 'category',
+]
+
 // ── Permisos ───────────────────────────────────────────────────
 const canVer      = computed(() => proxy.$store.hasPermission('Ver Productos'))
 const canCrear    = computed(() => proxy.$store.hasPermission('Crear Productos'))
@@ -734,7 +975,7 @@ const canEliminar = computed(() => proxy.$store.hasPermission('Eliminar Producto
 
 // ── Estado general ─────────────────────────────────────────────
 const tab     = ref('productos')
-const resumen = ref({ productos: 0, fabricantes: 0, unidades: 0, tipos: 0 })
+const resumen = ref({ productos: 0, fabricantes: 0, unidades: 0, tipos: 0, padres: 0 })
 const exportingPdf   = ref(false)
 const exportingExcel = ref(false)
 
@@ -824,9 +1065,26 @@ const tipoItem        = ref({})
 const tipoQuick       = ref(false)
 const tipoQNombre     = ref('')
 const tipoQColor      = ref('primary')
+const tipoQPadre      = ref(null)
+const filterTipoPadre = ref(null)
 let timerTipo         = null
 
 const pagesTipo = computed(() => Math.max(1, Math.ceil(totalTipo.value / perTipo)))
+
+// ── Tipos de producto padre ──────────────────────────────────────
+const padres                = ref([])
+const allTipoProductoPadres = ref([])
+const savingPadre           = ref(false)
+const dialogPadre           = ref(false)
+const padreAction           = ref('Nuevo')
+const filterPadre           = ref('')
+const pagePadre             = ref(1)
+const totalPadre            = ref(0)
+const perPadre              = 15
+const padreItem             = ref({})
+let timerPadre              = null
+
+const pagesPadre = computed(() => Math.max(1, Math.ceil(totalPadre.value / perPadre)))
 
 // ── Init ───────────────────────────────────────────────────────
 function init () {
@@ -848,17 +1106,20 @@ async function loadFarmaciaData () {
         page_fab: pageFab.value,
         page_unid: pageUnid.value,
         page_tipo: pageTipo.value,
+        page_padre: pagePadre.value,
         per_page: perProd,
         q_prod: filterProd.value,
         q_fab: filterFab.value,
         q_unid: filterUnid.value,
         q_tipo: filterTipo.value,
+        q_padre: filterPadre.value,
+        tipo_producto_padre_id: filterTipoPadre.value,
         tipo_producto_id: filterTipoProducto.value,
       },
     })
 
     const data = res.data || {}
-    resumen.value = data.resumen || { productos: 0, fabricantes: 0, unidades: 0, tipos: 0 }
+    resumen.value = data.resumen || { productos: 0, fabricantes: 0, unidades: 0, tipos: 0, padres: 0 }
 
     productos.value = data.productos?.data || []
     totalProd.value = data.productos?.total || 0
@@ -872,9 +1133,13 @@ async function loadFarmaciaData () {
     tipos.value = data.tipos?.data || []
     totalTipo.value = data.tipos?.total || 0
 
+    padres.value = data.padres?.data || []
+    totalPadre.value = data.padres?.total || 0
+
     allFabricantes.value = data.allFabricantes || []
     allUnidades.value = data.allUnidades || []
     allTipoProductos.value = data.allTipoProductos || []
+    allTipoProductoPadres.value = data.allTipoProductoPadres || []
   } catch (e) {
     proxy.$alert.error(e.response?.data?.message || 'Error al cargar')
   } finally {
@@ -1067,8 +1332,8 @@ function onFilterTipo () {
   timerTipo = setTimeout(() => { pageTipo.value = 1; loadTipos() }, 350)
 }
 
-function tipoNew ()     { tipoItem.value = { nombre: '', color: 'primary' }; tipoAction.value = 'Nuevo'; dialogTipo.value = true }
-function tipoEdit (row) { tipoItem.value = { ...row }; tipoAction.value = 'Editar'; dialogTipo.value = true }
+function tipoNew ()     { tipoItem.value = { nombre: '', color: 'primary', tipo_producto_padre_id: filterTipoPadre.value }; tipoAction.value = 'Nuevo'; dialogTipo.value = true }
+function tipoEdit (row) { tipoItem.value = { ...row, tipo_producto_padre_id: row.tipo_producto_padre_id ?? null }; tipoAction.value = 'Editar'; dialogTipo.value = true }
 
 async function tipoSave () {
   savingTipo.value = true
@@ -1100,17 +1365,76 @@ function tipoDelete (id) {
 async function tipoQuickSave () {
   savingTipo.value = true
   try {
-    const res = await proxy.$axios.post('tipo-productos', { nombre: tipoQNombre.value, color: tipoQColor.value })
+    const res = await proxy.$axios.post('tipo-productos', {
+      nombre: tipoQNombre.value,
+      color: tipoQColor.value,
+      tipo_producto_padre_id: tipoQPadre.value,
+    })
     loadFarmaciaData()
     prod.value.tipo_producto_id = res.data.id
     tipoQuick.value = false
     tipoQNombre.value = ''
     tipoQColor.value = 'primary'
+    tipoQPadre.value = null
   } catch (e) {
     proxy.$alert.error(e.response?.data?.message || 'Error')
   } finally {
     savingTipo.value = false
   }
+}
+
+function onFilterPadre () {
+  clearTimeout(timerPadre)
+  timerPadre = setTimeout(() => { pagePadre.value = 1; loadFarmaciaData() }, 350)
+}
+
+function padreNew () {
+  padreItem.value = { nombre: '', color: 'primary', icono: 'category', es_laboratorio: false, orden: null }
+  padreAction.value = 'Nuevo'
+  dialogPadre.value = true
+}
+
+function padreEdit (row) {
+  padreItem.value = { ...row }
+  padreAction.value = 'Editar'
+  dialogPadre.value = true
+}
+
+function padreVerTipos (row) {
+  filterTipoPadre.value = row.id
+  filterTipo.value = ''
+  pageTipo.value = 1
+  tab.value = 'tipos'
+  loadFarmaciaData()
+}
+
+async function padreSave () {
+  savingPadre.value = true
+  try {
+    const cuerpo = { ...padreItem.value }
+    if (cuerpo.orden === null || cuerpo.orden === '') delete cuerpo.orden
+    if (cuerpo.id) {
+      await proxy.$axios.put('tipo-producto-padres/' + cuerpo.id, cuerpo)
+      proxy.$alert.success('Tipo de producto padre actualizado')
+    } else {
+      await proxy.$axios.post('tipo-producto-padres', cuerpo)
+      proxy.$alert.success('Tipo de producto padre creado')
+    }
+    dialogPadre.value = false
+    loadFarmaciaData()
+  } catch (e) {
+    proxy.$alert.error(e.response?.data?.message || 'Error al guardar')
+  } finally {
+    savingPadre.value = false
+  }
+}
+
+function padreDelete (id) {
+  proxy.$alert.dialog('¿Desea eliminar el tipo de producto padre?').onOk(() => {
+    proxy.$axios.delete('tipo-producto-padres/' + id)
+      .then(() => { proxy.$alert.success('Tipo de producto padre eliminado'); loadFarmaciaData() })
+      .catch(e => proxy.$alert.error(e.response?.data?.message || 'Error'))
+  })
 }
 
 // ── Exportar ───────────────────────────────────────────────────

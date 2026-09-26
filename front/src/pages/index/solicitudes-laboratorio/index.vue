@@ -123,7 +123,10 @@
                   <tr v-for="resultado in item.resultados" :key="resultado.id">
                     <td>{{ resultado.nombre }}</td>
                     <td class="text-weight-bold">{{ resultado.valor || '—' }} {{ resultado.unidad || '' }}</td>
-                    <td class="text-grey-7">Ref.: {{ resultado.rango_referencia || '—' }}</td>
+                    <td class="text-grey-7">
+                      Ref.: <span v-if="resultado.rango_referencia" class="html-rango" v-html="resultado.rango_referencia_html" />
+                      <template v-else>—</template>
+                    </td>
                   </tr>
                 </tbody>
               </q-markup-table>

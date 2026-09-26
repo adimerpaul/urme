@@ -32,11 +32,25 @@
                   class="q-ma-none text-weight-bold">
             {{ estadoLabel(paciente.estado_internacion) }}
           </q-chip>
-          <q-btn dense outline no-caps size="sm" color="blue-grey-8"
-                 icon="print" label="Imprimir pendientes"
-                 :loading="printingCuenta" @click="imprimirEstadoCuenta">
-            <q-tooltip>Estado de cuenta: internaciones y productos pendientes</q-tooltip>
-          </q-btn>
+          <q-btn-dropdown dense outline no-caps size="sm" color="blue-grey-8"
+                          icon="print" label="Imprimir pendientes" :loading="!!printingCuenta">
+            <q-list dense style="min-width:260px">
+              <q-item clickable v-close-popup @click="imprimirEstadoCuenta('ventas')">
+                <q-item-section avatar><q-icon name="receipt_long" color="blue-grey-8" /></q-item-section>
+                <q-item-section>
+                  <q-item-label>Por ventas</q-item-label>
+                  <q-item-label caption>Internaciones y ventas pendientes, una por una</q-item-label>
+                </q-item-section>
+              </q-item>
+              <q-item clickable v-close-popup @click="imprimirEstadoCuenta('categoria')">
+                <q-item-section avatar><q-icon name="account_tree" color="deep-purple" /></q-item-section>
+                <q-item-section>
+                  <q-item-label>Por categoría</q-item-label>
+                  <q-item-label caption>Cargos agrupados por tipo padre (Laboratorio, Farmacia…)</q-item-label>
+                </q-item-section>
+              </q-item>
+            </q-list>
+          </q-btn-dropdown>
           <q-btn v-if="canCrearVenta" dense unelevated no-caps size="sm" color="positive"
                  icon="payments" label="Cobrar todo" :disable="!hayDeuda" @click="cobrarTodoNew">
             <q-tooltip v-if="hayDeuda">
@@ -231,7 +245,7 @@
                   <th class="text-left" style="width:90px">Pago</th>
                   <th class="text-center" style="width:90px">Estado</th>
                   <th class="text-right" style="width:90px">Total</th>
-                  <th class="text-right" style="width:70px"></th>
+                  <th class="text-right" style="width:110px"></th>
                 </tr>
               </thead>
               <tbody>
@@ -263,13 +277,14 @@
                       </q-badge>
                     </td>
                     <td class="text-right text-weight-bold">{{ formatMoney(v.total) }}</td>
-                    <td class="text-right">
+                    <td class="text-right no-wrap">
                       <q-btn v-if="v.estado === 'PENDIENTE' && !v.fecha_hora_cobro && canCrearVenta" dense unelevated size="xs"
                              color="positive" icon="payments" no-caps label="Cobrar"
                              @click.stop="abrirCobrar(v)" />
-                      <q-btn v-else-if="canDetalleVenta" dense flat round size="xs" color="grey-7" icon="print"
+                      <q-btn v-if="canDetalleVenta" dense flat round size="xs" color="grey-8" icon="print"
+                             class="q-ml-xs" :loading="reimprimiendoId === v.id"
                              @click.stop="imprimirVentaFila(v)">
-                        <q-tooltip>Imprimir</q-tooltip>
+                        <q-tooltip>Reimprimir venta #{{ v.id }}</q-tooltip>
                       </q-btn>
                     </td>
                   </tr>
@@ -293,6 +308,10 @@
                       </div>
                       <div v-if="v.fecha_hora_cobro" class="text-caption text-positive q-mt-xs">
                         Cobrado por {{ v.cobrado_por?.name || '—' }} el {{ formatFecha(v.fecha_hora_cobro) }}
+                      </div>
+                      <div class="q-mt-xs">
+                        <q-btn dense outline no-caps size="sm" color="blue-grey-8" icon="print" label="Reimprimir"
+                               :loading="reimprimiendoId === v.id" @click.stop="imprimirVentaFila(v)" />
                       </div>
                     </td>
                   </tr>
@@ -950,20 +969,24 @@ async function cobrarTodoSave () {
 
 // ── Imprimir proforma ────────────────────────────────────────
 const printingId = ref(null)
-const printingCuenta = ref(false)
+const printingCuenta = ref(null)
 
-/** Estado de cuenta: todas las internaciones y productos que siguen pendientes. */
-async function imprimirEstadoCuenta () {
-  printingCuenta.value = true
+/**
+ * Estado de cuenta: todas las internaciones y productos que siguen pendientes,
+ * por ventas (una por una) o por categoría (agrupado por tipo de producto padre).
+ */
+async function imprimirEstadoCuenta (modo = 'ventas') {
+  printingCuenta.value = modo
+  const ruta = modo === 'categoria' ? 'estado-cuenta-categoria-pdf' : 'estado-cuenta-pdf'
   try {
-    const res = await proxy.$axios.get('pacientes/' + proxy.$route.params.id + '/estado-cuenta-pdf', {
+    const res = await proxy.$axios.get('pacientes/' + proxy.$route.params.id + '/' + ruta, {
       responseType: 'blob',
     })
     window.open(window.URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' })), '_blank')
   } catch (err) {
     proxy.$alert.error('Error al generar el estado de cuenta')
   } finally {
-    printingCuenta.value = false
+    printingCuenta.value = null
   }
 }
 
@@ -1105,12 +1128,19 @@ async function cobrarVenta () {
   }
 }
 
+/** Reimprime el comprobante de una venta ya registrada (cobrada, pendiente o anulada). */
+const reimprimiendoId = ref(null)
+
 async function imprimirVentaFila (venta) {
+  if (reimprimiendoId.value) return
+  reimprimiendoId.value = venta.id
   try {
     const res = await proxy.$axios.get('ventas/' + venta.id)
     imprimirVenta(res.data)
   } catch (err) {
-    proxy.$alert.error('Error al imprimir')
+    proxy.$alert.error(err.response?.data?.message || 'Error al reimprimir')
+  } finally {
+    reimprimiendoId.value = null
   }
 }
 

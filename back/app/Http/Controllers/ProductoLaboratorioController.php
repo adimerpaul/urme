@@ -6,6 +6,7 @@ use App\Models\Producto;
 use App\Models\ProductoLaboratorioDato;
 use App\Models\ProductoLaboratorioFormula;
 use App\Models\ProductoLaboratorioValidacion;
+use App\Support\DescripcionHtml;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
@@ -211,7 +212,7 @@ class ProductoLaboratorioController extends Controller
             'unidad' => 'nullable|string|max:100',
             'metodo' => 'nullable|string|max:100',
             'muestra' => 'nullable|string|max:100',
-            'rango_referencia' => 'nullable|string|max:2000',
+            'rango_referencia' => 'nullable|string|max:1000000',
             'valor_defecto' => 'nullable|string|max:255',
             'opciones' => 'nullable|array|max:50',
             'opciones.*' => 'required|string|max:255',
@@ -226,9 +227,11 @@ class ProductoLaboratorioController extends Controller
         $data['muestra'] = isset($data['muestra']) && trim($data['muestra']) !== ''
             ? mb_strtoupper(trim($data['muestra']))
             : null;
-        $data['rango_referencia'] = isset($data['rango_referencia'])
-            ? mb_strtoupper(trim($data['rango_referencia']))
-            : null;
+        // El rango llega como HTML del editor: se limpia y, si no tiene texto
+        // (el editor deja "<br>" o "<p></p>"), se guarda como nulo.
+        $rango = trim($data['rango_referencia'] ?? '');
+        $textoRango = str_replace("\u{00A0}", ' ', html_entity_decode(strip_tags($rango), ENT_QUOTES | ENT_HTML5));
+        $data['rango_referencia'] = trim($textoRango) !== '' ? DescripcionHtml::guardar($rango) : null;
         $data['valor_defecto'] = isset($data['valor_defecto']) && trim($data['valor_defecto']) !== ''
             ? mb_strtoupper(trim($data['valor_defecto']))
             : null;

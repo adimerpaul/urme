@@ -24,6 +24,8 @@
         .results tr { page-break-inside: avoid; }
         .area td { color: #1f2937; font-size: 9px; font-weight: bold; padding: 4px; text-decoration: underline; }
         .result { font-weight: bold; }
+        .reference p, .reference div, .reference ul, .reference ol, .reference blockquote { margin: 0; }
+        .reference ul, .reference ol { padding-left: 12px; }
         .signature { margin-top: 24px; width: 230px; border-top: 1px solid #374151; text-align: center; padding-top: 3px; font-size: 8px; }
         .signature-name { margin-top: 2px; font-weight: bold; color: #164e7a; font-size: 8.5px; }
         .page-footer { position: fixed; left: 0; right: 0; bottom: -78px; height: 70px; border-top: 1px solid #c2cad3; color: #374151; }
@@ -79,7 +81,7 @@
                 <tr>
                     <td>{{ $resultado->nombre }}</td>
                     <td class="result">{{ filled($resultado->valor) ? $resultado->valor : '-' }} {{ $resultado->unidad }}</td>
-                    <td>{{ $resultado->rango_referencia ?: '-' }}</td>
+                    <td class="reference">{!! filled($resultado->rango_referencia) ? $resultado->rango_referencia_html : '-' !!}</td>
                     <td>{{ $resultado->metodo ?: '-' }}</td>
                     <td>{{ $resultado->muestra ?: '-' }}</td>
                 </tr>

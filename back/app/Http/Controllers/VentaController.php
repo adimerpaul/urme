@@ -2,13 +2,16 @@
 
 namespace App\Http\Controllers;
 
+use App\Exports\VentasExport;
 use App\Models\CompraDetalle;
 use App\Models\Producto;
 use App\Models\Venta;
 use App\Models\VentaDetalle;
 use App\Services\StockLote;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Maatwebsite\Excel\Facades\Excel;
 
 class VentaController extends Controller
 {
@@ -86,6 +89,75 @@ class VentaController extends Controller
         ]);
     }
 
+    /** Excel del historial con los mismos filtros de la pantalla (sin paginar). */
+    public function exportExcel(Request $request)
+    {
+        $this->req($request, 'Ver Ventas');
+
+        return Excel::download(
+            new VentasExport($this->ventasExport($request), $request->user()->can('Ver Montos Caja')),
+            'ventas_'.now()->format('Ymd_His').'.xlsx'
+        );
+    }
+
+    /** PDF del historial con los mismos filtros de la pantalla: sirve para ver e imprimir. */
+    public function exportPdf(Request $request)
+    {
+        $this->req($request, 'Ver Ventas');
+        ini_set('memory_limit', '1024M');
+
+        $pdf = Pdf::loadView('reportes.ventas', [
+            'ventas' => $this->ventasExport($request),
+            'verMontos' => $request->user()->can('Ver Montos Caja'),
+            'rango' => $this->rangoTexto($request),
+            'soloFarmacia' => $request->boolean('solo_farmacia'),
+        ])->setPaper('letter', 'landscape');
+
+        return $pdf->stream('ventas_'.now()->format('Ymd_His').'.pdf');
+    }
+
+    /** Todas las ventas que cumplen los filtros del historial, en orden cronológico. */
+    private function ventasExport(Request $request)
+    {
+        $query = Venta::with([
+            'paciente:id,nombre_completo,ci',
+            'doctor:id,nombre',
+            'seguro:id,nombre',
+            'user:id,name',
+            'detalles:id,venta_id,nombre',
+        ])->orderBy('fecha_hora');
+
+        $this->applyFiltros(
+            $query,
+            $request->input('fecha_inicio', ''),
+            $request->input('fecha_fin', ''),
+            $request->input('paciente_id', ''),
+            $request->input('user_id', ''),
+            $request->input('estado', ''),
+            $request->input('hora_inicio', ''),
+            $request->input('hora_fin', ''),
+            $request->input('tipo_movimiento', '')
+        );
+
+        if ($request->boolean('solo_farmacia')) {
+            $this->soloFarmacia($query);
+        }
+
+        return $query->get();
+    }
+
+    private function rangoTexto(Request $request): string
+    {
+        $desde = $request->input('fecha_inicio')
+            ? $request->input('fecha_inicio').' '.($request->input('hora_inicio') ?: '00:00')
+            : 'la primera venta';
+        $hasta = $request->input('fecha_fin')
+            ? $request->input('fecha_fin').' '.($request->input('hora_fin') ?: '23:59')
+            : 'la última venta';
+
+        return "Desde {$desde} hasta {$hasta}";
+    }
+
     /**
      * Usuarios que registraron alguna venta dentro del rango filtrado, con la
      * cantidad de ventas de cada uno, para el selector del historial.
@@ -130,9 +202,11 @@ class VentaController extends Controller
             'doctor_id' => 'nullable|exists:doctores,id',
             'seguro_id' => 'nullable|exists:seguros,id',
             'cliente' => 'nullable|string|max:255',
-            'tipo_pago' => 'nullable|string|max:50',
+            'tipo_pago' => 'nullable|in:EFECTIVO,QR,MIXTO',
             'comentario' => 'nullable|string|max:500',
             'pago' => 'nullable|numeric|min:0',
+            'monto_efectivo' => 'nullable|numeric|min:0',
+            'monto_qr' => 'nullable|numeric|min:0',
             //            'estado' => 'nullable|in:ACTIVO,PENDIENTE',
             'detalles' => 'required|array|min:1',
             'detalles.*.producto_id' => 'nullable|exists:productos,id',
@@ -229,16 +303,10 @@ class VentaController extends Controller
                 return $venta;
             }
 
-            $pago = (float) ($request->pago ?: $total);
-            if ($pago < $total) {
-                abort(422, 'El pago no puede ser menor al total de la venta');
-            }
-
             $venta->update([
                 'total' => $total,
                 'total_original' => $totalOriginal,
-                'pago' => $pago,
-                'cambio' => round($pago - $total, 2),
+                ...$this->montosPago($request, $total),
             ]);
 
             return $venta;
@@ -285,9 +353,10 @@ class VentaController extends Controller
                 'estado' => 'ACTIVO',
                 'total' => $monto,
                 'total_original' => $monto,
-                // Un gasto no da cambio: sale exactamente lo que se gastó.
+                // Un gasto no da cambio: sale exactamente lo que se gastó, en efectivo.
                 'pago' => $monto,
                 'cambio' => 0,
+                'monto_efectivo' => $monto,
             ]);
 
             VentaDetalle::create([
@@ -316,7 +385,12 @@ class VentaController extends Controller
             abort(422, 'Su caja de hoy ya fue cerrada: no puede cobrar ventas hasta mañana');
         }
 
-        $request->validate(['pago' => 'nullable|numeric|min:0']);
+        $request->validate([
+            'tipo_pago' => 'nullable|in:EFECTIVO,QR,MIXTO',
+            'pago' => 'nullable|numeric|min:0',
+            'monto_efectivo' => 'nullable|numeric|min:0',
+            'monto_qr' => 'nullable|numeric|min:0',
+        ]);
 
         $venta = DB::transaction(function () use ($request, $id) {
             $venta = Venta::lockForUpdate()->findOrFail($id);
@@ -328,16 +402,15 @@ class VentaController extends Controller
                 abort(422, 'Esta venta pendiente ya fue cobrada');
             }
 
-            $pago = (float) ($request->pago ?: $venta->total);
-            if ($pago < (float) $venta->total) {
-                abort(422, 'El pago no puede ser menor al total de la venta');
+            // Si al cobrar no se indica cómo, vale lo que se eligió al crear la venta.
+            if (! $request->tipo_pago) {
+                $request->merge(['tipo_pago' => $venta->tipo_pago === 'QR' ? 'QR' : 'EFECTIVO']);
             }
 
             $venta->update([
                 'cobrado_por_id' => $request->user()->id,
                 'fecha_hora_cobro' => now(),
-                'pago' => $pago,
-                'cambio' => round($pago - (float) $venta->total, 2),
+                ...$this->montosPago($request, (float) $venta->total),
             ]);
 
             return $venta;
@@ -363,6 +436,57 @@ class VentaController extends Controller
     }
 
     // ── Helpers ───────────────────────────────────────────────────
+
+    /**
+     * Reparte el cobro entre efectivo y QR según el tipo de pago.
+     * monto_efectivo + monto_qr = total: el efectivo se guarda sin el cambio
+     * devuelto, que es lo que de verdad queda en caja.
+     *   EFECTIVO: monto_efectivo (o pago) es lo que entregó el cliente.
+     *   QR:       todo el total por QR, sin cambio.
+     *   MIXTO:    monto_qr por QR y el resto en efectivo; si entrega más
+     *             efectivo del que falta, la diferencia es el cambio.
+     */
+    private function montosPago(Request $request, float $total): array
+    {
+        $tipo = mb_strtoupper($request->tipo_pago ?: 'EFECTIVO');
+
+        if ($tipo === 'QR') {
+            return ['tipo_pago' => 'QR', 'pago' => $total, 'cambio' => 0, 'monto_efectivo' => 0, 'monto_qr' => $total];
+        }
+
+        if ($tipo === 'MIXTO') {
+            $qr = round((float) $request->monto_qr, 2);
+            if ($qr <= 0 || $qr >= $total) {
+                abort(422, 'En pago mixto el monto QR debe ser mayor a 0 y menor al total');
+            }
+            $efectivo = round($total - $qr, 2);
+            $recibido = round((float) ($request->monto_efectivo ?: $efectivo), 2);
+            if ($recibido < $efectivo) {
+                abort(422, "El efectivo no alcanza: con {$qr} Bs por QR faltan {$efectivo} Bs en efectivo");
+            }
+
+            return [
+                'tipo_pago' => 'MIXTO',
+                'pago' => round($qr + $recibido, 2),
+                'cambio' => round($recibido - $efectivo, 2),
+                'monto_efectivo' => $efectivo,
+                'monto_qr' => $qr,
+            ];
+        }
+
+        $pago = round((float) ($request->monto_efectivo ?: $request->pago ?: $total), 2);
+        if ($pago < $total) {
+            abort(422, 'El pago no puede ser menor al total de la venta');
+        }
+
+        return [
+            'tipo_pago' => 'EFECTIVO',
+            'pago' => $pago,
+            'cambio' => round($pago - $total, 2),
+            'monto_efectivo' => $total,
+            'monto_qr' => 0,
+        ];
+    }
 
     private function applyFiltros($query, $fechaInicio, $fechaFin, $pacienteId, $userId, $estado, $horaInicio = '', $horaFin = '', $tipoMovimiento = ''): void
     {

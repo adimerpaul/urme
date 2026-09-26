@@ -8,6 +8,7 @@ export const routePermissions = [
   { path: '/usuarios', can: 'Ver Usuarios' },
 
   { path: '/farmacia', can: 'Ver Productos' },
+  { path: '/productos', can: 'Editar Productos' },
   { path: '/productos-farmacia', can: 'Ver Productos Farmacia' },
   { path: '/productos-por-vencer', can: 'Ver Productos por Vencer' },
   { path: '/productos-vencidos', can: 'Ver Productos Vencidos' },
@@ -17,6 +18,7 @@ export const routePermissions = [
   { path: '/proveedores', can: 'Ver Compras' },
   { path: '/ventas-farmacia/crear', can: 'Crear Ventas' },
   { path: '/ventas-farmacia', can: 'Ver Ventas' },
+  { path: '/ventas-clientes', can: 'Ver Ventas Clientes' },
   { path: '/ventas/crear', can: 'Crear Ventas' },
   { path: '/ventas', can: 'Ver Ventas' },
   { path: '/cierres-caja', can: 'Ver Cierres Caja' },

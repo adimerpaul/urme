@@ -81,20 +81,28 @@
             <th v-if="canMontos" class="text-right">Diferencia</th>
             <th class="text-left">Cerrado el</th>
             <th class="text-center">Corrección</th>
+            <th class="text-left">Validación</th>
             <th class="text-left">Comentario</th>
           </tr>
         </thead>
         <tbody>
           <tr v-if="loading">
-            <td :colspan="canMontos ? 10 : 8" class="text-center q-pa-md"><q-spinner color="primary" size="24px" /></td>
+            <td :colspan="canMontos ? 11 : 9" class="text-center q-pa-md"><q-spinner color="primary" size="24px" /></td>
           </tr>
           <tr v-else-if="!cierres.length">
-            <td :colspan="canMontos ? 10 : 8" class="text-center text-grey-5 q-pa-md">Sin cierres registrados</td>
+            <td :colspan="canMontos ? 11 : 9" class="text-center text-grey-5 q-pa-md">Sin cierres registrados</td>
           </tr>
           <tr v-else v-for="row in cierres" :key="row.id">
             <td class="text-center">
               <q-btn-dropdown label="Opciones" no-caps size="9px" dense rounded unelevated color="primary">
                 <q-list dense>
+                  <q-item v-if="canValidar && !row.validado" clickable v-close-popup @click="validar(row)">
+                    <q-item-section avatar><q-icon name="verified" color="positive" size="18px" /></q-item-section>
+                    <q-item-section>
+                      <q-item-label class="text-positive">Validar cierre</q-item-label>
+                      <q-item-label caption>Lo deja cerrado: ya no admite correcciones</q-item-label>
+                    </q-item-section>
+                  </q-item>
                   <q-item clickable v-close-popup @click="verVentas(row)">
                     <q-item-section avatar><q-icon name="receipt_long" size="18px" /></q-item-section>
                     <q-item-section><q-item-label>Ver todas las ventas</q-item-label></q-item-section>
@@ -135,6 +143,16 @@
                 {{ formatFecha(row.modificado_en) }}
               </q-badge>
               <span v-else class="text-grey-5">—</span>
+            </td>
+            <td>
+              <template v-if="row.validado">
+                <q-badge color="positive" class="text-weight-bold">
+                  <q-icon name="verified" size="12px" class="q-mr-xs" />VALIDADO
+                </q-badge>
+                <div class="text-grey-8">{{ row.validado_por?.name || '—' }}</div>
+                <div class="text-grey-6">{{ formatFecha(row.validado_en) }}</div>
+              </template>
+              <q-badge v-else color="orange-1" text-color="orange-9" class="text-weight-bold">SIN VALIDAR</q-badge>
             </td>
             <td>{{ row.comentario || '—' }}</td>
           </tr>
@@ -262,6 +280,7 @@ const { proxy } = getCurrentInstance()
 const canVer = computed(() => proxy.$store.hasPermission('Ver Cierres Caja'))
 // Sin 'Ver Montos Caja' se ve solo el efectivo declarado, no el sistema ni la diferencia.
 const canMontos = computed(() => proxy.$store.hasPermission('Ver Montos Caja'))
+const canValidar = computed(() => proxy.$store.hasPermission('Validar Cierres Caja'))
 
 const cierres = ref([])
 const usuarios = ref([])
@@ -388,6 +407,22 @@ async function cargarUsuarios () {
   } catch {
     // El filtro por usuario es opcional: sin la lista la pantalla sigue funcionando.
   }
+}
+
+// ── Validación ────────────────────────────────────────────────────
+function validar (row) {
+  proxy.$alert.confirm(
+    '¿Validar el cierre de ' + (row.user?.name || '—') + ' del ' + formatSoloFecha(row.fecha) +
+    '? Una vez validado queda cerrado y ya no se puede corregir.',
+  ).onOk(async () => {
+    try {
+      const { data } = await proxy.$axios.put('cierres-caja/' + row.id + '/validar')
+      proxy.$alert.success(data.message || 'Cierre validado')
+      cargar()
+    } catch (error) {
+      proxy.$alert.error(error.response?.data?.message || 'No se pudo validar el cierre')
+    }
+  })
 }
 
 // ── Ventas de un cierre ───────────────────────────────────────────

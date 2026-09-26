@@ -184,6 +184,15 @@ function buildHtml (venta) {
           <td style="width:32%" class="right monto">${money(venta.total)}</td>
         </tr>
         ${egreso ? '' : `
+        ${venta.tipo_pago === 'MIXTO' ? `
+        <tr>
+          <td class="right">EFECTIVO Bs. :</td>
+          <td class="right">${money(venta.monto_efectivo)}</td>
+        </tr>
+        <tr>
+          <td class="right">QR Bs. :</td>
+          <td class="right">${money(venta.monto_qr)}</td>
+        </tr>` : ''}
         <tr>
           <td class="right">PAGO Bs. :</td>
           <td class="right">${money(venta.pago)}</td>

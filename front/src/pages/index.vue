@@ -178,7 +178,9 @@ const menuSections = [
       { title: 'Usuarios',  icon: 'people',    link: '/usuarios' },
       { title: 'Ventas',    icon: 'point_of_sale', link: '/ventas' },
       { title: 'Nueva venta', icon: 'add_shopping_cart', link: '/ventas/crear' },
+      { title: 'Actualizar productos', icon: 'edit_note', link: '/productos' },
       { title: 'Cierres de caja', icon: 'lock_clock', link: '/cierres-caja' },
+      { title: 'Ventas de clientes', icon: 'receipt_long', link: '/ventas-clientes' },
     ],
   },
   {

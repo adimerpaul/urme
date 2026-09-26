@@ -200,8 +200,9 @@ class SolicitudeController extends Controller
         $qrSvg = (new Writer($renderer))->writeString($urlVerificacion);
         $qrDataUri = 'data:image/svg+xml;base64,'.base64_encode($qrSvg);
 
+        $paraNavegador = $html;
         $datos = compact(
-            'solicitude', 'impresoPor', 'urlVerificacion', 'qrDataUri'
+            'solicitude', 'impresoPor', 'urlVerificacion', 'qrDataUri', 'paraNavegador'
         );
         if ($html) {
             return response()->view('reportes.solicitud-laboratorio', $datos);

@@ -8,10 +8,11 @@ use Carbon\Carbon;
 
 class ReactivoKardex
 {
-    public static function datos(Reactivo $reactivo, string $mes): array
+    /** Kardex del reactivo entre dos fechas (Y-m-d), ambas incluidas. */
+    public static function datos(Reactivo $reactivo, string $fechaInicio, string $fechaFin): array
     {
-        $desde = Carbon::createFromFormat('!Y-m', $mes)->startOfMonth();
-        $hasta = $desde->copy()->endOfMonth();
+        $desde = Carbon::createFromFormat('!Y-m-d', $fechaInicio);
+        $hasta = Carbon::createFromFormat('!Y-m-d', $fechaFin);
         $cantidades = $reactivo->servicios()->pluck('cantidad', 'producto_id');
         $items = SolicitudLaboratorioItem::with('solicitude.user:id,name')
             ->whereIn('producto_id', $cantidades->keys())
@@ -43,7 +44,9 @@ class ReactivoKardex
 
         return [
             'reactivo' => $reactivo,
-            'mes' => $mes,
+            'fecha_inicio' => $desde->toDateString(),
+            'fecha_fin' => $hasta->toDateString(),
+            'periodo' => $desde->format('d/m/Y').' al '.$hasta->format('d/m/Y'),
             'movimientos' => $movimientos,
             'cantidad_pruebas' => $items->count(),
             'saldo_inicial' => null,

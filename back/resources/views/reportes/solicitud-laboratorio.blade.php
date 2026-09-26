@@ -36,8 +36,22 @@
         .footer-qr { width: 13%; text-align: right; }
         .footer-qr img { width: 56px; height: 56px; }
     </style>
+    @if($paraNavegador ?? false)
+    <style>
+        /* Impresión desde el navegador: el pie queda dentro del área imprimible y
+           un tfoot vacío le reserva espacio al final de cada hoja. */
+        @page { size: letter; margin: 8mm 11mm; }
+        .page-footer { bottom: 0; background: #fff; }
+        .print-layout { width: 100%; border-collapse: collapse; }
+        .print-layout > tbody > tr > td, .print-layout > tfoot > tr > td { padding: 0; }
+        .footer-space { height: 78px; }
+    </style>
+    @endif
 </head>
 <body>
+@if($paraNavegador ?? false)
+<table class="print-layout"><tfoot><tr><td class="footer-space"></td></tr></tfoot><tbody><tr><td>
+@endif
 <table class="header"><tr>
     <td style="width:42%">
         <img class="laboratory-logo" src="data:image/jpeg;base64,{{ base64_encode(file_get_contents(public_path('images/logo-laboratorio-urme.jpg'))) }}" alt="Laboratorio de Diagnóstico Clínico URME">
@@ -96,6 +110,9 @@
     <div>RESPONSABLE DE LABORATORIO</div>
     <div class="signature-name">{{ $impresoPor->name }}</div>
 </div>
+@if($paraNavegador ?? false)
+</td></tr></tbody></table>
+@endif
 <div class="page-footer">
     <table><tr>
         <td class="footer-message">Nuestro compromiso es brindarte resultados confiables para un mejor mañana.</td>

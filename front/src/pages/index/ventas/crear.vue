@@ -12,7 +12,7 @@
     <template v-else-if="proxy.$store.isLogged">
 
       <div class="row items-center q-mb-sm">
-        <q-btn flat dense round icon="arrow_back" color="grey-7" class="q-mr-sm" :to="rutaVentas">
+        <q-btn v-if="canVerVentas" flat dense round icon="arrow_back" color="grey-7" class="q-mr-sm" :to="rutaVentas">
           <q-tooltip>{{ soloFarmacia ? 'Volver a ventas de farmacia' : 'Volver a ventas' }}</q-tooltip>
         </q-btn>
         <div>
@@ -40,7 +40,7 @@
         <template v-slot:avatar><q-icon name="lock" color="orange-9" /></template>
         Su caja de hoy ya fue cerrada: no puede registrar más ventas hasta mañana.
         <template v-slot:action>
-          <q-btn flat dense no-caps color="orange-10" label="Ir a ventas" :to="rutaVentas" />
+          <q-btn v-if="canVerVentas" flat dense no-caps color="orange-10" label="Ir a ventas" :to="rutaVentas" />
         </template>
       </q-banner>
 
@@ -357,12 +357,14 @@
               </div>
               <div class="col-12">
                 <q-select v-model="nueva.seguro_id" label="Seguro / Institución" dense outlined clearable
-                          :options="allSeguros" option-value="id" option-label="nombre"
-                          emit-value map-options hint="Vacío = PARTICULAR" />
-              </div>
-              <div class="col-12">
-                <q-select v-model="nueva.tipo_pago" label="Tipo de pago" dense outlined
-                          :options="['EFECTIVO', 'TRANSFERENCIA', 'TARJETA', 'QR']" />
+                          use-input input-debounce="0" :options="opcionesSeguro"
+                          option-value="id" option-label="nombre"
+                          emit-value map-options hint="Vacío = PARTICULAR"
+                          @filter="filtrarSeguros">
+                  <template v-slot:no-option>
+                    <q-item><q-item-section class="text-grey">Sin resultados</q-item-section></q-item>
+                  </template>
+                </q-select>
               </div>
             </div>
 
@@ -379,17 +381,12 @@
             </q-banner>
 
             <div class="row q-col-gutter-sm items-center q-mb-sm">
-              <div :class="cobrarLuego ? 'col-12' : 'col-4'">
+              <div class="col-12">
                 <q-input :model-value="money(totalNueva)" label="Total Bs" dense outlined readonly
                          input-class="text-right text-weight-bold" />
               </div>
-              <div class="col-4" v-if="!cobrarLuego">
-                <q-input v-model.number="nueva.pago" label="Pago Bs" dense outlined type="number" step="0.01" min="0"
-                         input-class="text-right" />
-              </div>
-              <div class="col-4" v-if="!cobrarLuego">
-                <q-input :model-value="money(cambioNueva)" label="Cambio Bs" dense outlined readonly
-                         :input-class="'text-right ' + (cambioNueva < 0 ? 'text-negative' : '')" />
+              <div class="col-12" v-if="!cobrarLuego">
+                <PagoVenta v-model="nueva.pago" :total="totalNueva" />
               </div>
               <div class="col-12">
                 <q-input v-model="nueva.comentario" label="Comentario" dense outlined type="textarea" rows="1" />
@@ -508,11 +505,13 @@
               </div>
               <div class="col-12">
                 <q-select v-model="intQ.seguro_id" label="Seguro / Institución" dense outlined clearable
-                          :options="allSeguros" option-value="id" option-label="nombre"
+                          use-input input-debounce="0" :options="opcionesSeguro"
+                          option-value="id" option-label="nombre"
                           emit-value map-options
-                          hint="Sin seguro se registra como PARTICULAR">
+                          hint="Sin seguro se registra como PARTICULAR"
+                          @filter="filtrarSeguros">
                   <template v-slot:no-option>
-                    <q-item><q-item-section class="text-grey">No hay seguros registrados</q-item-section></q-item>
+                    <q-item><q-item-section class="text-grey">Sin resultados</q-item-section></q-item>
                   </template>
                 </q-select>
               </div>
@@ -560,6 +559,8 @@
 <script setup>
 import { ref, computed, watch, getCurrentInstance, nextTick } from 'vue'
 import { imprimirVenta } from '../../../addons/ventaPrint'
+import { pagoVacio, validarPago, payloadPago } from '../../../addons/pagoVenta'
+import PagoVenta from '../../../components/PagoVenta.vue'
 
 const { proxy } = getCurrentInstance()
 const ultimaVenta = ref(null)
@@ -583,6 +584,8 @@ const rutaVentas   = computed(() => props.soloFarmacia ? '/ventas-farmacia' : '/
 
 // ── Permisos ───────────────────────────────────────────────────
 const canCrear = computed(() => proxy.$store.hasPermission('Crear Ventas'))
+// Quien solo vende (sin 'Ver Ventas') no ve el historial: se ocultan los enlaces a él.
+const canVerVentas = computed(() => proxy.$store.hasPermission('Ver Ventas'))
 
 function money (v) { return Number(v || 0).toFixed(2) }
 
@@ -656,7 +659,17 @@ async function loadSeguros () {
   try {
     const res = await proxy.$axios.get('seguros')
     allSeguros.value = res.data || []
+    opcionesSeguro.value = allSeguros.value
   } catch (e) { /* silent */ }
+}
+const opcionesSeguro = ref([])
+function filtrarSeguros (val, update) {
+  update(() => {
+    const q = (val || '').toLowerCase()
+    opcionesSeguro.value = q
+      ? allSeguros.value.filter(s => (s.nombre || '').toLowerCase().includes(q))
+      : allSeguros.value
+  })
 }
 
 // ── Especialidades (para doctor rápido) ────────────────────────
@@ -812,9 +825,8 @@ function nuevaVentaVacia () {
     doctor_id: null,
     seguro_id: null,
     cliente: '',
-    tipo_pago: 'EFECTIVO',
     comentario: '',
-    pago: null,
+    pago: pagoVacio(),
     detalles: [],
   }
 }
@@ -824,11 +836,6 @@ const nueva = ref(nuevaVentaVacia())
 watch(() => nueva.value.paciente_id, (id) => cargarInternaciones(id))
 
 const totalNueva  = computed(() => nueva.value.detalles.reduce((acc, l) => acc + (Number(l.total) || 0), 0))
-const cambioNueva = computed(() => {
-  const pago = Number(nueva.value.pago)
-  if (!pago) return 0
-  return Math.round((pago - totalNueva.value) * 100) / 100
-})
 
 async function agregarProducto (p) {
   if (!esProductoFarmacia(p)) {
@@ -1009,9 +1016,9 @@ function confirmarVenta () {
 
 async function registrarVenta (estado = 'ACTIVO') {
   if (!detallesValidos()) return
-  const pago = estado === 'PENDIENTE' ? 0 : (Number(nueva.value.pago) || totalNueva.value)
-  if (estado !== 'PENDIENTE' && pago < totalNueva.value) {
-    proxy.$alert.error('El pago no puede ser menor al total')
+  const errorPago = estado === 'PENDIENTE' ? null : validarPago(nueva.value.pago, totalNueva.value)
+  if (errorPago) {
+    proxy.$alert.error(errorPago)
     return
   }
   registrando.value = true
@@ -1021,9 +1028,9 @@ async function registrarVenta (estado = 'ACTIVO') {
       doctor_id: nueva.value.doctor_id,
       seguro_id: nueva.value.seguro_id,
       cliente: nueva.value.paciente_id ? null : nueva.value.cliente,
-      tipo_pago: nueva.value.tipo_pago,
       comentario: nueva.value.comentario,
-      pago,
+      // Pendiente: el tipo de pago se elige al cobrarla.
+      ...(estado === 'PENDIENTE' ? {} : payloadPago(nueva.value.pago, totalNueva.value)),
       estado,
       detalles: nueva.value.detalles.map(l => ({
         producto_id: l.producto_id || null,

@@ -27,7 +27,7 @@ tr { page-break-inside: avoid; }
 <table class="header"><tr>
 <td style="width:14%"><img class="logo" src="{{ public_path('images/logo-laboratorio-urme.jpg') }}"></td>
 <td class="title">KARDEX DE REACTIVOS / INSUMOS</td>
-<td class="meta" style="width:25%">ÁREA: LABORATORIO<br>CLÍNICA URME<br>PERIODO: {{ $mes }}<br>GENERADO: {{ now()->format('d/m/Y H:i') }}</td>
+<td class="meta" style="width:25%">ÁREA: LABORATORIO<br>CLÍNICA URME<br>PERIODO: {{ $periodo }}<br>GENERADO: {{ now()->format('d/m/Y H:i') }}</td>
 </tr></table>
 <table class="info">
 <tr><th style="width:27%">NOMBRE DEL REACTIVO</th><td>{{ $reactivo->nombre }}</td><th style="width:14%">CÓDIGO</th><td style="width:18%">{{ $reactivo->codigo ?: '-' }}</td></tr>
@@ -51,7 +51,7 @@ tr { page-break-inside: avoid; }
 <td>{{ $fila['responsable'] ?: '-' }}</td><td>{{ $fila['observaciones'] ?: '-' }}</td>
 </tr>
 @empty
-<tr><td colspan="11" class="center">Sin movimientos registrados en el mes seleccionado.</td></tr>
+<tr><td colspan="11" class="center">Sin movimientos registrados en el periodo seleccionado.</td></tr>
 @endforelse
 </tbody>
 </table>

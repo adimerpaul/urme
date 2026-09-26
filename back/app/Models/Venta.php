@@ -17,6 +17,7 @@ class Venta extends Model implements AuditableContract
         'user_id', 'cobrado_por_id', 'tipo_movimiento', 'paciente_id', 'doctor_id', 'seguro_id', 'cliente', 'fecha_hora',
         'fecha_hora_cobro',
         'tipo_pago', 'comentario', 'estado', 'total', 'total_original', 'pago', 'cambio',
+        'monto_efectivo', 'monto_qr',
     ];
 
     protected $hidden = ['created_at', 'updated_at', 'deleted_at'];
@@ -28,6 +29,8 @@ class Venta extends Model implements AuditableContract
         'total_original' => 'decimal:2',
         'pago' => 'decimal:2',
         'cambio' => 'decimal:2',
+        'monto_efectivo' => 'decimal:2',
+        'monto_qr' => 'decimal:2',
     ];
 
     /** Gasto de caja (refresco, periódico, etc.): dinero que sale de caja, no que entra. */

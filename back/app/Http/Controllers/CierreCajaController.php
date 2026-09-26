@@ -18,14 +18,18 @@ use Maatwebsite\Excel\Facades\Excel;
  *    con el mismo monto.
  *  - El cierre admite una sola corrección, hecha por el mismo usuario que cerró.
  *  - Con la caja cerrada, ese usuario ya no puede registrar ventas ese día.
+ *  - Quien tiene 'Validar Cierres Caja' valida el cierre (queda quién y cuándo);
+ *    validado, el cierre queda cerrado y ya no admite correcciones.
  */
 class CierreCajaController extends Controller
 {
+    private const RELACIONES = ['user:id,name,username', 'validadoPor:id,name,username'];
+
     public function index(Request $request)
     {
         $this->req($request, 'Ver Cierres Caja');
 
-        $query = CierreCaja::with('user:id,name,username')
+        $query = CierreCaja::with(self::RELACIONES)
             ->orderByDesc('fecha')
             ->orderByDesc('id');
 
@@ -68,7 +72,7 @@ class CierreCajaController extends Controller
             'fecha' => $fecha,
             'cerrada' => (bool) $cierre,
             'ver_montos' => $verMontos,
-            'cierre' => $this->ocultarMontos($cierre?->load('user:id,name,username'), $user),
+            'cierre' => $this->ocultarMontos($cierre?->load(self::RELACIONES), $user),
             'total_sistema' => $totales['total'] ?? null,
             'cantidad_ventas' => $totales['cantidad'] ?? null,
         ]);
@@ -78,10 +82,7 @@ class CierreCajaController extends Controller
     {
         $this->req($request, 'Cerrar Caja');
 
-        $request->validate([
-            'monto' => 'required|numeric|min:0',
-            'comentario' => 'nullable|string|max:500',
-        ]);
+        $this->validarCierre($request);
 
         $user = $request->user();
         $fecha = $this->hoy();
@@ -90,19 +91,20 @@ class CierreCajaController extends Controller
         if ($cierre = self::cierreDelDia($user->id, $fecha)) {
             return response()->json([
                 'message' => 'La caja de hoy ya fue cerrada',
-                'cierre' => $this->ocultarMontos($cierre->load('user:id,name,username'), $user),
+                'cierre' => $this->ocultarMontos($cierre->load(self::RELACIONES), $user),
                 'ya_existia' => true,
             ]);
         }
 
         $totales = $this->totalesDelDia($user->id, $fecha);
-        $monto = round((float) $request->monto, 2);
+        [$monto, $detalle] = $this->efectivoDeclarado($request);
 
         $cierre = CierreCaja::create([
             'user_id' => $user->id,
             'fecha' => $fecha,
             'monto_sistema' => $totales['total'],
             'monto' => $monto,
+            'detalle_efectivo' => $detalle,
             'diferencia' => round($monto - $totales['total'], 2),
             'cantidad_ventas' => $totales['cantidad'],
             'fecha_hora' => now(),
@@ -111,7 +113,7 @@ class CierreCajaController extends Controller
 
         return response()->json([
             'message' => 'Caja cerrada',
-            'cierre' => $this->ocultarMontos($cierre->load('user:id,name,username'), $user),
+            'cierre' => $this->ocultarMontos($cierre->load(self::RELACIONES), $user),
             'ya_existia' => false,
         ], 201);
     }
@@ -121,10 +123,7 @@ class CierreCajaController extends Controller
     {
         $this->req($request, 'Cerrar Caja');
 
-        $request->validate([
-            'monto' => 'required|numeric|min:0',
-            'comentario' => 'nullable|string|max:500',
-        ]);
+        $this->validarCierre($request);
 
         $cierre = CierreCaja::findOrFail($id);
         $user = $request->user();
@@ -132,13 +131,17 @@ class CierreCajaController extends Controller
         if ((int) $cierre->user_id !== (int) $user->id) {
             abort(403, 'Solo el usuario que cerró la caja puede modificar el cierre');
         }
+        if ($cierre->validado) {
+            abort(422, 'Este cierre ya fue validado y no admite cambios');
+        }
         if (! $cierre->puede_modificar) {
             abort(422, 'Este cierre ya fue modificado una vez y no admite más cambios');
         }
 
-        $monto = round((float) $request->monto, 2);
+        [$monto, $detalle] = $this->efectivoDeclarado($request);
         $cierre->update([
             'monto' => $monto,
+            'detalle_efectivo' => $detalle,
             'diferencia' => round($monto - (float) $cierre->monto_sistema, 2),
             'comentario' => $request->comentario ?: null,
             'modificado_en' => now(),
@@ -146,7 +149,28 @@ class CierreCajaController extends Controller
 
         return response()->json([
             'message' => 'Cierre modificado',
-            'cierre' => $this->ocultarMontos($cierre->load('user:id,name,username'), $user),
+            'cierre' => $this->ocultarMontos($cierre->load(self::RELACIONES), $user),
+        ]);
+    }
+
+    /** Valida el cierre: registra quién y cuándo, y lo deja cerrado para siempre. */
+    public function validar(Request $request, $id)
+    {
+        $this->req($request, 'Validar Cierres Caja');
+
+        $cierre = CierreCaja::findOrFail($id);
+        if ($cierre->validado) {
+            abort(422, 'Este cierre ya fue validado');
+        }
+
+        $cierre->update([
+            'validado_por_id' => $request->user()->id,
+            'validado_en' => now(),
+        ]);
+
+        return response()->json([
+            'message' => 'Cierre validado',
+            'cierre' => $this->ocultarMontos($cierre->load(self::RELACIONES), $request->user()),
         ]);
     }
 
@@ -155,7 +179,7 @@ class CierreCajaController extends Controller
     {
         $this->req($request, 'Ver Cierres Caja');
 
-        $cierre = CierreCaja::with('user:id,name,username')->findOrFail($id);
+        $cierre = CierreCaja::with(self::RELACIONES)->findOrFail($id);
 
         $ventas = self::ventasDelDia($cierre->user_id, $cierre->fecha->toDateString())
             ->with([
@@ -177,7 +201,7 @@ class CierreCajaController extends Controller
     {
         $this->req($request, 'Ver Cierres Caja');
 
-        $cierre = CierreCaja::with('user:id,name,username')->findOrFail($id);
+        $cierre = CierreCaja::with(self::RELACIONES)->findOrFail($id);
 
         return Excel::download(
             new CierreCajaVentasExport($cierre),
@@ -190,7 +214,7 @@ class CierreCajaController extends Controller
         $this->req($request, 'Ver Cierres Caja');
         ini_set('memory_limit', '1024M');
 
-        $cierre = CierreCaja::with('user:id,name,username')->findOrFail($id);
+        $cierre = CierreCaja::with(self::RELACIONES)->findOrFail($id);
 
         $ventas = self::ventasDelDia($cierre->user_id, $cierre->fecha->toDateString())
             ->with(['paciente:id,nombre_completo,ci', 'detalles:id,venta_id,nombre,cantidad,precio,total'])
@@ -206,6 +230,49 @@ class CierreCajaController extends Controller
     }
 
     // ── Helpers ───────────────────────────────────────────────────
+
+    /** Cortes de billetes y monedas en Bolivia (Bs). */
+    public const CORTES = ['200', '100', '50', '20', '10', '5', '2', '1', '0.5', '0.2', '0.1'];
+
+    private function validarCierre(Request $request): void
+    {
+        $request->validate([
+            'monto' => 'required|numeric|min:0',
+            // Las claves "0.5", "0.2"... chocan con la notación de puntos de
+            // Laravel: las cantidades se validan en efectivoDeclarado().
+            'detalle_efectivo' => 'nullable|array',
+            'comentario' => 'nullable|string|max:500',
+        ]);
+    }
+
+    /**
+     * El monto que cuenta es el que digita el cajero. El conteo por cortes es
+     * solo una ayuda para sumar: se guarda como referencia si trae algo.
+     *
+     * @return array{0: float, 1: array<string,int>|null}
+     */
+    private function efectivoDeclarado(Request $request): array
+    {
+        $monto = round((float) $request->monto, 2);
+        $conteo = $request->input('detalle_efectivo');
+        if (! is_array($conteo)) {
+            return [$monto, null];
+        }
+
+        $detalle = [];
+        foreach (self::CORTES as $corte) {
+            $valor = $conteo[$corte] ?? 0;
+            if ($valor === null || $valor === '') {
+                $valor = 0;
+            }
+            if (filter_var($valor, FILTER_VALIDATE_INT) === false || (int) $valor < 0) {
+                abort(422, "Cantidad inválida para el corte de {$corte} Bs");
+            }
+            $detalle[$corte] = (int) $valor;
+        }
+
+        return [$monto, array_sum($detalle) > 0 ? $detalle : null];
+    }
 
     /**
      * Sin 'Ver Montos Caja' el cierre viaja sin el total del sistema ni la

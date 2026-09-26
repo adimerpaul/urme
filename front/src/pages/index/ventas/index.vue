@@ -164,6 +164,21 @@
 
           <q-space />
           <span class="filtros__rango">{{ rangoFiltro }}</span>
+
+          <q-separator vertical class="filtros__sep" />
+
+          <q-btn dense unelevated no-caps size="sm" color="grey-8" icon="print" label="Imprimir"
+                 :loading="imprimiendoLista" :disable="imprimiendoLista" @click="imprimirLista">
+            <q-tooltip>Imprimir el listado con los filtros actuales</q-tooltip>
+          </q-btn>
+          <q-btn dense unelevated no-caps size="sm" color="green-8" icon="table_view" label="Excel"
+                 :loading="exportingExcel" :disable="exportingExcel" @click="exportExcel">
+            <q-tooltip>Exportar el listado con los filtros actuales a Excel</q-tooltip>
+          </q-btn>
+          <q-btn dense unelevated no-caps size="sm" color="red-7" icon="picture_as_pdf" label="PDF"
+                 :loading="exportingPdf" :disable="exportingPdf" @click="exportPdf">
+            <q-tooltip>Exportar el listado con los filtros actuales a PDF</q-tooltip>
+          </q-btn>
         </div>
 
         <!-- Ancho de columnas fijo y alto mínimo: la tabla no cambia de forma al cargar -->
@@ -300,6 +315,11 @@
           <div class="row justify-end q-mt-sm text-body2">
             <div class="text-right">
               <div><b>Total:</b> {{ money(detalleVenta?.total) }} Bs</div>
+              <div><b>Tipo de pago:</b> {{ detalleVenta?.tipo_pago || '—' }}</div>
+              <template v-if="detalleVenta?.tipo_pago === 'MIXTO'">
+                <div><b>Efectivo:</b> {{ money(detalleVenta?.monto_efectivo) }} Bs</div>
+                <div><b>QR:</b> {{ money(detalleVenta?.monto_qr) }} Bs</div>
+              </template>
               <div><b>Pago:</b> {{ money(detalleVenta?.pago) }} Bs</div>
               <div><b>Cambio:</b> {{ money(detalleVenta?.cambio) }} Bs</div>
             </div>
@@ -310,20 +330,14 @@
 
     <!-- DIALOG COBRAR VENTA PENDIENTE -->
     <q-dialog v-model="dialogCobrar" persistent>
-      <q-card style="width:min(96vw,380px)">
+      <q-card style="width:min(96vw,440px)">
         <q-card-section class="bg-primary text-white q-py-sm">
           <span class="text-subtitle2 text-weight-bold">Cobrar venta #{{ ventaCobrar?.id }}</span>
         </q-card-section>
         <q-card-section>
           <q-form @submit.prevent="cobrarVenta">
             <div class="text-h6 q-mb-sm">Total: <span class="text-primary text-weight-bold">{{ money(ventaCobrar?.total) }} Bs</span></div>
-            <q-input v-model.number="cobrarPago" label="Pago Bs *" dense outlined type="number" step="0.01" min="0"
-                     class="q-mb-xs" autofocus input-class="text-right" />
-            <div class="text-body2 q-mb-md">Cambio:
-              <span class="text-weight-bold" :class="cobrarCambio < 0 ? 'text-negative' : 'text-positive'">
-                {{ money(cobrarCambio) }} Bs
-              </span>
-            </div>
+            <PagoVenta v-model="cobrarPago" :total="totalCobrar" class="q-mb-md" />
             <div class="row justify-end q-gutter-sm">
               <q-btn flat color="grey-7" label="Cancelar" no-caps @click="dialogCobrar = false" />
               <q-btn color="primary" label="Cobrar e imprimir" icon-right="payments" type="submit" no-caps :loading="cobrando" />
@@ -422,6 +436,12 @@
                     </q-badge>
                   </td>
                 </tr>
+                <tr v-if="cortesContados(caja.cierre?.detalle_efectivo).length">
+                  <td class="text-grey-7">Conteo</td>
+                  <td class="text-right text-caption">
+                    {{ cortesContados(caja.cierre.detalle_efectivo).map(c => c.cantidad + '×' + c.label).join(' · ') }}
+                  </td>
+                </tr>
                 <tr>
                   <td class="text-grey-7">Cerrada el</td>
                   <td class="text-right">{{ formatFecha(caja.cierre?.fecha_hora) }}</td>
@@ -434,6 +454,12 @@
                   <td class="text-grey-7">Modificado el</td>
                   <td class="text-right">{{ formatFecha(caja.cierre.modificado_en) }}</td>
                 </tr>
+                <tr v-if="caja.cierre?.validado">
+                  <td class="text-grey-7">Validado por</td>
+                  <td class="text-right">
+                    {{ caja.cierre.validado_por?.name || '—' }} · {{ formatFecha(caja.cierre.validado_en) }}
+                  </td>
+                </tr>
               </tbody>
             </q-markup-table>
 
@@ -442,9 +468,11 @@
               <template v-slot:avatar>
                 <q-icon :name="caja.cierre?.puede_modificar ? 'edit_note' : 'lock'" />
               </template>
-              {{ caja.cierre?.puede_modificar
-                ? 'Puede corregir este cierre una sola vez.'
-                : 'Este cierre ya fue corregido una vez y no admite más cambios.' }}
+              {{ caja.cierre?.validado
+                ? 'Este cierre ya fue validado y no admite cambios.'
+                : caja.cierre?.puede_modificar
+                  ? 'Puede corregir este cierre una sola vez.'
+                  : 'Este cierre ya fue corregido una vez y no admite más cambios.' }}
             </q-banner>
           </template>
 
@@ -452,9 +480,30 @@
           <q-form v-else @submit.prevent="guardarCierre">
             <q-input v-model.number="cierreForm.monto" label="Efectivo que entrega (Bs) *"
                      dense outlined type="number" step="0.01" min="0" autofocus
-                     input-class="text-right"
-                     hint="Cuente el efectivo y escriba el monto"
+                     input-class="text-right text-weight-bold"
                      :rules="[v => v !== null && v !== '' || 'Requerido']" />
+
+            <!-- Ayuda opcional: al contar por cortes se llena el monto de arriba. -->
+            <div class="cortes-ayuda q-mb-sm">
+              <div class="row items-center q-mb-xs">
+                <span class="text-caption text-grey-7">Ayuda: contar por cortes (opcional)</span>
+                <q-space />
+                <span v-if="totalEfectivo > 0" class="text-caption text-teal-8 text-weight-bold">
+                  = {{ money(totalEfectivo) }} Bs
+                </span>
+                <q-btn v-if="totalEfectivo > 0" flat dense round size="xs" icon="backspace" color="grey-6"
+                       class="q-ml-xs" @click="limpiarConteo">
+                  <q-tooltip>Limpiar conteo</q-tooltip>
+                </q-btn>
+              </div>
+              <div v-for="grupo in gruposCortes" :key="grupo.titulo" class="cortes-fila">
+                <div v-for="corte in grupo.cortes" :key="corte.valor" class="corte">
+                  <div class="corte-label">{{ corte.corto }}</div>
+                  <input v-model.number="cierreForm.detalle_efectivo[corte.valor]" type="number" min="0" step="1"
+                         placeholder="0" @focus="e => e.target.select()" @input="aplicarConteo">
+                </div>
+              </div>
+            </div>
             <q-input v-model="cierreForm.comentario" label="Comentario" dense outlined
                      type="textarea" rows="2" v-uppercase />
             <q-banner v-if="!editandoCierre" dense rounded class="bg-orange-1 text-orange-10 q-mt-sm">
@@ -484,6 +533,8 @@
 import { ref, computed, watch, getCurrentInstance } from 'vue'
 import { imprimirVenta } from '../../../addons/ventaPrint'
 import { formatBoliviaDate, formatBoliviaDateTime } from '../../../addons/dateTime'
+import { pagoVacio, validarPago, payloadPago } from '../../../addons/pagoVenta'
+import PagoVenta from '../../../components/PagoVenta.vue'
 
 const { proxy } = getCurrentInstance()
 
@@ -530,7 +581,54 @@ const caja = ref({ fecha: '', cerrada: false, ver_montos: false, cierre: null, t
 const dialogCierre = ref(false)
 const editandoCierre = ref(false)
 const guardandoCierre = ref(false)
-const cierreForm = ref({ monto: null, comentario: '' })
+const cierreForm = ref({ monto: null, detalle_efectivo: conteoVacio(), comentario: '' })
+
+// Cortes de billetes y monedas en Bolivia; las claves coinciden con el backend.
+const gruposCortes = [
+  {
+    titulo: 'BILLETES',
+    cortes: ['200', '100', '50', '20', '10'].map(v => ({ valor: v, label: v + ' Bs', corto: v })),
+  },
+  {
+    titulo: 'MONEDAS',
+    cortes: [
+      { valor: '5', label: '5 Bs', corto: '5' },
+      { valor: '2', label: '2 Bs', corto: '2' },
+      { valor: '1', label: '1 Bs', corto: '1' },
+      { valor: '0.5', label: '50 ctvs', corto: '50¢' },
+      { valor: '0.2', label: '20 ctvs', corto: '20¢' },
+      { valor: '0.1', label: '10 ctvs', corto: '10¢' },
+    ],
+  },
+]
+const todosLosCortes = gruposCortes.flatMap(g => g.cortes)
+
+function conteoVacio () {
+  return Object.fromEntries(['200', '100', '50', '20', '10', '5', '2', '1', '0.5', '0.2', '0.1'].map(v => [v, '']))
+}
+
+// En centavos para no arrastrar errores de punto flotante (0.1 + 0.2).
+function centavosCorte (valor, cantidad) {
+  return (Number(cantidad) || 0) * Math.round(Number(valor) * 100)
+}
+const totalEfectivo = computed(() =>
+  todosLosCortes.reduce((s, c) => s + centavosCorte(c.valor, cierreForm.value.detalle_efectivo[c.valor]), 0) / 100)
+
+// Solo los cortes con cantidad, para mostrar el cierre guardado.
+function cortesContados (detalle) {
+  return todosLosCortes
+    .map(c => ({ ...c, cantidad: Number(detalle?.[c.valor] || 0) }))
+    .filter(c => c.cantidad > 0)
+}
+
+// El conteo es solo una ayuda: al escribir una cantidad se llena el monto,
+// que el cajero puede seguir corrigiendo a mano.
+function aplicarConteo () {
+  cierreForm.value.monto = totalEfectivo.value
+}
+function limpiarConteo () {
+  cierreForm.value.detalle_efectivo = conteoVacio()
+}
 
 async function cargarCaja () {
   if (!canCerrarCaja.value) return
@@ -545,22 +643,32 @@ async function cargarCaja () {
 function abrirCierre () {
   editandoCierre.value = false
   // Arranca en cero: el cajero cuenta el efectivo y escribe lo que entrega.
-  cierreForm.value = { monto: 0, comentario: '' }
+  cierreForm.value = { monto: null, detalle_efectivo: conteoVacio(), comentario: '' }
   dialogCierre.value = true
   cargarCaja()
 }
 
 function editarCierre () {
   editandoCierre.value = true
+  // Parte del conteo guardado (los cierres anteriores a los cortes arrancan en cero).
   cierreForm.value = {
     monto: Number(caja.value.cierre?.monto || 0),
+    detalle_efectivo: { ...conteoVacio(), ...(caja.value.cierre?.detalle_efectivo || {}) },
     comentario: caja.value.cierre?.comentario || '',
   }
 }
 
 async function guardarCierre () {
   if (cierreForm.value.monto === null || cierreForm.value.monto === '') {
-    proxy.$alert.error('Indique el efectivo contado en caja')
+    proxy.$alert.error('Indique el efectivo que entrega')
+    return
+  }
+  const invalido = todosLosCortes.find(c => {
+    const v = cierreForm.value.detalle_efectivo[c.valor]
+    return v !== '' && v !== null && (!Number.isInteger(Number(v)) || Number(v) < 0)
+  })
+  if (invalido) {
+    proxy.$alert.error('Cantidad inválida en el corte de ' + invalido.label)
     return
   }
   guardandoCierre.value = true
@@ -728,23 +836,26 @@ function onFiltroChange () {
   timerFiltro = setTimeout(() => { pageVentas.value = 1; loadVentas() }, 350)
 }
 
+// Filtros del historial: los usan el listado y las exportaciones.
+function filtroParams () {
+  return {
+    fecha_inicio: filtro.value.fecha_inicio,
+    fecha_fin: filtro.value.fecha_fin,
+    hora_inicio: filtro.value.hora_inicio,
+    hora_fin: filtro.value.hora_fin,
+    paciente_id: filtro.value.paciente_id,
+    user_id: filtro.value.user_id,
+    estado: filtro.value.estado,
+    tipo_movimiento: filtro.value.tipo_movimiento,
+    solo_farmacia: props.soloFarmacia ? 1 : undefined,
+  }
+}
+
 async function loadVentas () {
   loadingVentas.value = true
   try {
     const res = await proxy.$axios.get('ventas', {
-      params: {
-        page: pageVentas.value,
-        per_page: perVentas,
-        fecha_inicio: filtro.value.fecha_inicio,
-        fecha_fin: filtro.value.fecha_fin,
-        hora_inicio: filtro.value.hora_inicio,
-        hora_fin: filtro.value.hora_fin,
-        paciente_id: filtro.value.paciente_id,
-        user_id: filtro.value.user_id,
-        estado: filtro.value.estado,
-        tipo_movimiento: filtro.value.tipo_movimiento,
-        solo_farmacia: props.soloFarmacia ? 1 : undefined,
-      },
+      params: { page: pageVentas.value, per_page: perVentas, ...filtroParams() },
     })
     const data = res.data || {}
     resumen.value = data.resumen || { total_ventas: 0, total_egresos: 0, total_anuladas: 0, cantidad: 0 }
@@ -779,6 +890,70 @@ async function imprimir (row) {
   }
 }
 
+// ── Exportar / imprimir el listado ─────────────────────────────
+const exportingExcel = ref(false)
+const exportingPdf = ref(false)
+const imprimiendoLista = ref(false)
+
+async function pdfListaBlob () {
+  const res = await proxy.$axios.get('ventas/export-pdf', { params: filtroParams(), responseType: 'blob' })
+  return window.URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }))
+}
+
+async function exportPdf () {
+  exportingPdf.value = true
+  try {
+    window.open(await pdfListaBlob(), '_blank')
+  } catch (e) {
+    proxy.$alert.error('Error al generar PDF')
+  } finally {
+    exportingPdf.value = false
+  }
+}
+
+// Carga el PDF en un iframe oculto y abre el diálogo de impresión del navegador.
+async function imprimirLista () {
+  imprimiendoLista.value = true
+  try {
+    const url = await pdfListaBlob()
+    const iframe = document.createElement('iframe')
+    iframe.style.position = 'fixed'
+    iframe.style.width = '0'
+    iframe.style.height = '0'
+    iframe.style.border = '0'
+    iframe.src = url
+    iframe.onload = () => {
+      iframe.contentWindow.focus()
+      iframe.contentWindow.print()
+      setTimeout(() => { iframe.remove(); window.URL.revokeObjectURL(url) }, 60000)
+    }
+    document.body.appendChild(iframe)
+  } catch (e) {
+    proxy.$alert.error('Error al imprimir')
+  } finally {
+    imprimiendoLista.value = false
+  }
+}
+
+async function exportExcel () {
+  exportingExcel.value = true
+  try {
+    const res = await proxy.$axios.get('ventas/export-excel', { params: filtroParams(), responseType: 'blob' })
+    const url = window.URL.createObjectURL(new Blob([res.data], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    }))
+    const a = document.createElement('a')
+    a.href = url
+    a.download = (props.soloFarmacia ? 'ventas_farmacia_' : 'ventas_') + hoyBolivia() + '.xlsx'
+    a.click()
+    window.URL.revokeObjectURL(url)
+  } catch (e) {
+    proxy.$alert.error('Error al generar Excel')
+  } finally {
+    exportingExcel.value = false
+  }
+}
+
 function anular (row) {
   const que = esEgreso(row) ? 'el gasto' : 'la venta'
   proxy.$alert.dialog('¿Desea anular ' + que + ' #' + row.id + '?').onOk(() => {
@@ -791,28 +966,26 @@ function anular (row) {
 // ── Cobrar venta pendiente ─────────────────────────────────────
 const dialogCobrar = ref(false)
 const ventaCobrar  = ref(null)
-const cobrarPago   = ref(0)
+const cobrarPago   = ref(pagoVacio())
 const cobrando     = ref(false)
-
-const cobrarCambio = computed(() => {
-  const pago = Number(cobrarPago.value) || 0
-  return Math.round((pago - Number(ventaCobrar.value?.total || 0)) * 100) / 100
-})
+const totalCobrar  = computed(() => Number(ventaCobrar.value?.total || 0))
 
 function abrirCobrar (row) {
   ventaCobrar.value = row
-  cobrarPago.value = Number(row.total)
+  cobrarPago.value = pagoVacio()
   dialogCobrar.value = true
 }
 
 async function cobrarVenta () {
-  if (Number(cobrarPago.value) < Number(ventaCobrar.value?.total || 0)) {
-    proxy.$alert.error('El pago no puede ser menor al total')
+  const error = validarPago(cobrarPago.value, totalCobrar.value)
+  if (error) {
+    proxy.$alert.error(error)
     return
   }
   cobrando.value = true
   try {
-    const res = await proxy.$axios.put('ventas/' + ventaCobrar.value.id + '/completar', { pago: cobrarPago.value })
+    const res = await proxy.$axios.put('ventas/' + ventaCobrar.value.id + '/completar',
+      payloadPago(cobrarPago.value, totalCobrar.value))
     proxy.$alert.success('Venta cobrada')
     dialogCobrar.value = false
     loadVentas()
@@ -834,6 +1007,39 @@ watch(() => proxy.$store.isLogged, (val) => { if (val) init() }, { immediate: tr
 </script>
 
 <style scoped>
+/* ── Ayuda de conteo por cortes (cierre de caja) ─────────────── */
+.cortes-ayuda {
+  border: 1px dashed #cfd8dc;
+  border-radius: 6px;
+  padding: 4px 6px 6px;
+}
+.cortes-fila {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 4px;
+}
+.cortes-fila + .cortes-fila { margin-top: 4px; }
+.corte { text-align: center; }
+.corte-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: #546e7a;
+  line-height: 14px;
+}
+.corte input {
+  width: 100%;
+  height: 24px;
+  padding: 0 3px;
+  border: 1px solid #cfd8dc;
+  border-radius: 4px;
+  font-size: 12px;
+  text-align: center;
+  outline: none;
+  -moz-appearance: textfield;
+}
+.corte input:focus { border-color: #00796b; }
+.corte input::-webkit-outer-spin-button,
+.corte input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 /* ── Barra de filtros ──────────────────────────────────────────
    Una sola fila baja: campos sin label flotante ni espacio para
    mensajes, separados por rótulos de texto en lugar de cajas. */

@@ -22,6 +22,7 @@ use App\Http\Controllers\ReactivoKardexController;
 use App\Http\Controllers\SeguroController;
 use App\Http\Controllers\SolicitudeController;
 use App\Http\Controllers\UserController;
+use App\Http\Controllers\VentaClienteController;
 use App\Http\Controllers\VentaController;
 use Illuminate\Support\Facades\Route;
 
@@ -205,8 +206,14 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/compras', [CompraController::class, 'store']);
     Route::delete('/compras/{id}', [CompraController::class, 'destroy']);
 
+    // Ventas por cliente (para facturar): no expone el listado general
+    Route::get('/ventas-clientes/clientes', [VentaClienteController::class, 'clientes']);
+    Route::get('/ventas-clientes', [VentaClienteController::class, 'index']);
+
     // Ventas
     Route::get('/ventas', [VentaController::class, 'index']);
+    Route::get('/ventas/export-excel', [VentaController::class, 'exportExcel']);
+    Route::get('/ventas/export-pdf', [VentaController::class, 'exportPdf']);
     Route::get('/ventas/{id}', [VentaController::class, 'show']);
     // Antes de POST /ventas: un gasto de caja se registra por su propia ruta.
     Route::post('/ventas/gasto', [VentaController::class, 'gasto']);
@@ -221,6 +228,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/cierres-caja/{id}/ventas/export-pdf', [CierreCajaController::class, 'ventasExportPdf']);
     Route::get('/cierres-caja/{id}/ventas', [CierreCajaController::class, 'ventas']);
     Route::post('/cierres-caja', [CierreCajaController::class, 'store']);
+    Route::put('/cierres-caja/{id}/validar', [CierreCajaController::class, 'validar']);
     Route::put('/cierres-caja/{id}', [CierreCajaController::class, 'update']);
 
     // Ingresos y gastos de Caja Administrativa y Caja General

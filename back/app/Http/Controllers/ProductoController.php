@@ -257,7 +257,8 @@ class ProductoController extends Controller
 
     public function tiposProducto(Request $request)
     {
-        $this->req($request, 'Ver Productos');
+        // Quien vende necesita las categorías para filtrar el catálogo de la venta.
+        $this->req($request, ['Ver Productos', 'Crear Ventas']);
         $q = $request->input('q', '');
         $perPage = $request->input('per_page');
 
@@ -345,7 +346,8 @@ class ProductoController extends Controller
 
     public function index(Request $request)
     {
-        $this->req($request, 'Ver Productos');
+        // Quien vende arma la venta desde este catálogo aunque no administre productos.
+        $this->req($request, ['Ver Productos', 'Crear Ventas']);
 
         $q = $request->input('q', '');
         $tipoProductoId = $request->input('tipo_producto_id', '');

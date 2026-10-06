@@ -48,7 +48,7 @@ class Permisos
             'Ver Montos Caja', 'Ver Ventas Clientes', 'Ver Compras Pacientes',
         ],
         'Caja' => [
-            'Ver Cierres Caja', 'Cerrar Caja', 'Validar Cierres Caja',
+            'Ver Cierres Caja', 'Cerrar Caja', 'Validar Cierres Caja', 'Autorizar Ventas Caja Cerrada',
         ],
         'Caja Administrativa' => [
             'Ver Caja Administrativa', 'Crear Caja Administrativa',
@@ -151,6 +151,7 @@ class Permisos
         'Ver Cierres Caja' => 'Consultar los cierres de caja realizados y el estado del turno actual.',
         'Cerrar Caja' => 'Ejecutar el cierre de caja del turno y registrar el arqueo.',
         'Validar Cierres Caja' => 'Revisar y validar los cierres de caja. Un cierre validado queda cerrado y ya no admite correcciones.',
+        'Autorizar Ventas Caja Cerrada' => 'Dar tiempo extra a un usuario que ya cerró su caja para que siga vendiendo; luego corrige su cierre.',
 
         // Caja Administrativa
         'Ver Caja Administrativa' => 'Consultar los ingresos y gastos de la caja administrativa.',

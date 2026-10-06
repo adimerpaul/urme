@@ -1,0 +1,1025 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+
+/**
+ * Reinicio del inventario de farmacia con el conteo oficial (28-09-2026).
+ *
+ * Todo lo de farmacia registrado antes de hoy se descarta y se arranca de cero:
+ *   - Compras y bajas anteriores a hoy: se borran.
+ *   - Ventas anteriores a hoy que son solo de farmacia: se borran. Las ventas
+ *     mixtas (farmacia + servicios/laboratorio) se conservan, pero sus ítems
+ *     de farmacia pierden el vínculo al lote.
+ *   - Cierres de caja anteriores a hoy: se borran.
+ *   - Productos de farmacia: se dan de baja (soft delete) y se crean de nuevo
+ *     desde el conteo. Si el producto anterior tenía precio, se conserva.
+ *
+ * El conteo entra como una única compra "INVENTARIO OFICIAL DE FARMACIA".
+ * Lo registrado hoy (ventas, etc.) no se toca.
+ *
+ * No es reversible: para volver atrás hay que restaurar el respaldo de la BD.
+ */
+return new class extends Migration
+{
+    private const COMENTARIO = 'INVENTARIO OFICIAL DE FARMACIA';
+
+    private const FECHA = '2026-09-28 08:00:00';
+
+    private const CORTE = '2026-09-28 00:00:00';
+
+    public function up(): void
+    {
+        DB::transaction(function () {
+            $ahora = now();
+            $tipoFarmaciaId = $this->tipoFarmaciaId($ahora);
+
+            $this->soltarLotes('venta_detalles');
+            $this->soltarLotes('baja_detalles');
+
+            $this->borrarBajas();
+            $this->borrarVentasDeFarmacia($tipoFarmaciaId);
+            $this->borrarCierresCaja();
+            $this->borrarCompras();
+
+            $precios = $this->preciosAnteriores($tipoFarmaciaId);
+            $this->darDeBajaProductos($tipoFarmaciaId, $ahora);
+
+            $this->cargarInventario($tipoFarmaciaId, $precios, $ahora);
+        });
+    }
+
+    public function down(): void
+    {
+        // Irreversible: los datos borrados solo se recuperan desde el respaldo.
+    }
+
+    // ── Limpieza ──────────────────────────────────────────────────
+
+    /** Los lotes anteriores desaparecen; ventas y bajas que se conservan pierden el vínculo. */
+    private function soltarLotes(string $tabla): void
+    {
+        if (! Schema::hasTable($tabla)) {
+            return;
+        }
+
+        DB::table($tabla)->whereNotNull('compra_detalle_id')->update(['compra_detalle_id' => null]);
+    }
+
+    private function borrarBajas(): void
+    {
+        $ids = DB::table('bajas')->where('created_at', '<', self::CORTE)->pluck('id');
+
+        DB::table('baja_detalles')->whereIn('baja_id', $ids)->delete();
+        DB::table('bajas')->whereIn('id', $ids)->delete();
+    }
+
+    /** Solo ventas cuyos ítems son todos productos de farmacia. */
+    private function borrarVentasDeFarmacia(int $tipoFarmaciaId): void
+    {
+        $ids = DB::table('ventas as v')
+            ->where('v.created_at', '<', self::CORTE)
+            ->whereExists(fn ($q) => $q->from('venta_detalles as vd')
+                ->join('productos as p', 'p.id', '=', 'vd.producto_id')
+                ->whereColumn('vd.venta_id', 'v.id')
+                ->where('p.tipo_producto_id', $tipoFarmaciaId))
+            ->whereNotExists(fn ($q) => $q->from('venta_detalles as vd')
+                ->leftJoin('productos as p', 'p.id', '=', 'vd.producto_id')
+                ->whereColumn('vd.venta_id', 'v.id')
+                ->where(fn ($w) => $w->whereNull('p.id')->orWhere('p.tipo_producto_id', '<>', $tipoFarmaciaId)))
+            ->pluck('v.id');
+
+        DB::table('internaciones')->whereIn('venta_id', $ids)->update(['venta_id' => null]);
+        DB::table('venta_detalles')->whereIn('venta_id', $ids)->delete();
+        DB::table('ventas')->whereIn('id', $ids)->delete();
+    }
+
+    private function borrarCierresCaja(): void
+    {
+        DB::table('cierres_caja')->where('fecha', '<', self::CORTE)->delete();
+    }
+
+    private function borrarCompras(): void
+    {
+        $ids = DB::table('compras')->where('fecha_hora', '<', self::CORTE)->pluck('id');
+
+        DB::table('compra_detalles')->whereIn('compra_id', $ids)->delete();
+        DB::table('compras')->whereIn('id', $ids)->delete();
+    }
+
+    /** Precios cargados a mano en el catálogo anterior, por nombre|comercial|marca. */
+    private function preciosAnteriores(int $tipoFarmaciaId): array
+    {
+        return DB::table('productos')
+            ->whereNull('deleted_at')
+            ->where('tipo_producto_id', $tipoFarmaciaId)
+            ->where('precio', '>', 0)
+            ->get(['nombre', 'nombre_comercial', 'marca', 'precio', 'precio_seguro'])
+            ->keyBy(fn ($p) => $this->clave($p->nombre, $p->nombre_comercial, $p->marca))
+            ->all();
+    }
+
+    private function darDeBajaProductos(int $tipoFarmaciaId, $ahora): void
+    {
+        DB::table('productos')
+            ->whereNull('deleted_at')
+            ->where('tipo_producto_id', $tipoFarmaciaId)
+            ->update(['deleted_at' => $ahora, 'updated_at' => $ahora]);
+    }
+
+    // ── Carga del conteo ──────────────────────────────────────────
+
+    private function cargarInventario(int $tipoFarmaciaId, array $precios, $ahora): void
+    {
+        $fabricantes = DB::table('fabricantes')->pluck('id', 'nombre')->all();
+        $unidades = DB::table('unidades')->pluck('id', 'nombre')->all();
+        $productos = [];
+        $detalles = [];
+
+        foreach ($this->filas() as [$medicamento, $comercial, $marca, $lote, $vencimiento, $cantidad, $composicion]) {
+            // Algunas filas del conteo solo traen el nombre comercial.
+            $nombre = $medicamento !== '' ? $medicamento : $comercial;
+            $comercial = $comercial !== '' ? $comercial : null;
+            $marca = $marca !== '' && $marca !== '-' ? $marca : null;
+
+            $clave = $this->clave($nombre, $comercial, $marca);
+
+            if (! isset($productos[$clave])) {
+                $anterior = $precios[$clave] ?? null;
+
+                $productos[$clave] = DB::table('productos')->insertGetId([
+                    'codigo' => null,
+                    'nombre' => $nombre,
+                    'nombre_comercial' => $comercial,
+                    'descripcion' => null,
+                    'marca' => $marca,
+                    'fabricante_id' => $this->fabricanteId($marca, $fabricantes, $ahora),
+                    'unidad_id' => $this->unidadId($composicion, $unidades, $ahora),
+                    'tipo_producto_id' => $tipoFarmaciaId,
+                    'precio' => $anterior->precio ?? 0,
+                    'precio_seguro' => $anterior->precio_seguro ?? null,
+                    'created_at' => $ahora,
+                    'updated_at' => $ahora,
+                ]);
+            }
+
+            $detalles[] = [
+                'producto_id' => $productos[$clave],
+                'nombre' => $nombre,
+                'precio' => 0,
+                'cantidad' => (float) $cantidad,
+                'total' => 0,
+                'factor' => null,
+                'precio_venta' => null,
+                'lote' => $lote !== '' ? $lote : null,
+                'fecha_vencimiento' => $this->fecha($vencimiento),
+                'created_at' => $ahora,
+                'updated_at' => $ahora,
+            ];
+        }
+
+        $userId = DB::table('users')->orderBy('id')->value('id');
+
+        $compraId = DB::table('compras')->insertGetId([
+            'user_id' => $userId,
+            'proveedor_id' => null,
+            'fecha_hora' => self::FECHA,
+            'nro_factura' => null,
+            'tipo_pago' => 'EFECTIVO',
+            'comentario' => self::COMENTARIO,
+            'estado' => 'ACTIVO',
+            'total' => 0,
+            'created_at' => $ahora,
+            'updated_at' => $ahora,
+        ]);
+
+        foreach (array_chunk($detalles, 200) as $bloque) {
+            DB::table('compra_detalles')->insert(array_map(
+                fn ($detalle) => ['compra_id' => $compraId] + $detalle,
+                $bloque
+            ));
+        }
+    }
+
+    private function clave(string $nombre, ?string $comercial, ?string $marca): string
+    {
+        return mb_strtoupper($nombre.'|'.($comercial ?? '').'|'.($marca ?? ''));
+    }
+
+    // ── Catálogos ─────────────────────────────────────────────────
+
+    private function tipoFarmaciaId($ahora): int
+    {
+        $id = DB::table('tipo_productos')->where('nombre', 'FARMACIA')->value('id');
+
+        return $id ?? DB::table('tipo_productos')->insertGetId([
+            'nombre' => 'FARMACIA',
+            'color' => 'teal',
+            'es_laboratorio' => false,
+            'created_at' => $ahora,
+            'updated_at' => $ahora,
+        ]);
+    }
+
+    private function fabricanteId(?string $marca, array &$cache, $ahora): ?int
+    {
+        if ($marca === null) {
+            return null;
+        }
+
+        if (! isset($cache[$marca])) {
+            $cache[$marca] = DB::table('fabricantes')->insertGetId([
+                'nombre' => $marca,
+                'created_at' => $ahora,
+                'updated_at' => $ahora,
+            ]);
+        }
+
+        return (int) $cache[$marca];
+    }
+
+    private function unidadId(string $composicion, array &$cache, $ahora): ?int
+    {
+        $nombre = $this->normalizarUnidad($composicion);
+
+        if ($nombre === null) {
+            return null;
+        }
+
+        if (! isset($cache[$nombre])) {
+            $cache[$nombre] = DB::table('unidades')->insertGetId([
+                'nombre' => $nombre,
+                'created_at' => $ahora,
+                'updated_at' => $ahora,
+            ]);
+        }
+
+        return (int) $cache[$nombre];
+    }
+
+    /** El conteo escribe la presentación en plural y con erratas; aquí se unifica. */
+    private function normalizarUnidad(string $composicion): ?string
+    {
+        $composicion = mb_strtoupper(trim($composicion));
+
+        if ($composicion === '') {
+            return null;
+        }
+
+        $equivalencias = [
+            'COMPROMIDO' => 'COMPRIMIDO',
+            'COMPRIMIDOS' => 'COMPRIMIDO',
+            'AMPOLLAS' => 'AMPOLLA',
+            'AN' => 'AMPOLLA',
+            'PIEZAS' => 'PIEZA',
+            'FRASCOS' => 'FRASCO',
+            'SOBRES' => 'SOBRE',
+            'CREMAS' => 'CREMA',
+            'JABONES' => 'JABON',
+            'GOTEROS' => 'GOTERO',
+            'ENVASES' => 'ENVASE',
+            'CAPSULAS' => 'CAPSULA',
+        ];
+
+        return $equivalencias[$composicion] ?? $composicion;
+    }
+
+    /**
+     * El conteo anota el vencimiento como "jun-28" (mes-año) y se guarda el
+     * último día de ese mes. Lo que no se entiende ("SV", "7/28/6/27",
+     * "24-mar", "jul-02") o viene vacío queda en null para corregirlo a mano.
+     */
+    private function fecha(string $vencimiento): ?string
+    {
+        $vencimiento = mb_strtolower(trim($vencimiento));
+
+        if (! preg_match('/^([a-z]+)-(\d{2})$/u', $vencimiento, $partes)) {
+            return null;
+        }
+
+        $meses = [
+            'ene' => 1, 'feb' => 2, 'mar' => 3, 'abr' => 4, 'may' => 5, 'jun' => 6,
+            'jul' => 7, 'ago' => 8, 'sep' => 9, 'sept' => 9, 'oct' => 10, 'nov' => 11, 'dic' => 12,
+        ];
+
+        $mes = $meses[$partes[1]] ?? null;
+        $anio = (int) $partes[2];
+
+        if ($mes === null || $anio < 25 || $anio > 40) {
+            return null;
+        }
+
+        $anio += 2000;
+        $ultimoDia = (int) date('t', mktime(0, 0, 0, $mes, 1, $anio));
+
+        return sprintf('%04d-%02d-%02d', $anio, $mes, $ultimoDia);
+    }
+
+    // ── Conteo oficial ────────────────────────────────────────────
+
+    /**
+     * Conteo tal como lo entregó farmacia, separado por "|":
+     * medicamento | nombre comercial | marca | lote | vencimiento | cantidad | composición.
+     *
+     * @return array<int, array<int, string>>
+     */
+    private function filas(): array
+    {
+        $csv = <<<'CSV'
+        KETOROLACO 60MG|REZITRO 60|IFA|25663|jun-28|6|AMPOLLAS
+        IBUPROFENO/PSEUDOEFETINA|DIPROFEN|IFA|52573|may-29|20|COMPROMIDO
+        DICLOFENACO/GRANOCOBATADINA|FLAMADIN B12|IFA|26210|feb-28|5|AMPOLLAS
+        DICLOFENACO/PARACETAMOL|FLAMADIN PLIS FORTE|IFA|42584|abr-27|25|COMPROMIDO
+        IBUPROFENO 400|DIPROFEN|IFA|122541|dic-27|10|COMPROMIDO
+        IBUPROFENO 600|DOPROFEN|IFA|122543|dic-27|10|COMPROMIDO
+        MELOXICAM/PRIDINOL|FLAMACOX RELAX|IFA|72519|jul-27|25|COMPROMIDO
+        ALBENDAZOL 400|CESTODEN|IFA|725110|jul-27|5|COMPROMIDO
+        CEFIXIMA|CEFABIOTIC|IFA|12517|ene-29|5|COMPROMIDO
+        DICLOFENACO/VITAMINA B12|FLAMADIN B12 FORTE|IFA|26678|jun-28|3|AMPOLLAS
+        DICLOFENACO/VITAMINA B12|FLAMADIN B12 FORTE|IFA|2511150|nov-27|1|AMPOLLAS
+        DICLOFENACO/PARACETAMOL|FLAMADIN PLUS|IFA|122551|dic-27|190|COMPROMIDO
+        IMIPEMEN/CILATADINA|CILASTAX|IFA|26216|feb-30|6|VIAL
+        PARACETAMOL/PSEUDOEFEDRINA|DOLOGRIP|IFA|52577|may-27|1|JARABE
+        DICLOFENACO|FLAMADIN|IFA|52577|feb-30|1|JARABE
+        METAMIZOL|REDUTEN|IFA|52546|may-27|1|JARABE
+        ANTIGIPÀL|DOLOGRIP I|IFA|725106|may-27|3|JARABE
+        CODEINA/CLORFERINAMIDA|TUSSINOL|IFA|72577|jul-27|2|JARABE
+        SALBUTAMOL/AMBROXOL|BRONCOFLU|IFA|62529|jul-27|1|JARABE
+        CITICOLINA|REGELNE 500|IFA|B-17824|jun-27|8|COMPROMIDO
+        ITROCONAZOL|ZITRACON|IFA|B-48824|sep-28|16|COMPROMIDO
+        CARBAMACEPINA|FARMAZEPIM|IFA|B-24624|7/28/6/27|29|COMPROMIDO
+        PIROXICAM/CARISOPROBOL|RELAXICAM|IFA|B-23524|oct-28|95|COMPROMIDO
+        INDOMETACINA100|INDOFAR|IFA|C-06824|oct-26|30|COMPROMIDO
+        NIMODIPINO|USUPEK|IFA|B-14025|jun-27|97|COMPROMIDO
+        NIMODIPINO|USUPEK|IFA|B-29525|oct-27|74|COMPROMIDO
+        CITICOLINA|RECELINE|IFA|A-05024|jul-28|3|JARABE
+        AZITROMICINA|BATAZIM|AMFAR|AZI250625|jun-28|3|JARABE
+        LOZARTAN|LOSARTAN|IFA|21111224|nov-27|21|COMPROMIDO
+        ATORVASTATINA 20|ATORVASTATINA|DISMEDIN|241075|oct-27|96|COMPROMIDO
+        PARACETAMOL|PARACETAMOL|UNIVERSAL|230628|jun-28|130|COMPROMIDO
+        QUETIAPINA 100|QUETIAPIN|CATEDRAL|20551|jul-27|21|COMPROMIDO
+        CLORIXINATO DE LISINA/PROPINOX|VIADIL COMPUESTO|MEGALABS|10356|may-27|20|COMPROMIDO
+        LEVETIRAZETAM|CEUMID|MEGALABS|11696|jun-28|10|AMPOLLAS
+        LEVETIRAZETAM|CEUMID|MEGALABS|10356|sep-28|55|COMPROMIDO
+        BISOPROL FOMARATO|CORNTEL|MEGALABS|11696|oct-26|1|AMPOLLAS
+        BACILLUS CLAUSSIN|DEFLORA|MEGALABS|12792|may-27|20|FRASCO
+        PIROXICAM/VIT. B6B12|FLOGIATRIN|MEGALABS|8949|jul-27|1|VIAL
+        DAPAGLIFLOZINA|DAPAGLICINA|MEGALABS|H325001|mar-29|30|COMPROMIDO
+        RUPATADINA|MEGATADINA|MEGALABS|2411964601|nov-28|20|COMPROMIDO
+        ACIDO TRANEXAMICO 250|RIXAM 250|MEGALABS|13014|sep-28|6|AMPOLLAS
+        ACIDO TRANEXAMICO 500|RIXAM 500|MEGALABS|12442|jun-28|3|AMPOLLAS
+        ACIDO TRANEXAMICO 1000|RIXAM 1000|MEGALABS|11544|feb-28|9|AMPOLLAS
+        HEDERA HELIX|ABRILAR|MEGALABS|10925|mar-28|8|JARABE
+        CLORURO DE SODIO|NASOXY|MEGALABS|25CO99B|ago-27|2|AEROSOL
+        CARBOXIMETILCISTEINA/DEXTROMETOFANO|TUSILEXIL D|MEGALABS|23292|may-27|1|JARABE
+        NEOSTIGMINA|NEOSTEGMINA|INTI|37810|feb-31|62|AMPOLLAS
+        ADRENALINA|ADRENALINA|INTI|36588|oct-27|24|AMPOLLAS
+        PARACETAMOL/CAFEINA/ASA|BIOELECTRO|INTI|36588|may-28|104|COMPROMIDO
+        ACIDO ACETIL SALICILICO|ASA|INTI|2034335|mar-29|240|COMPROMIDO
+        COMPLEJO B|COMPLEJO B VIMIN|INTI|34359|feb-27|99|COMPROMIDO
+        VITAMINA B1|B VIMIN|INTI|38785|jun-28|20|COMPROMIDO
+        ACIDO FOLICO/VIT. C|CARDIOVIMIN|INTI|20947|oct-28|24|COMPROMIDO
+        LEVOTIROXINA 50|EUTIROX|INTI|3611|nov-26|20|COMPROMIDO
+        LEVOTIROXINA 100|EUTIROX|INTI|M455526|nov-26|50|COMPROMIDO
+        PROPINOX|DEMOTIL|INTI|M44214|oct-28|1|AMPOLLAS
+        KETOROLACO 60MG|SIUPRADOL|INTI|25333|oct-27|1|AMPOLLAS
+        SACCHAROMYCES BAULARDII|FLORESTOR|INTI|H10236|abr-28|13|SOBRE
+        MAGNESIO/VIT. C|MAGNESIOVIMIN|INTI|36870|sep-26|25|COMPROMIDO
+        LACTOBACILLUS|ZOLIUM RELAX|INTI|MA421|sep-26|30|COMPROMIDO
+        HIERRO/VIT. C|SIDERAL|INTI|M40367|sep-26|20|COMPROMIDO
+        HIEROO/VITAMINAS|SIDERAL|INTI|3094|sep-26|10|SOBRE
+        HIEROO/AC. FOLICO|SIDERAL|INTI|3034|sep-26|10|SOBRE
+        METOCLOPRAMIDA|METOCLOPRAMIDA|INTI|30597|sep-26|98|COMPROMIDO
+        ACIDO DEHIDROCOLICO|BILISAN|INTI|15415|nov-26|80|COMPROMIDO
+        HIDROCORTIZONA|HIDROCLORT|LAQFAGAL|36713|jul-27|82|COMPROMIDO
+        REROMETRINA|ERGO 0.2|LAQFAGAL|2116|jun-27|94|COMPROMIDO
+        ATORVASTATINA 20|ATROVARD|LAQFAGAL|28027|abr-28|15|COMPROMIDO
+        ACICLOVIR|ACYCLO|LAQFAGAL|14406|feb-28|170|COMPROMIDO
+        SINDELAFIL|SUPER ERECTRIX|LAQFAGAL|24611|oct-27|7|COMPROMIDO
+        ESPIRNOLACOTNA 100|VARDARTONE|LAQFAGAL|24418|jul-27|3|COMPROMIDO
+        ESOIRONOLACTONA 25|VARDARTONE|LAQFAGAL|19317|ago-28|24|COMPROMIDO
+        FUROSEMINA 40|LASIVARD|LAQFAGAL|T28820|dic-27|100|COMPROMIDO
+        ENALAPRIL 10|ENAPRIL|LAQFAGAL|T25052|jul-27|100|COMPROMIDO
+        PROPANOLOL|VARVANOL|LAQFAGAL|CO3414|jul-27|100|COMPROMIDO
+        DICLOXACILINA|DOXY|LAQFAGAL|DLP5008|ago-28|100|COMPROMIDO
+        ERGOMETRINA|ERGO|LAQFAGAL|TP11025|abr-27|18|AMPOLLAS
+        METILPREDNISOLONA|METILPREOGAL|LAQFAGAL|2512222|mar-28|1|VIAL
+        FENITOINA|FENITOGAL|LAQFAGAL|125051|dic-28|24|AMPOLLAS
+        OXITOCINA|OXITOXINA|LAQFAGAL|250580|abr-28|14|AMPOLLAS
+        FENOFIBRATO|GALFIBRATO|LAQFAGAL|UT25004F|may-28|30|COMPROMIDO
+        BITAMINA B1|TIAMIGAL|LAQFAGAL|20T24001|may-28|10|AN
+        BRANCOMICINA/LEVOFLOXACINA|BRANCOMICINA/LEVOFLOXACINA|QUIMFA|241071|mar-27|3|COMPROMIDO
+        FORTINIL/CITICOLINA|FORTINIL/ CITICOLINA|QUIMFA|251625|may-27|2|AMPOLLAS
+        FORTINIL/CITICOLINA|FORTINIL/ CITICOLINA|QUIMFA|251625|oct-27|5|AMPOLLAS
+        FORTINIL/CITICOLINA|FORTINIL/ CITICOLINA|QUIMFA|250477|jul-29|30|COMPROMIDO
+        METOCLOPRAMIDA|ADECUAN|SIGMA|254098|ene-27|7|AMPOLLAS
+        TAMSULAMINA|FLOW 0.4|SIGMA|540725|feb-29|30|COMPROMIDO
+        NITROFURANTOINA|UVAMIN RETARD|SIGMA|1030125|feb-27|9|COMPROMIDO
+        MELOXICAM|BENFLOGIM|QUIMFA|80226|sep-27|6|COMPROMIDO
+        PIRACETAM|NOPIRAM|SIGMA|610925|oct-27|9|AMPOLLAS
+        SAL DE REHIDRATACION|CURADIL 90|ALCOS|16520X36|jun-27|3|FRASCO
+        SAL DE REHIDRATACION|DEHIDRILIT|INTI|34136|may-30|3|FRASCO
+        AMPICILINA|AMPIORIS|HANHEMANN|5616|dic-28|25|VIAL
+        CEFTAZIDIMA|CEFTADIX11000|HANHEMANN|123112|jul-27|25|VIAL
+        BICARBONATO DE SODIO|BICARBONATO DE SODIO|INTI|34677|dic-27|1|AMPOLLAS
+        BICARBONATO DE SODIO|BICARBONATO DE SODIO|INTI|36943|dic-27|50|AMPOLLAS
+        HILO VICRYL 5-0|HILO VICRYL 5-0|SUTUMED|20902911|sep-26|35|SACHET
+        HILO SEDA NEGRA 3-0|HILO SEDA NEGRA 3-0|BIOLINO|202436|jul-29|19|SACHET
+        HILO SEDA 2-0|HILO SEDA 2-0|BIOLINO|RL247702|nov-26|35|SACHET
+        HILO SEDA NEGRA 1|HILO SEDA NEGRA 1|BIOLINO|20622055|nov-27|35|SACHET
+        HILO CATGUT CROMICO 5-0|HILO CATGUT CROMICO 5-0|SUTUMED|201121032|jun-30|33|SACHET
+        HOLO CATGUT CROMICO 4-0|HOLO CATGUT CROMICO 4-0|SUTUMED|20108944|nov-27|8|SACHET
+        HILO CATGUT CROMICO 3-0|HILO CATGUT CROMICO 3-0|SUTUMED|21121032|ene-28|28|SACHET
+        HILO CATGUT CROMICO 2-0|HILO CATGUT CROMICO 2-0|SUTUMED|20108944|jun-29|31|SACHET
+        HILO CATGUT CROMICO 1|HILO CATGUT CROMICO 1|SUTUMED|203000754|nov-27|10|SACHET
+        APOSITO ADESIVO|TEGRADERM|LEVKOMEDT|40942822|ene-29|5|SACHET
+        MICROPORE|MICROPORE|3M MICROPORE|345MHM|mar-29|42|
+        CATGUT SIMPLE 2-0|CATGUT SIMPLE 2-0|SUTUMED|203013|ene-29|15|SACHET
+        CATGUT SIMPLE 1|CATGUT SIMPLE 1|SUTUMED|2022934|jun-30|22|SACHET
+        HILO CATGUT SIMPLE 0|HILO CATGUT SIMPLE 0|SUTUMED|20301382|mar-27|26|SACHET
+        HILO VICRYL 6-0|HILO VICRYL 6-0|SUTUMED|253611|jun-29|11|SACHET
+        HILO VICRYL 4-0|HILO VICRYL 4-0|SUTUMED|IA247129|mar-27|12|SACHET
+        HILO NYLON 4-0|HILO NYLON 4-0|SUTUMED|250306|jun-30|21|SACHET
+        HILO VICRYL 3-0|HILO VICRYL 3-0|SUTUMED|RL247702|nov-29|23|SACHET
+        HILO NYLON 2-0|HILO NYLON 2-0|SUTUMED|20606722|jun-29|6|SACHET
+        HILO NYLON 1|HILO NYLON 1|SUTUMED|21203613|dic-28|12|SACHET
+        CERA DE HUESO|CERA DE HUESO|SUTUMED|20626204|jun-30|12|SACHET
+        TRANSPORE|TRANSPORE|3M MICROPORE|33KNJE|dic-28|24|
+        MICROPORE|MICROPORE|3M MICROPORE|33KNJE|jun-29|12|
+        MICROPORE|MICROPORE|3M MICROPORE|33KNJE|ago-28|1|
+        MICROPORE|MICROPORE|3M MICROPORE|231121|jun-27|24|
+        CINTA TRANSPARENTE|CINTA ANTIALERGICA|OPTIMED|W250340|nov-28|13|SACHET
+        ABSORBENTE HEMOSTATICO|STYPCEL|MEDPRIN|508250817|nov-30|5|SACHET
+        SET PARA BIOPSIA|BIOPSYSET|SALUR|51847|oct-28|1|SACHET
+        BAJA LENGUAS PEDIATRICO|BAJA LENGUAS PEDIATRICO||202404|abr-29|8|CAJA
+        ESPATULA DE ASA|ESPATULA DE ASA|OPTIMED|202404|abr-29|4|CAJA
+        BOLSA DE ORINA PEDRIATRICO||OPTIMED|202404|abr-29|44|BOLSA
+        FRASCO DE HECES|FRASCO DE HECES|OPTIMED|202404|ago-29|56|BOLSA
+        BOLSA COLECTORA|BOLSA COLECTORA|OPTIMED|EH-0031|dic-26|9|BOLSA
+        BOLSA COLECTORA NIPRO|BOLSA COLECTORA NIPRO|NIPRO|32519|feb-28|14|BOLSA
+        LLAVE DE 3 VIA|LLAVE DE 3 VIA|HE|240805|ago-29|20|BOLSA
+        LLAVE DE 3 VIAS ALARGADOR 30CM|LLAVE DE 3 VIAS ALARGADOR 30CM|HE|22302|ene-28|22|BOLSA
+        LLAVE DE 3 VIAS ALARGADOR 10CM|LLAVE DE 3 VIAS ALARGADOR 10CM|HE|B24420|sep-29|86|BOLSA
+        TELA ADHESIVA|TELA ADHESIVA|CREMER|24414|oct-30|15|BOLSA
+        FRASCO DE ORINA|FRASCO DE ORINA|FABRIMED|4535160|abr-27|10|BOLSA
+        PRESERVATIVO|PRESERVATIVO|INTENSS|250625|jun-30|182|BOLSA
+        SONDA FOLEY 16|SONDA FOLEY 16|CATHETER|2511039|oct-30|39|BOLSA
+        SONDA FOLEY 18|SONDA FOLEY 18|CATHETER|25A0036|ago-30|13|BOLSA
+        SONDA FOLEY 10|SONDA FOLEY 10|CATHETER|25A0037|ene-29|9|BOLSA
+        SONDA FOLEY 12|SONDA FOLEY 12|CATHETER|25A0038|nov-27|7|BOLSA
+        SONDA FOLEY 14|SONDA FOLEY 14|CATHETER|25A0039|nov-27|3|BOLSA
+        TUBO ENDOTRAQUEAL 7.5|TUBO ENDOTRAQUEAL 7.5|ENDOTRAQUEAL TUB|20240115|ene-29|4|BOLSA
+        TUBO ENDOTRAQUEAL 7|TUBO ENDOTRAQUEAL 7|ENDOTRAQUEAL TUB|20250828|ene-29|13|BOLSA
+        TUBO ENDOTRAQUEAL 5|TUBO ENDOTRAQUEAL 5|ENDOTRAQUEAL TUB|20250828|ago-30|10|BOLSA
+        TUBO ENDOTRAQUEAL 5.5|TUBO ENDOTRAQUEAL 5.5|ENDOTRAQUEAL TUB|20250828|oct-27|11|BOLSA
+        TUBO ENDOTRAQUEAL 6|TUBO ENDOTRAQUEAL 6|ENDOTRAQUEAL TUB|20250828|ene-29|10|BOLSA
+        TUBO ENDOTRAQUEAL 6.5|TUBO ENDOTRAQUEAL 6.5|ENDOTRAQUEAL TUB|20250828|may-27|8|BOLSA
+        TUBO ENDOTRAQUEAL 2.5|TUBO ENDOTRAQUEAL 2.5|ENDOTRAQUEAL TUB|20250828|oct-27|3|BOLSA
+        TUBO ENDOTRAQUEAL 3|TUBO ENDOTRAQUEAL 3|ENDOTRAQUEAL TUB|20250828|jun-27|3|BOLSA
+        TUBO ENDOTRAQUEAL 3|TUBO ENDOTRAQUEAL 3|ENDOTRAQUEAL TUB|20250828|oct-27|2|BOLSA
+        VENDA DE YESO 5´´|VENDA DE YESO 5´´|KENGDA|24042102|abr-27|4|BOLSA
+        SONDA NASOGASTRICA 12|SONDA NASOGASTRICA 12|FREDINATUBE|22102|may-27|34|BOLSA
+        SONDA NASOGASTRICA 16|SONDA NASOGASTRICA 16|FREDINATUBE|23196|dic-30|49|BOLSA
+        SONDA NASOGASTRICA 10|SONDA NASOGASTRICA 10|FREDINATUBE|2022601|may-27|37|BOLSA
+        |SONDA NASOGASTRICA 6|FREDINATUBE|23755133|abr-28|68|BOLSA
+        SONDA NASOGASTRICA 4|SONDA NASOGASTRICA 4|FREDINATUBE|22755131|jun-27|3|SACHET
+        HOILO SEDA 1|HOILO SEDA 1|SUTUMED|21005784|ago-29|1|SACHET
+        HILO VICRYL 6-0|HILO VICRYL 6-0|SUTUMED|2012273|ene-28|32|SACHET
+        HILO VICRYL 5-0|HILO VICRYL 5-0|SUTUMED|20262626|feb-31|36|SACHET
+        HILO VICRYL 4-0|HILO VICRYL 4-0|SUTUMED|21120642|nov-27|19|SACHET
+        HILO VICRYL 3-0|HILO VICRYL 3-0|SUTUMED|20472434|abr-29|31|SACHET
+        HILO VICRYL 2-0|HILO VICRYL 2-0|SUTUMED|20622364|jun-29|14|SACHET
+        HILO VICRYL 0|HILO VICRYL 0|SUTUMED|2093436|sep-30|61|SACHET
+        HILO CATGUT SIMPLE 4-0|HILO CATGUT SIMPLE 4-0|SUTUMED|20605473|jun-28|9|SACHET
+        HILO CATGUT SIMPLE 5-0|HILO CATGUT SIMPLE 5-0|SUTUMED|202300814|mar-29|7|SACHET
+        HILO VICRYL 3-0|HILO VICRYL 3-0|SUTUMED|20605713|dic-28|11|SACHET
+        HILO SEDA 0|HILO SEDA 0|SUTUMED|21205903|mar-27|4|SACHET
+        HILO SEDA 5-0|HILO SEDA 5-0|SUTUMED|20301582|mar-27|9|SACHET
+        HILO VICRYL 4-0|HILO VICRYL 4-0|SUTUMED|20605733|jun-28|5|SACHET
+        HILO NYLON|HILO NYLON|SUTUMED|21255745|dic-30|17|SACHET
+        AMIKACINA|BETACLOX|TERBOL|1A24024|oct-27|67|AMPOLLAS
+        CLOXACILINA|TERBOCAINA|TERBOL|2403305|mar-27|11|AMPOLLAS
+        LIDOCAINA 2% 20ML|LIDOCAINA 2% 20ML|TERBOL|1B23014|oct-26|21|AMPOLLAS
+        LIDOCAINA 2% 20ML|LIDOCAINA 2% 20ML|TERBOL|1B250065|dic-28|3|AMPOLLAS
+        LIDOCAINA 2% 50ML|LIDOCAINA 2% 50ML|TERBOL|2507306|jul-27|3|AMPOLLAS
+        OMEPRAZOL 40MG|OMEGAZOL|TERBOL|2504302|abr-28|38|AMPOLLAS
+        CEFOTAXIMA 1G|CAFOTAXIM|TERBOL|2504302|mar-27|3|VIAL
+        CEFTRIAXONA|CEXTRIAXON|TERBOL|2403304|ago-28|23|VIAL
+        LIDOCANA 1%|TERBOCAINA|TERBOL|1A25010|abr-28|18|VIAL
+        HIDROCORTIZONA 250MG|HIDROCORTIZONA 250MG|DISMEDIN|250469|mar-28|27|VIAL
+        HIDROCORTIZONA 500MG|HIDROCORTIZONA 500MG|DISMEDIN|250318|may-28|13|VIAL
+        METOCLOPRAMIDA|METOCLOPRAMIDA|DISMEDIN|250506|may-27|100|AMPOLLAS
+        GENTAMICINA|GENTAMICINA|DISMEDIN|250412|sep-27|101|AMPOLLAS
+        FUROSEMIDA|FUROSEMIDA|DISMEDIN|250311|oct-27|130|AMPOLLAS
+        VITAMINA C|VITAMINA C|DISMEDIN|250820|sep-27|100|AMPOLLAS
+        MELOXICAM|FLAMAX|TERBOL|1A24020|ene-29|25|AMPOLLAS
+        BUTIL BROMURO DE HIOSINA|BUTIL BROMURO DE HIOSINA|DISMEDIN|240918|sep-29|48|AMPOLLAS
+        SULFATO DE MAGNESIO|SULFATO DE MAGNESIO|INTI|34664|sep-27|12|AMPOLLAS
+        SULFATO DE MAGNESIO|SULFATO DE MAGNESIO|INTI|35648|jun-27|50|AMPOLLAS
+        VITAMINA C|VITAMINA C|INTI|36523|feb-28|57|AMPOLLAS
+        METAMIZOL 1G|DIPIRONA|INTI|37419|ene-28|162|AMPOLLAS
+        AGUA DE INYECCION|AGUA DE INYECCION|INTI|35498|ene-31|37|AMPOLLAS
+        LIDOCAINA 2% 10ML|LIDOCAINA 2% 10ML|INTI|5793|oct-30|15|AMPOLLAS
+        DEXAMETAZONA 8MG|DEXACOFASONA|INTI|33963|ago-30|170|AMPOLLAS
+        BUPIVACAINA 0.5 10ML|BUPIVACAINA 0.5 10ML|INTI|37763|dic-28|55|AMPOLLAS
+        BUPIVACAINA 0.5 4ML|BUPIVACAINA 0.5 4ML|INTI|37812|may-30|96|AMPOLLAS
+        BUPIVACAINA 0.5 4ML|BUPIVACAINA 0.5 4ML|DISMEDIN|BEH105|ene-31|3|AMPOLLAS
+        CEFOTAXIMA 1G|CEFOTAXIMA 1G|HANHEMANN|V01601|oct-30|50|VIAL
+        CEFOTAXIMA 1G|CEFOTAXIMA 1G|HANHEMANN|V10535|ago-30|29|VIAL
+        CEFAZOLINA 1G|CEFAZOHAN|HANHEMANN|V08525|ago-30|60|VIAL
+        CEFTOZIDIMA|CEFODIX|HANHEMANN|V123112|dic-28|25|VIAL
+        AMPICILINA|AMPICRIS|HANHEMANN|V05616|may-30|25|VIAL
+        CEFTRIAXONA 1G|CEFTRIAX|IFA|26110|ene-30|25|VIAL
+        PREGABALINA|PREGABALINA|COFAR|7669|sep-28|7|COMPROMIDO
+        ROSUBASTATINA|ROSUVASTATINA|COFAR|B106|feb-29|30|COMPROMIDO
+        AZITROMICINA|AZITROMICINA|COFAR|5484|feb-29|6|COMPROMIDO
+        ACETILCISTEINA|ACETILCISTEINA|COFAR|3056|dic-27|14|SOBRE
+        KETOROLACO 60MG|KETOROLAKO|COFAR|7662|nov-28|15|AMPOLLAS
+        AMOXICILINA 1G|AMOXICILINA 1G|COFAR|3238|mar-27|51|COMPROMIDO
+        AMOXICILINA 500MG|AMOXCILINA|COFAR|6950|may-29|1|JARABE
+        IBUPROFENO 100|IBUPROFENO|COFAR|7234|jun-27|2|JARABE
+        IBUPROFENO 200|IBUPROFENO|COFAR|7302|jun-28|3|JARABE
+        HEDERA HELIX|BLOKTUS NATURAL|COFAR|6939|may-27|2|JARABE
+        SUCRALFATO/SIMETTICONA|SUCRABONAGEL|COFAR|8514|may-28|2|JARABE
+        HIDOXIDO DE ALUNIMIO Y MAGNESIO/SIMETICVONA|BONAGEL PLUS|COFAR|7754|oct-29|3|JARABE
+        HIDROXIDO DE MAGNESIO Y ALUMINIO|BONAGEL|COFAR|7871|dic-30|3|JARABE
+        DEXAMETASONA 8MG|CORTIMED 8|COFAR|7212|oct-28|13|AMPOLLAS
+        DICLOFENACO 75/VIT. B12|DOLOCOFAMIN|COFAR|7257|sep-29|18|AMPOLLAS
+        MELOXICAM/VIT. B12|FLEXICAM B12|COFAR|3987|oct-26|1|AMPOLLAS
+        DIPIRONA 1G|TERADOL|COFAR|6754|mar-28|6|AMPOLLAS
+        DIPIRONA 2G|TERADOL FORTE|COFAR|7275|abr-29|1|AMPOLLAS
+        ACIDO TRANEXAMICO 500|NEOTREX|COFAR|7507|may-30|4|AMPOLLAS
+        DICLOFENACO/PARACETAMOL|NOVADOL|COFAR|8299|ago-27|58|COMPROMIDO
+        DICLOFENACO/PARACETAMOL/CAFEINA|NOVADOL MUJER|COFAR|5828|jun-28|100|COMPROMIDO
+        PARACETAMOL 1G|TRASSIL|COFAR|8699|dic-27|60|SOBRE
+        SIMETICONA|DIGESTOGAS|COFAR|7543|may-28|30|COMPROMIDO
+        MELOXICAM/GLUCOSAMINA|DOLOFLEXICAM|COFAR|8735|ago-27|40|SOBRE
+        ORNITINA/ASPARTATO|L DEXAMINO|COFAR|7269|ago-27|8|AMPOLLAS
+        ORNITINA/ASPARTATO|DEXAMINO FUERTE|COFAR|5873|ago-27|55|SOBRE
+        DEXKETOPROFENO/PARACETAMOL|KETOFLEX|COFAR|7474|mar-27|30|COMPROMIDO
+        ETAMCILATO 500|PLATELET|COFAR|7473|ago-27|20|COMPROMIDO
+        ETAMSILATO250|PLATELET|COFAR|4518|mar-27|8|AMPOLLAS
+        ACETILCISTEINA|FLUIDIMED PRO|COFAR|6971|abr-27|7|SOBRE
+        DOMPERIDONA/SIMETICONA|PROCIN DIGEST|COFAR|7896|dic-30|88|COMPROMIDO
+        DL-METRONINA|DEXAMINO FUERTE|COFAR|7772|abr-28|36|AMPOLLAS
+        OLMERSANTAN/TIAZIDA|OXAR D|COFAR|6569|ene-27|31|COMPROMIDO
+        ATROPINA|ATROPINA|ALFA|1771|dic-28|33|AMPOLLAS
+        CLORFERINAMINA|CLORFERINAMINA|UNIVERSAL|240957|sep-27|77|AMPOLLAS
+        AMPICILINA|AMPICILINA|IFA|25750|jul-28|26|AMPOLLAS
+        DEXAMETAZINA 4|DEXAMETAZINA 4|INTI|38380|mar-28|100|AMPOLLAS
+        DEXAMETASONA 8MG|DEXAMETASONA 8MG|COFAR|7013|mar-28|87|AMPOLLAS
+        COMPLEJO B|COMPLEJO B|MEDICAL|260227|abr-29|0|AMPOLLAS
+        COMPLEJO B|COMPLEJO B|DISMEDIN|251011|feb-29|75|AMPOLLAS
+        CLORURO DE SODIO|CLARURO DE SODIO|INTI|3553|oct-28|19|AMPOLLAS
+        CLORURO DE SODIO|CLORURO DE SODIO|INTI|33231|sep-27|27|AMPOLLAS
+        CLORURO DE POTASIO|CLORURO DE POTASIO|INTI|36868|abr-28|42|AMPOLLAS
+        CLORURO DE POTASIO|CLORURO DE POTASIO|INTI|38868|abr-28|50|AMPOLLAS
+        GLUCANATO DE CALCIO|GLUCANATO DE CALCIO|IFA|259127|abr-29|15|AMPOLLAS
+        ATRACURIO|ATRACURIO|ALFA|ATR245|ago-27|1|AMPOLLAS
+        AGUA CON LIDOCAINA 1%|AGUA CON LIDOCAINA 1%|UNIVERSAL|250249|feb-28|100|AMPOLLAS
+        KETOPROFENO 100MG|KETOPROFENO 100MG|UNIVERSAL|2504307|abr-28|20|AMPOLLAS
+        KETOROLACO 60MG|KETOROLACO 60MG|UNIVERSAL|PY169|ene-28|100|AMPOLLAS
+        KETOROLACO 30|KETOROLACO 30|UNIVERSAL|1012602|dic-28|30|AMPOLLAS
+        LIDOCAINA|LIDOCAINA|IFA|PY171|feb-28|18|AMPOLLAS
+        AGUA CON LIDOCAINA 1%|AGUA CON LIDOCAINA|UNIVERSAL|10666|dic-28|7|AMPOLLAS
+        KETOROLACO 60MG|DISICOL|UNIVERSAL|2510140|oct-27|56|AMPOLLAS
+        KETOROLACO 60MG|CIROLAC|UNIVERSAL|250249|feb-28|0|AMPOLLAS
+        KETOPROFENO 100MG|KETOPROFENO|INTI|PY169|ene-28|88|AMPOLLAS
+        FLUCONAZOL 200|FLUXOL|ALCOS|18250|oct-28|23|AMPOLLAS
+        LEVOFLOXACINA|LEVOFLOXACINA|ALCOS|1100006|mar-27|20|AMPOLLAS
+        CIPROFLOXACINA|CIPROXAN|ALCOS|1605|oct-28|1|AMPOLLAS
+        CLINDAMICINA|CLINDALCOS|ALCOS|27855|nov-28|28|AMPOLLAS
+        SOL RINGER LACTATO 500ML|SOL RINGER LACTATO 500ML|INTI|210972|sep-28|288|FRASCO
+        SOL RINGER NORMAL 500ML|SOL RINGER NORMAL 500ML|INTI|211810|feb-29|228|FRASCO
+        SOL RINGER LACTATO 500ML|SOL RINGER LACTATO 500ML|INTI|26222|jun-29|10|FRASCO
+        SOL RINGER NORMAL 500ML|SOL RINGER NORMAL 500ML|INTI|28228|feb-29|9|FRASCO
+        SOL RINGER NORMAL 1000ML|SOL RINGER NORMAL 1000ML|INTI|39624|jun-31|8|FRASCO
+        CEFTRIAXONA 1G|CEFTRIAX|IFA|26109|ene-30|23|VIAL
+        CEFOTAXIMA 1G|IFOTAXIMA|IFA|25751|jul-29|25|VIAL
+        DICLOFENACO 75|EFASIGESIC|ALFA|32410|mar-27|56|AMPOLLAS
+        DICLOFENACO 75|DICLOFENACO|COFAR|6745|jun-28|2|AMPOLLAS
+        FUROSEMIDA|FUROSEMIDA|FARMASHOPING|154|jun-28|20|AMPOLLAS
+        GLUCOSA|GLUCOSA|ALFA|969|jun-28|17|AMPOLLAS
+        HIDROCORTIZONA 100|HIDROCORTIZONA 100|UNIVERSAL|63148|sep-28|31|AMPOLLAS
+        LIDOCAINA 25|LIDOCAINA 25|UNIVERSAL|46099|abr-28|6|AMPOLLAS
+        METOCLOPRAMIDA|METOCLOPRAMIDA|UNIVERSAL|240584|may-27|10|AMPOLLAS
+        VITAMINA K|VITAMINA K|ALFA|70680|jun-29|73|AMPOLLAS
+        CEFTRIAXONA|CEFTRIAXONA|FARMASHOPING|25073|abr-27|40|VIAL
+        METRONIDAZOL|METROGYN|ALCOS|215-5|dic-28|20|FRASCO
+        SOL FISIOLOGIA 1000|SOL FISIOLOGIA 1000|INTI|37450|ene-31|90|FRASCO
+        SOL FISIOLOGICA 500|SOL FISIOLOGICA 500|INTI|36555|oct-30|27|FRASCO
+        SOL FUSIOLOGICA 100|SOL FUSIOLOGICA 100|INTI|33905|jun-30|48|FRASCO
+        GLUCOSA 10% 500ML|GLUCOSA 10% 500ML|INTI|24387|sep-29|31|FRASCO
+        GLUCOSA 5% 1000|GLUCOSA 5% 1000|INTI|37494|ene-31|60|FRASCO
+        GLUCOSA 50% 500ML|GLUCOSA 50% 500ML|INTI|28195|jun-29|48|FRASCO
+        GLUCOSA 50% 500ML|GLUCOSA 50% 500ML|INTI|28195|jun-29|12|FRASCO
+        GLUCOSA 20% 500ML|GLUCOSA 20% 500ML|INTI|28192|nov-29|44|FRASCO
+        GLUCOSA 5% 1000|GLUCOSA 5% 1000|INTI|31048|dic-28|86|FRASCO
+        GLUCOSA 10% 1000ML|GLUCOSA 10% 1000ML|INTI|25673|nov-26|124|FRASCO
+        GLUCOSA 10% 1000ML|GLUCOSA 10% 1000ML|INTI|32687|nov-27|60|FRASCO
+        SOL RINGER NORMAL 1000ML|SOL RINGER NORMAL 1000ML|INTI|19186|oct-30|36|FRASCO
+        SOL RINGER LACTTATO 1000ML|SOL RINGER LACTTATO 1000ML|INTI|36292|mar-31|7|FRASCO
+        SOL RINGER LACTTATO 1000ML|SOL RINGER LACTTATO 1000ML|INTI|37972|mar-31|36|FRASCO
+        OMEPRAZOL 40MG|OMEPRAZOL 40MG|NOVOPHARMA|37971|jun-28|180|VIAL
+        GUANTES LATEX S|GUANTES LATEX S|SENSICARE|250608|feb-31|1|CAJA
+        GUANTES LATEX M|GUANTES LATEX M|SENSICARE|25023114|feb-31|0|CAJA
+        GUANTES NITRILO M|GUANTES NITRILO M|SENSICARE|226363|ago-27|5|CAJA
+        GUANTES LATEX M|GUANTES LATEX M|INSUMED|20251201|dic-30|1|CAJA
+        GUANTES ESTERILES 6.5|GUANTES ESTERILES 6.5|PREMIER|289|dic-28|3|CAJA
+        DIMETILPOLISINOXANO100|DIPOSAN|INTI|20348|ene-28|60|COMPROMIDO
+        KETOROLACO 20MG|QUETOROL|INTI|38351|mar-28|10|COMPROMIDO
+        ANTIGRIPAL|ANTIGRIPAL COMPUESTO|INTI|31502|dic-27|90|COMPROMIDO
+        ACICLOVIR 500|VIRUSAN|INTI|36645|nov-27|4|AMPOLLAS
+        OMEPRAZOL 20MG|OMEGASTRIN|INTI|36517|oct-27|15|COMPROMIDO
+        ACETILCISTEINA|MUAXTIL|INTI|34572|jul-27|20|SOBRE
+        KETOROLACO 30|QUETOROL 30|INTI|35451|oct-26|10|COMPROMIDO
+        DEXKETOPROFENO|DEXALIVIUM|INTI|37585|may-27|20|AMPOLLAS
+        LAXANTE|LAXUAVE|INTI|30601|ene-30|6|SOBRE
+        SAL DE REHIDRATACION|DEHIDROLID|INTI|33515|ene-28|10|SOBRE
+        ACETILCISTEINA|MUXATIL|INTI|35617|ago-27|30|AMPOLLAS
+        COMPLEJO B|NEUROTRAT FORTE|INTI|29379|abr-27|20|COMPROMIDO
+        COMPLEJO B|NEUROTRAT FORTE|INTI|998|sep-27|3|AMPOLLAS
+        CEFALEXIMA|TROXOLINA|INTI|833|nov-26|1|JARABE
+        DIFENHIDRAMINA|LIDRAMINA|INTI|25306|may-27|16|COMPROMIDO
+        AMOXICILINA/ACIDO CLAVULANICO|PENTRAX AC|INTI|1213|jul-27|16|COMPROMIDO
+        LISINOPRIL|HIPOPRES|INTI|29604|mar-27|2|COMPROMIDO
+        IBUPROFENO 400|MEBIDOX 400|INTI|34001|oct-27|40|COMPROMIDO
+        IBUPROFENO 600|MEBIDOX 600|INTI|37861|jun-28|26|COMPROMIDO
+        AMBROXOL|INTIBROXOL|INTI|34008|oct-28|9|AMPOLLAS
+        SUMATRIPTAN|SUMAX|INTI|30524|jul-28|4|COMPROMIDO
+        ATORVASTATINA 20|TRONIX|INTI|34696|abr-28|20|COMPROMIDO
+        KETOROLACO 60MG|QUETOROL 60|INTI|39381|abr-28|21|AMPOLLAS
+        KETOROLACO 30|QUETOROL 30|INTI|35048|jun-28|25|AMPOLLAS
+        METIMAZOL|DYPIRETIC|INTI|ARMJW6|ago-27|32|AMPOLLAS
+        IBUPROFENO 600|ACTRON|BAGO|ARMJW7|nov-27|20|COMPROMIDO
+        IBUPROFENO 400|ACTRON|BAGO|ARMJW8|jun-27|5|COMPROMIDO
+        DICLOFENACO 75|CLOFENAC 75|BAGO|ARMJW9|feb-30|70|COMPROMIDO
+        PROPIXINATO DE LISINA|ESPASMODIOXADOL PLUS|BAGO|ARMJW10|jul-28|7|AMPOLLAS
+        KETOPROFENO 100MG|TALFLEX|BAGO|ARMJW11|jun-28|23|COMPROMIDO
+        KETOPROFENO/VIT. B1 B6 B12|TALFLEX B1B6B12|BAGO|ARMJW12|jul-29|86|COMPROMIDO
+        PREGABALINA|PRESTAT|BAGO|ARMJW13|jul-27|10|COMPROMIDO
+        AGUJA PARA BIOPSIA|AGUJA PARA BIOPSIA|HISTO|14155240|may-28|7|PIEZA
+        MASCARILLA PARA NEBULIZAR ADULTO|MASCARILLA PARA NEBULIZAR ADULTO|T2V|230512|may-28|5|PIEZA
+        MASCARILLA PARA NEBULIZAR PEDIATRICO|MASCARILLA PARA NEBULIZAR PEDIATRICO|T2V|250603|jul-30|5|PIEZA
+        MASCARA NEBULIZADORA|MASCARA NEBULIZADORA|SUTUMED|2081063|SV|4|PIEZA
+        CANULA DE OXIGENO|CANULA DE OXIGENO|SUTUMED|2304011|may-30|1|PIEZA
+        ESCAPULO VAGINAL M|ESCAPULO VAGINAL M|WELLAD|12516|jul-27|1|PIEZA
+        ESCAPULO VAGINAL L|ESCAPULO VAGINAL L|MADAM|20250510|dic-28|4|PIEZA
+        ESCAPULO VAGINAL S|ESCAPULO VAGINAL S|ESTRERIL|225755131|oct-28|3|PIEZA
+        COMPRESA NEUROQUIRURGICA|COMPRESA NEUROQUIRURGICA|SAMED|202312|SV|4|PIEZA
+        ELECTRODO|ELECTRODO|PHIULIPS|251122|nov-27|1|PIEZA
+        HILO VICRYL 0|HILO VICRYL 0|SUTUMED|260087|dic-30|15|PIEZA
+        HILO VICRYL 0|HILO VICRYL 0|SUTUMED|247101|nov-27|30|PIEZA
+        HILO VICRYL 1|HILO VICRYL 1|SUTUMED|21056314|dic-30|20|PIEZA
+        HILO VICRYL 5-0|HILO VICRYL 5-0|SUTUMED|20262626|nov-29|20|PIEZA
+        HILO VICRYL 1|HILO VICRYL 1|SUTUMED|20262626|oct-29|11|PIEZA
+        HILO VICRYL 1|HILO VICRYL 1|SUTUMED|20262626|feb-31|15|PIEZA
+        HILO VICRYL 2-0|HILO VICRYL 2-0|SUTUMED|20262626|jun-30|24|PIEZA
+        HILO VICRYL 5-0|HILO VICRYL 5-0|SUTUMED|20262626|nov-29|36|PIEZA
+        HILO VICRYL|HILO VICRYL|SUTUMED|20262626|nov-29|33|PIEZA
+        HILO NYLON 6-0|HILO NYLON 6-0|SUTUMED|244581|nov-29|36|PIEZA
+        HILO NYLN 5-0|HILO NYLN 5-0|SUTUMED|5554884|dic-30|30|PIEZA
+        HILO NYLON 3-0|HILO NYLON 3-0|SUTUMED|21120492|may-31|20|PIEZA
+        HILO NYLON 2|HILO NYLON 2|SUTUMED|20220404|nov-27|36|PIEZA
+        HILO NYLON 4-0|HILO NYLON 4-0|SUTUMED|250306|sep-27|12|PIEZA
+        HILO NYLON 4-0|HILO NYLON 4-0|SUTUMED|253613|mar-30|12|PIEZA
+        HILO SEDA 1|HILO SEDA 1|SUTUMED|619264|jun-30|12|PIEZA
+        HILO CATGUT CROMICO 1|HILO CATGUT CROMICO 1|SUTUMED|206192|jun-29|35|PIEZA
+        MALLA MARLEX|MALLA MARLEX|HEALTHIUM|257473|oct-30|1|PIEZA
+        ESPONJA HEMOSTATIC|ESPONJA HEMOSTATIC|SUTUMED|20369286|mar-29|1|PIEZA
+        lancetas|lancetas|SUTUMED|755141|feb-30|10|PIEZA
+        hilo seda 3-0|hilo seda 3-0|SUTUMED|20806113|ago-28|2|PIEZA
+        hilo seda negro 2|hilo seda negro 2|SUTUMED|20806993|ago-28|2|PIEZA
+        MANITOL 20%|MANITOL 20%|INTI|28579|jul-29|130|PIEZA
+        JERINGA 10ML|JERINGA 10ML|OPTIMED|20260108|ene-31|3200|PIEZA
+        JERINGA 5 ML|JERINGA 5 ML|OPTIMED|2060324|mar-31|5400|PIEZA
+        JERINGA 20 ML|JERINGA 20 ML|OPTIMED|20240620|jun-29|200|PIEZA
+        JERINGA 3 ML|JERINGA 3 ML|OPTIMED|221105|nov-27|500|PIEZA
+        JERINGA 1 ML|JERINGA 1 ML|OPTIMED|20241019|oct-28|400|PIEZA
+        JERINGA 5ML|JERINGA 5ML|OPTIMED|20240421|abr-29|50|PIEZA
+        JERINGA 50ML|JERINGA 50ML|OPTIMED|240805|ago-29|25|PIEZA
+        GUANTES ESTERILES 6.5|GUANTES ESTERILES 6.5|PREMIER|302|abr-29|500|PIEZA
+        GUANTES ESTERILES 7|GUANTES ESTERILES 7|PREMIER|250917|sep-30|580|PIEZA
+        GUANTES ESTERILES 7|GUANTES ESTERILES 7|PREMIER|289|oct-28|185|PIEZA
+        GUANTES ESTERILES 7.5|GUANTES ESTERILES 7.5|PREMIER|250917|sep-30|452|PIEZA
+        GUANTES ESTERILES 8|GUANTES ESTERILES 8|PREMIER|2022022|ene-28|51|PIEZA
+        GORROS DESECHABLES|GORROS DESECHABLES|AMSORTRAN|110725|jul-30|100|PIEZA
+        GORROS DESECHABLES|GORROS DESECHABLES|AMSORTRAN|27030008|mar-28|100|PIEZA
+        SISTEMA CAAP|SISTEMA CAAP|AMSORTRAN|270532|feb-28|2|PIEZA
+        VENTILADOR NEONATAL|VENTILADOR NEONATAL|AMSORTRAN|2703008|may-27|2|PIEZA
+        VENTILADOR|VENTILADOR|AMSORTRAN|270532|ago-27|3|PIEZA
+        DRENAJE PLEURAL 22|DRENAJE PLEURAL 22|CRESA|30920|abr-30|2|PIEZA
+        DRENAJE PLEURAL 26|DRENAJE PLEURAL 26|CRESA|12774|feb-30|1|PIEZA
+        DRENAJE PLEURAL 36|DRENAJE PLEURAL 36|CRESA|12435|ene-29|2|PIEZA
+        DRENAJE PLEURAL 34|DRENAJE PLEURAL 34|CRESA|110008|sep-26|1|PIEZA
+        DRENAJE PLEURAL 32|DRENAJE PLEURAL 32|CRESA|11003|sep-26|1|PIEZA
+        CATETER|CATETER|POLIMED|30014|ago-28|0|PIEZA
+        THORAMETRIX|THORAMETRIX|BIOMETRIX|250733|jun-30|1|PIEZA
+        FRASCO DE DRENAJE PLEURAL|FRASCO DE DRENAJE PLEURAL|BIOMETRIX|4530|sep-28|1|PIEZA
+        DISPENSADOR ANESTESICO ADULTO|DISPENSADOR ANESTESICO ADULTO|BIOMETRIX|220606|jun-27|1|PIEZA
+        DISPENSADOR ANESTESICO PEDIATRICO|DISPENSADOR ANESTESICO PEDIATRICO|TUVREN|220606|jun-27|1|PIEZA
+        ENDOTRAC KID 7.0|ENDOTRAC KID 7.0|TUVREN|220608|jun-27|1|PIEZA
+        ENDOTRAC KID 7.5|ENDOTRAC KID 7.5|CRISTALIA|500020009|oct-26|5|PIEZA
+        CLORHIDRATO DE ESTAMONA|CLORHIDRATO DE ESTAMONA|FARMEDICAL|245|ago-27|26|PIEZA
+        OCTREONTIDA 100MG|BLENTAX|FARMEDICAL|775101|ago-27|2|AMPOLLA
+        CEFEPIME 1G|SUPRAPIME|FARMEDICAL|250833|ago-27|6|AMPOLLA
+        HIDROXILO FERRICO|ENCIFER|FARMEDICAL|ELF8AM5011|feb-27|3|AMPOLLA
+        PANTOPRAZOL 40MG-DOMPERIDONA10MG|GASTROZAC D|FARMEDICAL|1013260007|ene-28|60|COMPRIMIDOS
+        NIFEDIPINO 20MG|DIPIN 20|FARMEDICAL|KT4007A|jun-27|96|COMPRIMIDOS
+        EMPAGLIFLOZINA 25MG|EMPAGLYP 25|FARMEDICAL|AP250028|dic-27|25|COMPRIMIDOS
+        EMPAGLIFLOZINA 10MG|EMPAGLYP 10|FARMEDICAL|AP250406|jun-27|30|COMPRIMIDOS
+        ANTIGRIPAL|ALIVIOL ANTIGRIPAL|FARMEDICAL|AN5002|feb-28|120|COMPRIMIDOS
+        MCT-LCT|CELEPID|FARMEDICAL|2251256|feb-27|2|FRASCOS
+        ALBIMINA HUMANA 20%|ALBUMINA|FARMEDICAL|AD20F26020|feb-29|4|VIAL
+        PIPERACICLINA4-TAZOBACTAM0,5|PIPEBAC T|FARMEDICAL|2604531|abr-29|3|VIAL
+        OLMERSARTAM 40MG|TESIUM 40|FARMEDICAL|112550498A|jun-28|30|COMPRIMIDOS
+        OLMERSARTAN 20|TENSIUM 20|FARMEDICAL|11250497A|jun-28|30|COMPRIMIDOS
+        ESMEPRASOL|ESMUPS 40|FARMEDICAL|2511889|nov-27|30|COMPRIMIDOS
+        DICLOFENACO 75-PARACETAMOL500|ALIVIOL PLUS|FARMEDICAL|PS4031A|abr-27|200|COMPRIMIDOS
+        ACIDO TRNEXAMICO 500MG|PAUSE|FARMEDICAL|ELF805003|abr-27|1|AMPOLLA
+        AMOXICILINA- ACIDO CLAVULANICO|AMOXIDIN PLUS FORTE|FARMEDICAL|2503006|mar-28|32|COMPRIMIDOS
+        PREGABALINA 150MG|GANIUM|FARMEDICAL|6AB22401|mar-27|24|COMPRIMIDOS
+        PREGABALONA 75|GANEUM 75|FARMEDICAL|GAB032501|abr-28|4|COMPRIMIDOS
+        TRAMADOL-PARACETAOL|TAMBOL FORTE|FARMEDICAL|D02W03|nov-26|25|COMPRIMIDOS
+        TRAMADOL-PARACETAOL|TAMBOL|FARMEDICAL|D0X01|may-27|20|COMPRIMIDOS
+        TRAMADOL 100MG|TAMBOL|FARMEDICAL|A3R24009|abr-27|30|AMPOLLA
+        LEVOCETIRIZINA 5 - MUNTELUKAST 10 MG|ARACYL PLUS|FARMEDICAL|TA2504|dic-27|10|COMPRIMIDOS
+        AMOXICILINA 500 MG|AMOXIDIN|FARMEDICAL|2771123|dic-26|2|FRASCOS
+        AMOXICILINA 250|AMOXIDIN|FARMEDICAL|2701223|dic-26|1|FRASCOS
+        CEFIXIMA 100 MG|SITEX|FARMEDICAL|AP501|ago-27|1|FRASCOS
+        CEFIXIMA 200 MG|SITE FORTE|FARMEDICAL|OV501|feb-27|1|FRASCOS
+        AMOXICILINA 1 G|MOXILIN|TERBOL|2404313|abr-27|65|COMPRIMIDOS
+        VITAMINCA C 2 G|VITAMINA C|TERBOL|252502|jun-27|25|SOBRES
+        GENTAMICINA 280 MG|TERBOMICINA|TERBOL|1A25014|ago-28|25|AMPOLLA
+        CEFOTAXIMA 1 G|CEFOLAXIM|TERBOL|2504302|abr-28|6|VIAL
+        LANZOPRAZOL|LANZOPRAL|MEGALABS|899|nov-27|12|VIAL
+        CLORIXNATO DE LISNA - PROPINOX|VIADIL COMPUESTO|MEGALABS|9627|feb-27|3|AMPOLLA
+        SONDA NASOGASTRICA N°8|SONDA NASOGASTRICA N°8|FENDENIL|22100|mar-27|90|PIEZAS
+        MICROGOTERO|MICROGOTERO|INFUSION|250801|jul-30|24|PIEZAS
+        VENDA DE HIESO 20 CM|VENDA DE HIESO 20 CM|CREMER|80426247|nov-27|27|PIEZAS
+        VENDA DE HIESO DE 15 CM|VENDA DE HIESO DE 15 CM|CREMER|798262347|jul-26|49|PIEZAS
+        SONDA FOLEY 16|SONDA FOLEY 16|POLYMET|25143756|jun-30|50|PIEZAS
+        STILO INTUBADO|STILO INTUBADO|WIILSAT|2211022333|oct-27|1|PIEZAS
+        SONDA ARCOMET 16|NOLATON|NELATON|Y-121|sep-26|2|PIEZAS
+        CANULA DE ASPIRACION 8|CANULA DE ASPIRACION 8|TICNOL|20230415|mar-28|16|PIEZAS
+        CANULA DE ASPIRACION  6|CANULA DE ASPIRACION  6|TICNOL|757144|ene-31|11|PIEZAS
+        CANULA DE ASPIRACION 12|CANULA DE ASPIRACION 12|TICNOL|20211015|oct-26|4|PIEZAS
+        CANULA DE ASPIRACION 10|CANULA DE ASPIRACION 10|TICNOL|23114270|ago-26|10|PIEZAS
+        CANULA DE ASPIRACION 16|CANULA DE ASPIRACION 16|TICNOL|25143756|jun-30|25|PIEZAS
+        SONDA DE ASPIRACION 14|SONDA DE ASPIRACION 14|TICNOL|24121900|mar-29|36|PIEZAS
+        SONDA DEASPIRACION 18|SONDA DEASPIRACION 18|TICNOL|20220715|jun-27|10|PIEZAS
+        HUMIFICADOR ADULTOR|COMBIME BAT|-|20230815|ago-28|2|PIEZAS
+        SET DE INFUSION|ARCOMET|SALOR|24PH903|sep-29|21|PIEZAS
+        ELECTROBISTURI|ELECTROSUCCIONAL|SIMGLE|LG2025|nov-27|7|PIEZAS
+        UNIDAD DE SUCCION 16|POLIVAC SET|POLYMET|4176024K|ago-29|4|PIEZAS
+        VENDA DE GASA 20 CM|VENDA DE GASA 20 CM|CREMER|20220302|abr-27|88|PIEZAS
+        VENDA DE YESO 10 CM|VENDA DE YESO 10 CM|CREMER|20220302|abr-27|89|PIEZAS
+        VENDA DE YESO 10 CM|VENDA DE YESO 10 CM|CREMER|774262421|may-27|51|PIEZAS
+        VENDA ELASTICA 15 CM|VENDA ELASTICA 15 CM|PREMIER|2023005|dic-28|22|PIEZAS
+        VENDA ELASTICA 10 CM|VENDA ELASTICA 10 CM|OPTIMET|20240910|sep-29|14|PIEZAS
+        VENDA ELASTICA 5 CM|VENDA ELASTICA 5 CM|OPTIMET|2024093|sep-29|25|PIEZAS
+        VENDA ELASTICA CORRUGADA|VENDA ELASTICA CORRUGADA|ANHIKEN|23755133|abr-28|2|PIEZAS
+        VENDA ELASTICA 20 CM|VENDA ELASTICA 20 CM|PREMIER|2023005|jun-28|11|PIEZAS
+        VENDA DE GAS 10 CM|VENDA DE GAS 10 CM|OPTIMET|20250325|mar-30|38|PIEZAS
+        VENDA DE GASA 15 CM|VENDA DE GASA 15 CM|PREMIER|122023|nov-28|61|PIEZAS
+        VENDA DE GAS 7.5 CM|VENDA DE GAS 7.5 CM|OPTIMET|20250325|24-mar|34|PIEZAS
+        VENDA DE GASA 5 CM|VENDA DE GASA 5 CM|PREMIER|20230204|jun-28|11|PIEZAS
+        SONDA URETRAL 14|SONDA URETRAL 14|WALLEAD|2305011054|abr-28|9|PIEZAS
+        SONDA URETRAL 16|SONDA URETRAL 16|WALLEAD|2204010562|mar-27|5|PIEZAS
+        TUBO ENDOTRAQUEAL 4|TUBO ENDOTRAQUEAL 4|ENDOTRAQUEAL|20240115|ene-29|7|PIEZAS
+        CLINAMICINA|CLINAMICINA|FARMASIMA|CMC2302|oct-26|15|COMPRIMIDOS
+        BETAHISTINA|BETISTIN|EUROFARMA|957474|nov-26|17|COMPRIMIDOS
+        CLORFENIRAMINA|SINALERG 4|SIGMA|1260924|sep-26|13|COMPRIMIDOS
+        VITAMINA B 12|COBAVIMIN|INTI|24907|oct-26|8|AMPOLLA
+        PROXIMETOCAINA|ANESTCARS|LANSIER|211094|nov-26|1|GOTAS
+        GENTAMISINA|SINCAGENT|LAQFAGAL|B4L40|nov-26|2|GOTAS
+        VITAMINA A-C-D|ACDVIMIN|INTI|32468|mar-27|1|FRASCOS
+        PROPINOX 15 ML|DCMULTI|INTI|24305|ago-27|2|GOTEROS
+        PROPINOX 20 ML|DEMOTIL|INTI|33180|abr-28|2|FRASCOS
+        SYLIBUM|FORFIG|EUROFARMA|939875|sep-26|24|COMPRIMIDOS
+        CEFALEXINA|CEFACRIS|HANEMAN|E04418|jul-02|1|FRASCOS
+        CLORURO DE SODIO|RINFRIM|INTI|34943|jun-28|2|FRASCOS
+        AMBROXOL 15 MG|BROXOL INFANTIL|INTI|33940|jun-27|2|FRASCOS
+        AMBROXOL 30 MG|BROXOL|INTI|34852|jul-28|2|FRASCOS
+        LEVODROPROPIZINA|TUSIBROM|BAGO|AB5M|jun-27|5|FRASCOS
+        HEDERA HELIX|TOCEX|BAGO|4V2|ene-27|4|FRASCOS
+        IBRUPOFENO|PIRONAL|BAGO|AAXW|abr-27|3|FRASCOS
+        DIPIRONA|DIOXOADOL|BAGO|AVLS|jun-27|3|FRASCOS
+        CLORFEMIDAMINA|TUSIGEN|BAGO|AAND|mar-28|1|FRASCOS
+        COTRIMOXAZOL|BACTICEL FORTE|BAGO|AA3L|abr-28|2|FRASCOS
+        BETAMETAZONA|CORTYPIREM|BAGO|4J5|sep-26|1|FRASCOS
+        BETAMETAZONA|CORTYPIREM|BAGO|ACZY|ago-27|1|FRASCOS
+        PROPINOX|ESPASMODIOXADOL|BAGO|AB9B|jun-27|2|FRASCOS
+        IBUPROFENO+PSEUDOFEDRINA|PIRONAL FLUFORTE|BAGO|AF3C|mar-28|2|FRASCOS
+        FLUTICASONA|FLUCOMIX|BAGO|F16970|abr-27|2|FRASCOS
+        SALBUTAMOL|GEL BRONQUIAL|TERBOL|2A24017|ago-27|1|FRASCOS
+        AMAXOCICILINA|AMOBAL|SAVAL|47193|mar-27|1|FRASCOS
+        IBUPROFENO|1P50N|SAVAL|35103|mar-28|2|FRASCOS
+        IBUPROFENO|1P50N|SAVAL|95793|sep-28|3|FRASCOS
+        AMBROXL|MUXOL|SAVAL|4035963|mar-28|1|FRASCOS
+        DEXAMETASONA/CIPROFLOXACINO|CIPRODEX|SAVAL|22506|feb-29|3|PIEZAS
+        RIFAMICINA 10MG|RIFAMICINA|SAVAL|252265|jun-27|7|PIEZAS
+        AGUJA ESPINAL 18|INTROCAM|QUIMFA|3068912|nov-29|44|PIEZAS
+        EXTENSOR 120 CM|ESTENSOFIX|INTI|23H14|ago-29|7|PIEZAS
+        TAPON HEPARINIZADO PARA CATETER|STOPER|INTI|24G22A|jul-29|2|PIEZAS
+        TRAINSOFIX|TRAINSOFIX|INTI|2.40E+19|may-29|2|PIEZAS
+        AGUJA ESPINAL CON BISO|PERICAN|INTI|23HI36|ago-28|3|PIEZAS
+        CANULA IV|INTROCAN|INTI|23G23|ago-28|39|PIEZAS
+        TAPON HEPARINIZADO|STOPER|INTI|23M17|nov-28|120|PIEZAS
+        PROPOFOL|PROPOFOL|INTI|251730|mar-27|11|AMPOLLA
+        OLIGOALIMENTOS|TRACUTIL|INTI|25465051|oct-30|23|AMPOLLA
+        AGUJA ESPINAL 27|SPINOCAM|INTI|23A18H8|ene-28|9|PIEZAS
+        AGUJA ESPINAL 26|SPINOCAM|INTI|23A18H10|jun-30|5|PIEZAS
+        AGUJA ESPINAL 25|SPINOCAM|INTI|23A18H11|ago-30|15|PIEZAS
+        AGUJA ESPINAL 22|SPINOCAM|INTI|23A18H12|mar-28|26|PIEZAS
+        CATETER UMBILICAL|CAT UMBILICAL|SILMAG|304843|may-27|2|PIEZAS
+        IBUPROFENO 600|IBUPROFENO 600|INTI|24233402|jul-27|11|VIAL
+        PARACETAMOL 1G|PARACETAMOL|INTI|25304453|dic-26|5|VIAL
+        PARACETAMOL 1G|PARAVITAMOL|VITA|154550|jul-27|6|VIAL
+        PARACETAMOL 1G|PIREBOL|TERBOL|253044503|ene-30|3|VIAL
+        CATETER CENTRAL VENOSO|CETOFIX 720|INTI|1545503|may-27|4|PIEZAS
+        CATETER CENTRAL VENOSO TIRA|C-CATVEN TRIO|INTI|82503|feb-30|1|PIEZAS
+        CATETER CENTRAL VENOSO|CERTOFIX DUO 413|INTI|8551|jun-30|1|PIEZAS
+        CATETER CENTRAL VENOSO|CERTOFIX TRIO 720|INTI|220512|abr-27|3|PIEZAS
+        SIS. ARMADO DE ESPIRAL G|AVAMON|INTI|8551|abr-27|1|PIEZAS
+        TUBO PENROSE 3/4|DRENES|INTI|30194017|may-28|2|PIEZAS
+        SOL GELATINA SUCCIONADA 4%|GELOFUSIN|INTI|202306|abr-27|2|FRASCOS
+        AMINOACIDOS Y ELECTROLITOS|AMINOPLASMAL|INTI|252217641|may-28|5|FRASCOS
+        EMULSION PERFUSION 500ML|LIPOFUDIN|INTI|252678061|mar-27|4|FRASCOS
+        SOL DE IRRIGACION PA HERIDAS|PENTOSAS|INTI|2515228082|jun-27|1|FRASCOS
+        ALGODÓN 100G|ALGODÓN 100G|PREMIER|24303140|feb-31|20|BOLSA
+        ALGODÓN 400G|ALGODÓN 400G|PREMIER|4001225|dic-30|15|BOLSA
+        EQUIPO DE INYECCIO 150CM|EXADROP|INTI|25F23|jun-27|6|BOLSA
+        MELOXICAM 15ML|MELOXIHAM|HAHNNEMANN|C105191|oct-30|448|COMPRIMIDO
+        ESPIRONOLACTONA 100 ML|UROHAN|HAHNNEMANN|CO83156|ago-28|16|COMPRIMIDO
+        IVERMECTINA|IVERMECTINA|HAHNNEMANN|CO84129|ago-27|12|COMPRIMIDO
+        IBUPROFENO/ERBOTAMINA/CAFEINA|IBUMIGRAM|HAHNNEMANN|CO2626|feb-28|48|COMPRIMIDO
+        FUROSEMIDA|FUROSEMIDA|HAHNNEMANN|CO1612|ene-31|500|COMPRIMIDO
+        OMEPRAZOL|OMEPRAZOL|HAHNNEMANN|K02639|feb-29|205|COMPRIMIDO
+        ECHINACEA|ECHINACEA|HAHNNEMANN|ZY04401|abr-28|1|SPRAY
+        DICLOFENACO 50 MG|DICLOFENACO|HAHNNEMANN|CO3472|mar-29|257|COMPRIMIDO
+        IBUPROFENO/PARACETAMOL|IBUFORT DUO|HAHNNEMANN|CO54111|may-27|20|COMPRIMIDO
+        AZITROMICINA 1G|AZITROMICINA|HAHNNEMANN|CO84151|ago-28|10|COMPRIMIDO
+        DIIMENHIDRINATO CLORHIDRATO|VOMAR|SAN FERNANDO|DH2501|dic-27|10|AMPOLLA
+        TRAMADOL|TRAMADOL|SAN FERNANDO|CRJ503|abr-27|40|AMPOLLA
+        DEXMEDETOMINIDINA|DEXMEDETOMINIDINA|EURO FARMA|L956061|dic-26|4|AMPOLLA
+        DEXMEDETOMINIDINA|DEXMEDETOMINIDINA|EURO FARMA|L992629|jun-27|5|AMPOLLA
+        ESCITALOPRAM 20MG|ETAPRAM|EURO FARMA|155611|ene-28|40|COMPRIMIDO
+        KETOPROFENO 150 MG|BICERTO|EURO FARMA|977980|mar-27|7|AMPOLLA
+        PARACETAMOL + CODEINA|PACO|EURO FARMA|917901|abr-27|12|COMPRIMIDO
+        MELOXICAM 15ML|MELOXICAM|IFA|72523|jul-27|28|COMPRIMIDO
+        IBUPROFENO 400MG|IBUPROFENO|IFA|52666|may-30|100|COMPRIMIDO
+        AMLODIPINA|AMLODIPINA|IFA|42519|abr-27|16|COMPRIMIDO
+        ALBENDAZOL|ALBENDAZOL|IFA|42521|abr-27|20|COMPRIMIDO
+        DICLOXACILINA|DICLOXACILINA|IFA|12559|ene-27|1|FRASCO
+        DEXTROMETORFANO|DEXTROMETORFANO|IFA|6530|jun-29|1|FRASCO
+        DEXTROMETORFANO|DEXTROMETORFANO|IFA|6531|jun-29|2|FRASCO
+        CODEINA|CODEINA|IFA|72501|jul-27|4|FRASCO
+        DICLOXACILINA|DICLOXACILINA|IFA|42505|abr-29|34|COMPRIMIDO
+        CEFIXIMA|CEFIXIMA|IFA|82506|ago-27|90|COMPRIMIDO
+        CIPROFLOXACINO|CIPROFLOXACINO|IFA|225123|feb-28|94|COMPRIMIDO
+        CEFOTAXIMA|CEFOTAXIMA|IFA|112424|nov-28|26|COMPRIMIDO
+        PARACETAMOL|PARACCETAMOL|IFA|32545|mar-27|3|FRASCO
+        VANCOMISINA|VANCOMISINA|IFA|25746|jul-29|2|FRASCO
+        KETOROLACO 30 MG|REZITRO|IFA|26462|abr-30|3|AMPOLLA
+        PREDNISONA 5MG|PREDNISONA|LAB. CHILE|E0125|ene-28|10|COMPRIMIDO
+        DIGOXINA 0.25MG|DIGOXINA|LAB. CHILE|E0224|feb-27|30|COMPRIMIDO
+        FLUOXETINA 20 MG|FLUOXETINA|LAB. CHILE|E0624|jun-27|30|COMPRIMIDO
+        CARBAMEZEPINA 200 MG|CARBAPEZINA|LAB. CHILE|E0525|may-27|77|COMPRIMIDO
+        MELOXICAM 15ML|SUPRACAM|TECNOFARMA|72530|sep-26|1|AMPOLLA
+        MELOXICAM 15ML|SUPRACAM|TECNOFARMA|73137|feb-27|5|COMPRIMIDO
+        VITAMINA K + VITAMINA C|FLAVO CKR|VITA|416528|mar-27|105|COMPRIMIDO
+        OXIMETAZOLINA|VITANASAL NIÑO|VITA|311215|abr-29|2|FRASCO
+        ELETRIPTAN 40 MG|KEVAL|SAVAL|49234|abr-27|7|COMPRIMIDO
+        VALSARTAN 160 MG|VALAX|SAVAL|86924|ago-27|29|COMPRIMIDO
+        VALSARTAN + AMLODIPINO|VALAXACAM D|SAVAL|86034|ago-27|29|COMPRIMIDO
+        METILPREDMISOLONA4 MG|FORUCORT|SAE|MK1C501|feb-28|2|COMPRIMIDO
+        METOLAZONA 5 MG|DIURENIL 5|SAE|PAAH848|jun-27|4|COMPRIMIDO
+        METOLAZONA 5 MG|METOLAZONA 5 MG|SAE|7CAB|jun-28|30|COMPRIMIDO
+        DEXKETOPROFENO|TARAZOL|LAFAGE|EP928|feb-28|10|AMPOLLA
+        DEXKETOPROFENO|TARAZOL|LAFAGE|EV940|may-28|10|AMPOLLA
+        SIMETICONA|MAGAL D|HERSIL|2N04054|nov-27|1|FRASCO
+        DIOSMEGTITA 3 MG|PARASIN|SAE|NV001246|jun-27|28|SOBRES
+        METRONIDAZOL 550 MG|METROCAPS|PROCAPS|1580107|sep-28|90|CAPSULAS
+        IBUPROFENO 400 MG|NODOL|SAE|X997|oct-27|20|SOBRES
+        AMITRIPTILINA|AMITRIPTILINA|SAE|AM1C401|ene-27|100|COMPRIMIDO
+        SALBUTAMOL|SALBUTAMOL|SAE|20502073|jul-27|4|AEROSOL
+        PROTECTOR SOLAR + VITAMINA E|UMBRELLA|MEDIHEALTH|518929|feb-28|1|FRASCO
+        LOSION LIMPIADORA|LACTIBON|MEDIHEALTH|516949|abr-27|2|FRASCO
+        CLINDAMICINA|ZUDENINA PLUS|MEDIHEALTH|519405|ene-28|4|FRASCO
+        JABON CON AVENA|LACTIBON AVENA|MEDIHEALTH|520413|jun-28|13|JABONES
+        PROTECTOR SOLAR|HELEOCAR|CANTABRINA LUPPS|256623|jul-28|3|FRASCO
+        PROTECTOR SOLAR|HELEOCAR|CANTABRINA LUPPS|250259|abr-28|6|FRASCO
+        PEROXIDO DE BENZOILO|ZUDENINA PV FORTTE|MEDIHEALTH|360425|abr-28|4|ENVASES
+        JABON LIQUIDO|FISIOGEL|MEGALABS|360425|abr-28|1|FRASCO
+        ALOPURINOL 300 MG|GALPURINOL|LAQFAGAL|HFT4050|nov-27|100|COMPRIMIDO
+        LAXANTE|KRITEL|KRITEL|EA00|sep-28|6|FRASCO
+        LAXANTE|ENEMAVIT|VITA|508545|dic-27|2|FRASCO
+        CLOVETAZOL 0,05 MG|VETAZOL|FARMEDICA|BE506|abr-27|5|POMADA
+        UNGÜENTO|MENTISAN|INTI|39189|may-30|3|POMADA
+        SALACILATO|FLOGEATRIN|MEGALABS|2045525|abr-28|2|POMADA
+        ENDOMETACINA|FLOGEATRIN|MEGALABS|2124865|dic-27|2|SPRAY
+        LIDOCAINA 2%|ROXICAINA|ROBSON|250238|ago-27|10|TUBO
+        SULFADRAZINA DE PLATA 1 G|QUEMACURAN|INTI|37475|ene-29|3|TUBO
+        GENTAMIZINA|SUPRACEDIN|INTI|36121|oct-28|3|CREMAS
+        LINOVERA|LINOVERA|BRAUN|2505213|dic-26|2|TUBO
+        DICLOFENACO 5 %|CLOFENAC|BAGO|E07082025|ago-27|3|TUBO
+        DICLOFENACO 2%|NOVADOL|BRESKOT|8624|jun-28|6|TUBO
+        DICLOFENACO 5 %|DOLOCOFAMIN 5 %|BRESKOT|7875|nov-27|5|TUBO
+        METILSALICILATO 2%|GOLPEX|SAE|820403|jul-27|4|SPRAY
+        DICLOFENACO|ALIVIOL|FARMEDICA|26025240|dic-26|12|TUBO
+        SALICILATO DE METILO 18 %|ZASS|HAHNNEMANN|U04640|abr-30|2|TUBO
+        SALICILATO DE METILO 18 %|ZASS|HAHNNEMANN|U07521|jul-29|1|TUBO
+        DICLOFENACO 1%|DICLOFENACO 1%|DISMEDIN|250529|may-28|4|TUBO
+        EXTRACTO ACUOSO|BIOCICATRISANTE|SAE|BC4V504|nov-28|1|TUBO
+        EXTRACTO DE MANZANILLA Y ALOE VERA|EXAMIL DERM|IFA|82449|ago-27|1|TUBO
+        CLOTRIMASOL 1 G|CLOTRIM 1%|IFA|52543|may-28|1|TUBO
+        CLOTRIMASOL 1 G|CLOTRIM 1%|IFA|102524|oct-29|1|CREMAS
+        HIDROCORTISONA 1 %|HIDROCORTISONA 1 %|IFA|32540|abr-28|4|TUBO
+        DEXAMETOZONA 0.1 %|DEXAMETOZONA 0.1 %|UNIVERSAL FARMA|240902|sep-27|2|GOTAS
+        HIALURONATO DE SODIO 0.4%|DACRIHYAL|INTI|35056|ago-27|1|GOTAS
+        TETRAMICINA|TEBRAZOL|LANSIAR|201064|ene-27|1|GOTAS
+        GETAMIZINA 0.3 %|GENTAMIZINA|VITALIANS|209454|sep-27|1|GOTAS
+        CLORANFENICOL|CLORANFENICOL|NICOLICH|44975|abr-30|5|FRASCO
+        PARACETAMO+DICLOFENACO|NOVADOL 75|COFAR|8357|abr-28|35|COMPRIMIDO
+        CEFEXIMA|FIXIM FORTE|COFAR|7753|abr-27|1|JARABE
+        PANTOPRASOL|INHIBIB|COFAR|2145|jun-27|24|COMPRIMIDO
+        PARECTAMOL+DICLOFENAACO|NOVADOL FORTE|COFAR|8299|mar-28|0|COMPRIMIDO
+        IBRUPROFENO 400|ACTICAP|COFAR|7583|sep-27|10|COMPRIMIDO
+        IBUPREFENO 600|ACTCAP|COFAR|7604|oct-27|36|COMPRIMIDO
+        PROPINAXATO 20MG - CLORIXINATO DE LISINA|ESPASMOLOXADIN FORTE|COFAR|7272|oct-26|43|COMPRIMIDO
+        SITOGLICPTINA-METFORMINA|SIGNUM-M|COFAR|7467|oct-27|17|COMPRIMIDO
+        MELOXCAM -PRIDINOL|FLEXIACAM RELAX|COFAR|7484|jul-27|70|COMPRIMIDO
+        CELECOXIB 200 MG|MIROUS|COFAR|6762|feb-27|48|COMPRIMIDO
+        BETAMETAZONA 4MG|BECOR|COFAR|7642|nov-27|3|AMPOLLA
+        BETAMETAZONA 10MG|BECOR RAPILENTO|COFAR|6870|mar-28|3|AMPOLLA
+        DIPIRONA 2,5 MG PROPIXINATO 30 MG|ESPASMOLOXADIN FORTE|COFAR|7658|feb-28|11|AMPOLLA
+        DIPIRONA 2 G + PROPIXINATO 30 MG|ESPASMOLOXADIN|COFAR|7655|mar-28|16|AMPOLLA
+        YODO ORGANICAMENTE|IOVERSOL|GUSIBET|113A|may-27|2|FRASCO
+        ELECTRODO ADULTO|ELECTRODO ADULTO|GIMED|251122084|nov-27|110|FRASCO
+        ELECTTRODO PEDIATRICO|ELECTTRODO PEDIATRICO|GIMED|25058|may-28|45|FRASCO
+        CABLE DE CONEXIÓN|CABLE DE CONEXIÓN|GIMED|10731025|sep-29|50|FRASCO
+        YODO SOLUCION|YODO SOLUCION|GIMED|24278|abr-27|1|FRASCO
+        YODO POVIDONA|YODO POVIDONA|TELCHI|107310255|ene-27|3|FRASCO
+        AMONIO CUATERNARIO|GERMINIO|TELCHI|2505629|feb-27|6|FRASCO
+        VASELINA|VASELINA|TELCHI|250134012|oct-28|7|FRASCO
+        VASELINA|VASELINA|TELCHI|1101082|jul-28|1|FRASCO
+        PEROXIDO DE HIDROGENO|AGUA OXIGENADA|TELCHI|102202426|may-29|3|FRASCO
+        PEROXIDO DE HIDROGENO|AGUA OXIGENADA|TELCHI|102150425|feb-31|7|FRASCO
+        CLORHEXIDINA GLUTANATO|CLOREX|SIGMA|1250924|sep-28|7|FRASCO
+        SERRA DE GIGLI|SERRA DE GIGLI|ATYLLE|9223|feb-28|2|FRASCO
+        LIGALIL|LIGALIL|ATYLLE|708D58|jul-30|1|FRASCO
+        YARDA DE GASA|YARDA DE GASA|PREMIER|100226|feb-31|7|BOLSA
+        BARBIJO|BARBIJO|ATYLLE|12V25|dic-30|85|CAJA
+        THORACIC DRAINAGE|THORACIC DRAINAGE|PREMIER|23110836|feb-28|2|FRASCO
+        RESUCITADOR MANUAL|RESUCITADOR MANUAL|PREMIER|220510|feb-28|1|FRASCO
+        FLUCONAZOL|FLUXOL|ALCOS|1825499|feb-29|40|FRASCO
+        CIPROFLOXACINO|CIPROXAM|ALCOS|16050|oct-28|40|FRASCO
+        LLAVE DE 3 VIAS 50CM|DISCOFI|INTI|231129|nov-26|3|SACHET
+        EQUIPO DE VENICLISIS|EXADROP|INTI|25F23F1500|jun-27|3|SACHET
+        INSUMED|INSUMED|ISUMED|20260110||358|PIEZA
+        HOJA DE BISTURI 11|HOJA DE BISTURI 11|ISUMED|250309||40|PIEZA
+        HOJA DE BISTURI 20|HOJA DE BISTURI 20|ISUMED|22023||512|PIEZA
+        TIRAS PARA GLUCOSA|TIRAS PARA GLUCOSA|ISUMED|25012||8|PIEZA
+        CINTA TESTIGO CALOR SECO|CINTA TESTIGO CALOR SECO|ISUMED|2280||9|PIEZA
+        CINTA TESTIGO CALOR HUMEDO|CINTA TESTIGO CALOR HUMEDO|ISUMED|1327||4|PIEZA
+        AGUJA 21G|AGUJA 21G|OPTIMED|250415||282|PIEZA
+        AGUJA 21G|AGUJA 21G|OPTIMED|202107||202|PIEZA
+        AGUJA 23 G|AGUJA 23 G|OPTIMED|221105||232|PIEZA
+        AGUJA 22 G|AGUJA 22 G|OPTIMED|20250228||380|PIEZA
+        AGUJA 19G|AGUJA 19G|OPTIMED|250415||358|PIEZA
+        AGUJA 30 G|AGUJA 30 G|OPTIMED|202002||99|PIEZA
+        BRANULA 14|BRANULA 14|NIPRO|2502||109|PIEZA
+        BRANULA 18|BRANULA 18|NIPRO|25EIIC||340|PIEZA
+        BRANULA 20|BRANULA 20|NIPRO|2.50E+17||76|PIEZA
+        BRANULA 22|BRANULA 22|NIPRO|202551||143|PIEZA
+        BRANULA 24|BRANULA 24|NIPRO|25L10||69|PIEZA
+        JERINGA 50ML|JERINGA 50ML|OPTIMED|24U80||7|PIEZA
+        JERINGA 20ML|JERINGA 20ML|OPTIMED|20221020||14|PIEZA
+        JERINGA 10ML|JERINGA 10ML|OPTIMED|20260108||66|PIEZA
+        JERINGA 5ML|JERINGA 5ML|OPTIMED|20240421||96|PIEZA
+        JERINGA 3ML|JERINGA 3ML|OPTIMED|22105||134|PIEZA
+        JERINGA 1ML|JERINGA 1ML|OPTIMED|20231030||54|PIEZA
+        JERINGA DE INSULINA|JERINGA DE INSULINA|OPTIMED|20241019||24|PIEZA
+        METRONIDAZOL 1,5|METRONIDAZOL 1,5|INTI|257220||24|FRASCO
+        TRANSOFIX|TRANSOFIX|INTI|22A14LA||109|FRASCO
+        BOLSA COLECTORA|BOLSA COLECTORA|INTI|33963||10|FRASCO
+        APOSITO ADHESIVO|APOSITO ADHESIVO|INTI|412428||40|FRASCO
+        FORMOL|FORMOL|SOLQUIFAR|250316020||3|FRASCO
+        ALCOHOL YODADO|ALCOHOL YODADO|SOLQUIFAR|250316030||5|FRASCO
+        DETERGENTE|DETERGENTE|SOLQUIFAR|250427||1|FRASCO
+        GEL ACUOSO|GEL ACUOSO|SOLQUIFAR|1040926||2|FRASCO
+        GEL PARA TRANSEMINACION|GEL PARA TRANSEMINACION|SOLQUIFAR|251972||2|FRASCO
+        CSV;
+
+        $filas = [];
+
+        foreach (explode("\n", trim($csv)) as $linea) {
+            $campos = array_map('trim', explode('|', $linea));
+            $filas[] = array_slice(array_pad($campos, 7, ''), 0, 7);
+        }
+
+        return $filas;
+    }
+};

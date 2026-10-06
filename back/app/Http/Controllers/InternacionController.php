@@ -165,7 +165,7 @@ class InternacionController extends Controller
 
         $internacion = Internacion::with('items')->findOrFail($id);
 
-        if (CierreCajaController::cierreDelDia($request->user()->id, now()->toDateString())) {
+        if (CierreCajaController::cajaBloqueada($request->user()->id, now()->toDateString())) {
             abort(422, 'Su caja de hoy ya fue cerrada: no puede registrar más cobros hasta mañana');
         }
 

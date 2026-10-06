@@ -503,6 +503,7 @@ class ProductoController extends Controller
             $query->where(function ($sq) use ($q) {
                 $sq->where('nombre', 'like', "%$q%")
                     ->orWhere('codigo', 'like', "%$q%")
+                    ->orWhere('nombre_comercial', 'like', "%$q%")
                     ->orWhere('marca', 'like', "%$q%");
             });
         }
@@ -600,6 +601,7 @@ class ProductoController extends Controller
             $query->where(function ($sq) use ($q) {
                 $sq->where('nombre', 'like', "%$q%")
                     ->orWhere('codigo', 'like', "%$q%")
+                    ->orWhere('nombre_comercial', 'like', "%$q%")
                     ->orWhere('marca', 'like', "%$q%");
             });
         }

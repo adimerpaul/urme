@@ -16,7 +16,7 @@ class CierreCaja extends Model implements AuditableContract
     protected $fillable = [
         'user_id', 'fecha', 'monto_sistema', 'monto', 'detalle_efectivo', 'diferencia',
         'cantidad_ventas', 'fecha_hora', 'comentario', 'modificado_en',
-        'validado_por_id', 'validado_en',
+        'validado_por_id', 'validado_en', 'autorizado_hasta', 'autorizado_por_id',
     ];
 
     protected $hidden = ['created_at', 'updated_at', 'deleted_at'];
@@ -26,13 +26,14 @@ class CierreCaja extends Model implements AuditableContract
         'fecha_hora' => 'datetime',
         'modificado_en' => 'datetime',
         'validado_en' => 'datetime',
+        'autorizado_hasta' => 'datetime',
         'monto_sistema' => 'decimal:2',
         'monto' => 'decimal:2',
         'diferencia' => 'decimal:2',
         'detalle_efectivo' => 'array',
     ];
 
-    protected $appends = ['puede_modificar', 'validado'];
+    protected $appends = ['puede_modificar', 'validado', 'autorizado'];
 
     public function setComentarioAttribute($value): void
     {
@@ -45,6 +46,12 @@ class CierreCaja extends Model implements AuditableContract
         return $this->modificado_en === null && $this->validado_en === null;
     }
 
+    /** Con la caja cerrada, el usuario sigue vendiendo mientras dure la autorización. */
+    public function getAutorizadoAttribute(): bool
+    {
+        return $this->autorizado_hasta !== null && $this->autorizado_hasta->isFuture();
+    }
+
     public function getValidadoAttribute(): bool
     {
         return $this->validado_en !== null;
@@ -53,6 +60,11 @@ class CierreCaja extends Model implements AuditableContract
     public function user()
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function autorizadoPor()
+    {
+        return $this->belongsTo(User::class, 'autorizado_por_id');
     }
 
     public function validadoPor()

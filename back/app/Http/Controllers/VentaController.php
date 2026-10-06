@@ -193,7 +193,7 @@ class VentaController extends Controller
         $this->req($request, 'Crear Ventas');
 
         // Con la caja del día ya cerrada, este usuario no registra más ventas.
-        if (CierreCajaController::cierreDelDia($request->user()->id, now()->toDateString())) {
+        if (CierreCajaController::cajaBloqueada($request->user()->id, now()->toDateString())) {
             abort(422, 'Su caja de hoy ya fue cerrada: no puede registrar más ventas hasta mañana');
         }
 
@@ -328,7 +328,7 @@ class VentaController extends Controller
         $this->req($request, 'Crear Ventas');
 
         // Con la caja del día ya cerrada tampoco se registran salidas de dinero.
-        if (CierreCajaController::cierreDelDia($request->user()->id, now()->toDateString())) {
+        if (CierreCajaController::cajaBloqueada($request->user()->id, now()->toDateString())) {
             abort(422, 'Su caja de hoy ya fue cerrada: no puede registrar más movimientos hasta mañana');
         }
 
@@ -381,7 +381,7 @@ class VentaController extends Controller
         $this->req($request, 'Crear Ventas');
 
         // Cobrar una pendiente también mueve dinero: se bloquea igual que una venta nueva.
-        if (CierreCajaController::cierreDelDia($request->user()->id, now()->toDateString())) {
+        if (CierreCajaController::cajaBloqueada($request->user()->id, now()->toDateString())) {
             abort(422, 'Su caja de hoy ya fue cerrada: no puede cobrar ventas hasta mañana');
         }
 

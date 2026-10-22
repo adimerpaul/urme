@@ -201,8 +201,9 @@ class SolicitudeController extends Controller
         $qrDataUri = 'data:image/svg+xml;base64,'.base64_encode($qrSvg);
 
         $paraNavegador = $html;
+        $bloques = $this->bloquesInforme($solicitude);
         $datos = compact(
-            'solicitude', 'impresoPor', 'urlVerificacion', 'qrDataUri', 'paraNavegador'
+            'solicitude', 'impresoPor', 'urlVerificacion', 'qrDataUri', 'paraNavegador', 'bloques'
         );
         if ($html) {
             return response()->view('reportes.solicitud-laboratorio', $datos);
@@ -364,6 +365,65 @@ class SolicitudeController extends Controller
             $productos,
             collect($validated['resultados'] ?? [])->keyBy('producto_laboratorio_dato_id'),
         ];
+    }
+
+    /**
+     * Bloques del informe en orden de impresión. Un producto sin grupo_reporte
+     * es su propio bloque, como siempre. Los productos de una misma área con el
+     * mismo grupo se juntan bajo un título, en la posición del primero, ordenados
+     * por orden_reporte (vacíos al final) y luego por el orden de la solicitud.
+     */
+    private function bloquesInforme(Solicitude $solicitude): array
+    {
+        $items = $solicitude->laboratorioItems
+            ->filter(fn ($item) => $item->resultados->where('visible', true)->isNotEmpty() || filled($item->producto?->descripcion))
+            ->values();
+
+        $bloques = [];
+        $indiceGrupo = [];
+        foreach ($items as $posicion => $item) {
+            $grupo = trim((string) $item->producto?->grupo_reporte);
+            if ($grupo === '') {
+                $bloques[] = ['tipo' => 'producto', 'item' => $item];
+
+                continue;
+            }
+
+            $clave = mb_strtoupper($grupo).'|'.$item->producto->tipo_producto_id;
+            if (! isset($indiceGrupo[$clave])) {
+                $indiceGrupo[$clave] = count($bloques);
+                $bloques[] = [
+                    'tipo' => 'grupo',
+                    'titulo' => $grupo,
+                    'area' => $item->producto->tipoProducto?->nombre ?: 'LABORATORIO',
+                    'items' => [],
+                ];
+            }
+            $bloques[$indiceGrupo[$clave]]['items'][] = ['item' => $item, 'posicion' => $posicion];
+        }
+
+        foreach ($indiceGrupo as $indice) {
+            $miembros = collect($bloques[$indice]['items'])
+                ->sortBy(fn ($m) => [$m['item']->producto->orden_reporte === null ? 1 : 0, $m['item']->producto->orden_reporte ?? 0, $m['posicion']])
+                ->pluck('item');
+
+            // Producto de un solo parámetro: la fila lleva el nombre del producto
+            // en lugar del genérico "RESULTADO".
+            $bloques[$indice]['filas'] = $miembros->flatMap(fn ($item) => $item->resultados->where('visible', true)
+                ->map(fn ($resultado) => [
+                    'nombre' => $item->resultados->count() === 1 ? $item->producto_nombre : $resultado->nombre,
+                    'resultado' => $resultado,
+                ]))->values()->all();
+
+            // La descripción se imprime una vez solo si es idéntica en todos.
+            $descripciones = $miembros->map(fn ($item) => (string) $item->producto?->descripcion)->unique();
+            $bloques[$indice]['descripcion'] = $descripciones->count() === 1 && filled($descripciones->first())
+                ? $miembros->first()->producto->descripcion_html
+                : null;
+            unset($bloques[$indice]['items']);
+        }
+
+        return $bloques;
     }
 
     private function syncLaboratorios(Solicitude $solicitud, $productos, $valores): void

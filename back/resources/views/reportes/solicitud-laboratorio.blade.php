@@ -23,6 +23,7 @@
         .results th { border-top: 1.5px solid #1a73e8; border-bottom: 1.5px solid #1a73e8; color: #0b5ed7; padding: 4px; text-align: left; font-size: 8.5px; }
         .results td { border-bottom: 1px solid #e5e7eb; padding: 3.5px 4px; vertical-align: top; }
         .results tr { page-break-inside: avoid; }
+        .bloque-grupo { page-break-inside: avoid; break-inside: avoid; }
         .area td { color: #1f2937; font-size: 10px; font-weight: bold; padding: 4px; text-decoration: underline; }
         .result { font-weight: bold; }
         .reference p, .reference div, .reference ul, .reference ol, .reference blockquote { margin: 0; }
@@ -76,7 +77,41 @@
     </tr>
     <tr><td colspan="3"><span class="label">DIAGNÓSTICO:</span> {{ $solicitude->diagnostico_clinico ?: '-' }}</td></tr>
 </table>
-@foreach($solicitude->laboratorioItems->filter(fn ($item) => $item->resultados->where('visible', true)->isNotEmpty() || filled($item->producto?->descripcion)) as $item)
+@foreach($bloques as $bloque)
+@if($bloque['tipo'] === 'grupo')
+    {{-- Productos agrupados (grupo_reporte): título, una tabla y sus filas no se separan entre páginas. --}}
+    <div class="bloque-grupo">
+        <div class="service-title">{{ mb_strtoupper($bloque['titulo']) }}</div>
+        <table class="results">
+            <thead><tr>
+                <th style="width:25%">ANÁLISIS</th>
+                <th style="width:15%">RESULTADO</th>
+                <th style="width:26%">VALORES DE REFERENCIA</th>
+                <th style="width:18%">MÉTODO</th>
+                <th style="width:16%">MUESTRA</th>
+            </tr></thead>
+            <tbody>
+                <tr class="area">
+                    <td colspan="5">ÁREA DE {{ $bloque['area'] }}</td>
+                </tr>
+                @foreach($bloque['filas'] as $fila)
+                    @php($resultado = $fila['resultado'])
+                    <tr>
+                        <td>{{ $fila['nombre'] }}</td>
+                        <td class="result">{{ filled($resultado->valor) ? $resultado->valor : '-' }} {{ $resultado->unidad }}</td>
+                        <td class="reference">{!! filled($resultado->rango_referencia) ? $resultado->rango_referencia_html : '-' !!}</td>
+                        <td>{{ $resultado->metodo ?: '-' }}</td>
+                        <td>{{ $resultado->muestra ?: '-' }}</td>
+                    </tr>
+                @endforeach
+            </tbody>
+        </table>
+        @if($bloque['descripcion'])
+            <div class="description">{!! $bloque['descripcion'] !!}</div>
+        @endif
+    </div>
+@else
+    @php($item = $bloque['item'])
     <div class="service-title">{{ $item->producto_nombre }}</div>
     @if($item->producto?->descripcion)
         <div class="description">{!! $item->producto->descripcion_html !!}</div>
@@ -104,6 +139,7 @@
             @endforeach
         </tbody>
     </table>
+@endif
 @endforeach
 @if($solicitude->observaciones)
     <div style="margin-top:12px"><span class="label">OBSERVACIONES:</span> {{ $solicitude->observaciones }}</div>

@@ -134,6 +134,34 @@
         se solicita a un paciente. El orden de la tabla es el orden de impresión.
       </div>
 
+      <!-- ══ AGRUPACIÓN EN EL INFORME ═══════════════════════════════ -->
+      <div class="row items-center no-wrap q-mt-sm q-mb-xs">
+        <q-icon name="view_agenda" color="primary" size="18px" class="q-mr-xs" />
+        <div>
+          <div class="text-subtitle2 text-weight-bold">Agrupación en el informe</div>
+          <div class="lab-sub text-grey-6">
+            Las pruebas de la misma área con el mismo grupo se imprimen juntas bajo ese título
+            (p. ej. ELECTROLITOS), ordenadas por el número de orden. Deje el grupo vacío para imprimirla sola.
+          </div>
+        </div>
+      </div>
+
+      <q-card flat bordered class="q-pa-sm">
+        <div class="row q-col-gutter-sm items-start">
+          <!-- Sin v-uppercase: el grupo se guarda tal como se escribe; el informe lo imprime en mayúsculas. -->
+          <q-input v-model="reporteForm.grupo_reporte" dense outlined clearable maxlength="100"
+                   class="col-12 col-sm-6" label="Grupo en el informe" :readonly="!canEditar"
+                   hint="Ej.: Electrolitos, Perfil lipídico" />
+          <q-input v-model.number="reporteForm.orden_reporte" type="number" min="0" dense outlined clearable
+                   class="col-6 col-sm-3" label="Orden en el grupo" :readonly="!canEditar"
+                   hint="Vacío: al final" />
+          <div v-if="canEditar" class="col-6 col-sm-3">
+            <q-btn dense unelevated color="primary" icon="save" label="Guardar agrupación" no-caps
+                   padding="6px 12px" :loading="savingReporte" @click="guardarReporte" />
+          </div>
+        </div>
+      </q-card>
+
       <!-- ══ MENSAJES DE VALIDACIÓN ═════════════════════════════════ -->
       <div class="row items-center no-wrap q-mt-sm q-mb-xs">
         <q-icon name="rule" color="orange-9" size="18px" class="q-mr-xs" />
@@ -404,6 +432,8 @@ const validaciones = ref([])
 const validacionDialog = ref(false)
 const validacionForm = ref({})
 const validacionError = ref('')
+const reporteForm = ref({ grupo_reporte: '', orden_reporte: null })
+const savingReporte = ref(false)
 
 const operadores = [
   { label: 'Igual a (=)', value: '=' },
@@ -477,10 +507,28 @@ async function cargarConfiguracion () {
     datos.value = data.laboratorio_datos || []
     formulas.value = data.laboratorio_formulas || []
     validaciones.value = data.laboratorio_validaciones || []
+    reporteForm.value = { grupo_reporte: data.grupo_reporte || '', orden_reporte: data.orden_reporte ?? null }
   } catch (error) {
     proxy.$alert.error(error.response?.data?.message || 'No se pudo cargar la configuración')
   } finally {
     adminLoading.value = false
+  }
+}
+
+async function guardarReporte () {
+  savingReporte.value = true
+  try {
+    const orden = reporteForm.value.orden_reporte
+    const { data } = await proxy.$axios.put(`productos/${productoId}/laboratorio-reporte`, {
+      grupo_reporte: reporteForm.value.grupo_reporte || null,
+      orden_reporte: orden === '' || orden === undefined ? null : orden,
+    })
+    reporteForm.value = { grupo_reporte: data.grupo_reporte || '', orden_reporte: data.orden_reporte ?? null }
+    proxy.$alert.success('Agrupación guardada')
+  } catch (error) {
+    proxy.$alert.error(error.response?.data?.message || firstValidationError(error) || 'No se pudo guardar')
+  } finally {
+    savingReporte.value = false
   }
 }
 

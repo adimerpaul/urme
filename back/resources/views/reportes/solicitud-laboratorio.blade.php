@@ -6,32 +6,33 @@
         @page { size: letter; margin: 22px 32px 92px; }
         .description { margin: 5px 0 8px; line-height: 1.4; }
         .description p { margin: 3px 0; }
-        body { font-family: DejaVu Sans, sans-serif; color: #1f2937; font-size: 8.5px; }
+        body { font-family: DejaVu Sans, sans-serif; color: #1f2937; font-size: 9.5px; }
         .header, .patient, .results { width: 100%; border-collapse: collapse; }
-        .header { margin-bottom: 3px; border-bottom: 2px solid #2d82b7; }
+        .header { margin-bottom: 3px; border-bottom: 2px solid #1a73e8; }
         .header td { vertical-align: middle; padding-bottom: 5px; }
         .laboratory-logo { width: 205px; height: auto; display: block; }
-        .document-code { color: #155ca8; font-size: 11px; }
-        .meta { color: #4b5563; font-size: 8px; line-height: 1.45; }
-        .title { color: #164e7a; font-size: 12px; font-weight: bold; text-align: center; margin: 5px 0 6px; letter-spacing: .3px; }
+        .document-code { color: #0b5ed7; font-size: 11px; }
+        .codelab { color: #0b5ed7; font-weight: bold; }
+        .meta { color: #4b5563; font-size: 10px; line-height: 1.45; }
+        .title { color: #0b5ed7; font-size: 13px; font-weight: bold; text-align: center; margin: 5px 0 6px; letter-spacing: .3px; }
         .patient { margin-bottom: 7px; }
         .patient td { border: 1px solid #aeb9c5; padding: 3px 5px; }
         .label { font-weight: bold; color: #374151; }
-        .service-title { color: #1f2937; font-size: 9.5px; font-weight: bold; text-align: center; margin: 7px 0 2px; }
+        .service-title { color: #1f2937; font-size: 10.5px; font-weight: bold; text-align: center; margin: 7px 0 2px; }
         .results { margin-bottom: 4px; }
-        .results th { border-top: 1.5px solid #2868a8; border-bottom: 1.5px solid #2868a8; color: #1f4f7d; padding: 4px; text-align: left; font-size: 7.5px; }
+        .results th { border-top: 1.5px solid #1a73e8; border-bottom: 1.5px solid #1a73e8; color: #0b5ed7; padding: 4px; text-align: left; font-size: 8.5px; }
         .results td { border-bottom: 1px solid #e5e7eb; padding: 3.5px 4px; vertical-align: top; }
         .results tr { page-break-inside: avoid; }
-        .area td { color: #1f2937; font-size: 9px; font-weight: bold; padding: 4px; text-decoration: underline; }
+        .area td { color: #1f2937; font-size: 10px; font-weight: bold; padding: 4px; text-decoration: underline; }
         .result { font-weight: bold; }
         .reference p, .reference div, .reference ul, .reference ol, .reference blockquote { margin: 0; }
         .reference ul, .reference ol { padding-left: 12px; }
-        .signature { margin-top: 24px; width: 230px; border-top: 1px solid #374151; text-align: center; padding-top: 3px; font-size: 8px; }
-        .signature-name { margin-top: 2px; font-weight: bold; color: #164e7a; font-size: 8.5px; }
+        .signature { margin-top: 60px; width: 300px; border-top: 1px solid #374151; text-align: center; padding-top: 3px; font-size: 9px; }
+        .signature-name { margin-top: 2px; font-weight: bold; color: #0b5ed7; font-size: 9.5px; }
         .page-footer { position: fixed; left: 0; right: 0; bottom: -78px; height: 70px; border-top: 1px solid #c2cad3; color: #374151; }
         .page-footer table { width: 100%; height: 66px; border-collapse: collapse; }
         .page-footer td { padding: 3px 5px; vertical-align: middle; }
-        .footer-message { width: 62%; color: #245f88; font-size: 8.5px; font-style: italic; font-weight: bold; letter-spacing: .1px; white-space: nowrap; }
+        .footer-message { width: 62%; color: #1a73e8; font-size: 10.5px; font-style: italic; font-weight: bold; letter-spacing: .1px; white-space: nowrap; }
         .footer-patient { width: 25%; text-align: right; font-size: 8px; text-transform: uppercase; }
         .footer-qr { width: 13%; text-align: right; }
         .footer-qr img { width: 56px; height: 56px; }
@@ -58,6 +59,7 @@
     </td>
     <td class="meta" style="width:58%;text-align:right">
         <strong class="document-code">{{ $solicitude->codigo_solicitud }}</strong><br>
+        <span class="codelab">COD. CODELAB 000043</span><br>
         Fecha de solicitud: {{ $solicitude->fecha_solicitud->format('d/m/Y') }} {{ substr($solicitude->hora_solicitud, 0, 5) }}<br>
         Fecha de impresión: {{ now()->format('d/m/Y H:i') }}
     </td>

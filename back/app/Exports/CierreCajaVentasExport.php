@@ -2,8 +2,7 @@
 
 namespace App\Exports;
 
-use App\Http\Controllers\CierreCajaController;
-use App\Models\CierreCaja;
+use Illuminate\Database\Eloquent\Builder;
 use Maatwebsite\Excel\Concerns\FromCollection;
 use Maatwebsite\Excel\Concerns\ShouldAutoSize;
 use Maatwebsite\Excel\Concerns\WithHeadings;
@@ -17,11 +16,12 @@ use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 /** Todos los movimientos (ventas y gastos) que componen un cierre de caja. */
 class CierreCajaVentasExport implements FromCollection, ShouldAutoSize, WithHeadings, WithStyles, WithTitle
 {
-    public function __construct(protected CierreCaja $cierre) {}
+    /** @param Builder $ventas Movimientos del cierre (su día o el rango filtrado). */
+    public function __construct(protected Builder $ventas) {}
 
     public function collection()
     {
-        return CierreCajaController::ventasDelDia($this->cierre->user_id, $this->cierre->fecha->toDateString())
+        return $this->ventas
             ->with(['paciente:id,nombre_completo,ci', 'detalles:id,venta_id,nombre,cantidad,precio,precio_original,total'])
             ->orderBy('fecha_hora')
             ->get()

@@ -39,6 +39,9 @@ const CSS = `
   .items th { text-align: left; border-bottom: 1.5px solid #000; padding: 2px 4px; }
   .items td { padding: 2px 4px; border-bottom: 1px dotted #bbb; }
   .items .num { text-align: right; white-space: nowrap; }
+  .items .det { font-size: 9.5px; line-height: 1.2; padding-left: 6px; }
+  .items .mod { font-weight: bold; }
+  .items .com { font-size: 9.5px; font-style: italic; padding-left: 6px; }
   .son { text-align: center; font-weight: bold; margin-top: 6px; }
   .nota { font-size: 10px; margin-top: 4px; }
   .firmas { margin-top: 34px; }
@@ -113,6 +116,19 @@ function importe (venta) {
   return esEgreso(venta) ? -total : total
 }
 
+/** La vendedora cobró un precio distinto al de lista. */
+function precioModificado (d) {
+  return d?.precio_original != null && Number(d.precio).toFixed(2) !== Number(d.precio_original).toFixed(2)
+}
+
+/** Ítems de la venta con su precio; "*" marca el precio cambiado. */
+function detalleVenta (venta) {
+  return (venta.detalles || []).map(d => {
+    const mod = precioModificado(d)
+    return `<div class="det${mod ? ' mod' : ''}">${esc(Number(d.cantidad))} x ${esc(d.nombre)} · ${money(d.precio)}${mod ? `* (lista ${money(d.precio_original)})` : ''}</div>`
+  }).join('')
+}
+
 /** Totales por forma de pago de los movimientos que entraron a la caja. */
 function porFormaDePago (ventas) {
   const mapa = new Map()
@@ -128,18 +144,26 @@ function porFormaDePago (ventas) {
     .sort((a, b) => b.total - a.total)
 }
 
-function buildHtml (cierre, ventas, completo, verMontos) {
-  const dif = leerDiferencia(cierre.diferencia)
-  const cantidad = cierre.cantidad_ventas ?? ventas.length
+function buildHtml (cierre, ventas, completo, verMontos, rango, resumen) {
+  // Con rango de fecha y hora, los montos son los del rango, no los del día.
+  const conRango = Boolean(rango && resumen)
+  const sistema = conRango ? resumen.neto : cierre.monto_sistema
+  const dif = leerDiferencia(conRango ? Number(cierre.monto || 0) - Number(resumen.neto || 0) : cierre.diferencia)
+  const cantidad = conRango ? resumen.cantidad_ventas : (cierre.cantidad_ventas ?? ventas.length)
   const formas = completo ? porFormaDePago(ventas) : []
 
   const gastos = ventas.filter(esEgreso)
+  const cantidadGastos = conRango ? resumen.cantidad_gastos : gastos.length
+  const totalGastos = conRango ? resumen.egresos : gastos.reduce((suma, g) => suma + Number(g.total || 0), 0)
+  const periodo = conRango ? 'del rango' : 'del día'
 
   const filasVentas = ventas.map(v => `<tr>
     <td>${esc(v.id)}</td>
-    <td>${esc(hora(v.fecha_hora_cobro || v.fecha_hora))}</td>
+    <td>${esc(conRango ? fechaHora(v.fecha_hora_cobro || v.fecha_hora) : hora(v.fecha_hora_cobro || v.fecha_hora))}</td>
     <td>${esc(v.paciente?.nombre_completo || v.cliente ||
-      (esEgreso(v) ? 'GASTO: ' + (v.detalles?.[0]?.nombre || 'SIN DETALLE') : 'SIN CLIENTE'))}</td>
+      (esEgreso(v) ? 'GASTO: ' + (v.detalles?.[0]?.nombre || 'SIN DETALLE') : 'SIN CLIENTE'))}
+      ${esEgreso(v) ? '' : detalleVenta(v)}
+      ${v.comentario ? `<div class="com">Coment.: ${esc(v.comentario)}</div>` : ''}</td>
     <td class="num">${esEgreso(v) ? '-' : ''}${money(v.total)}</td>
   </tr>`).join('')
 
@@ -161,15 +185,16 @@ function buildHtml (cierre, ventas, completo, verMontos) {
     <span class="bold">Fecha de caja:</span> ${esc(soloFecha(cierre.fecha))}<br>
     <span class="bold">Cerrado el:</span> ${esc(fechaHora(cierre.fecha_hora))}
     ${cierre.modificado_en ? `<br><span class="bold">Corregido el:</span> ${esc(fechaHora(cierre.modificado_en))}` : ''}
+    ${conRango ? `<br><span class="bold">Movimientos desde:</span> ${esc(rango.desde)}<br><span class="bold">Movimientos hasta:</span> ${esc(rango.hasta)}` : ''}
     <br><span class="bold">Impreso el:</span> ${esc(fechaHora(new Date()))}
 
     <hr class="dashed">
     <div class="titulo">COMPROBANTE DE CIERRE DE CAJA</div>
 
     <table class="montos">
-      <tr><td class="etiqueta">Ventas del día</td><td class="valor">${cantidad}</td></tr>
-      ${gastos.length ? `<tr><td class="etiqueta">Gastos del día (${gastos.length}) (Bs)</td><td class="valor">-${money(gastos.reduce((suma, g) => suma + Number(g.total || 0), 0))}</td></tr>` : ''}
-      ${verMontos ? `<tr><td class="etiqueta">Total según el sistema (Bs)</td><td class="valor">${money(cierre.monto_sistema)}</td></tr>
+      <tr><td class="etiqueta">Ventas ${periodo}</td><td class="valor">${cantidad}</td></tr>
+      ${cantidadGastos ? `<tr><td class="etiqueta">Gastos ${periodo} (${cantidadGastos}) (Bs)</td><td class="valor">-${money(totalGastos)}</td></tr>` : ''}
+      ${verMontos ? `<tr><td class="etiqueta">Total según el sistema ${periodo} (Bs)</td><td class="valor">${money(sistema)}</td></tr>
       <tr><td class="etiqueta">${dif.etiqueta} (Bs)</td><td class="valor">${dif.monto}</td></tr>` : ''}
       <tr class="fuerte"><td>EFECTIVO DECLARADO (Bs)</td><td class="right">${money(cierre.monto)}</td></tr>
     </table>
@@ -185,8 +210,9 @@ function buildHtml (cierre, ventas, completo, verMontos) {
       <thead><tr><th>N°</th><th>Hora</th><th>Cliente / Paciente</th><th class="num">Total</th></tr></thead>
       <tbody>${filasVentas}</tbody>
     </table>
+    ${ventas.some(v => (v.detalles || []).some(precioModificado)) ? '<div class="nota">* Precio modificado por la vendedora (distinto al precio de lista).</div>' : ''}
     ${completo ? '' : `<div class="nota">Se listan los primeros ${ventas.length} movimientos. El detalle completo está en el PDF del cierre.</div>`}`
-      : '<div class="nota">Este cierre no tiene movimientos registrados.</div>'}
+      : `<div class="nota">${conRango ? 'No hay movimientos en el rango indicado.' : 'Este cierre no tiene movimientos registrados.'}</div>`}
 
     ${cierre.comentario ? `<hr class="dashed"><span class="bold">Comentario:</span> ${esc(cierre.comentario)}` : ''}
 
@@ -208,14 +234,17 @@ function buildHtml (cierre, ventas, completo, verMontos) {
  *   total, para avisar en el voucher si la lista va incompleta.
  * @param {boolean} [opciones.verMontos]  Sin 'Ver Montos Caja' el voucher sale
  *   solo con lo declarado: ni el total del sistema ni la diferencia.
+ * @param {object} [opciones.rango]  { desde, hasta } si las ventas se filtraron
+ *   por fecha y hora; los montos salen entonces del rango.
+ * @param {object} [opciones.resumen]  Totales del rango que devuelve el API.
  */
 export function imprimirCierreCaja (cierre, ventas = [], opciones = {}) {
-  const { totalVentas = null, verMontos = true } = opciones
+  const { totalVentas = null, verMontos = true, rango = null, resumen = null } = opciones
   const lista = Array.isArray(ventas) ? ventas : []
   const completo = totalVentas === null || lista.length >= totalVentas
 
   const element = document.createElement('div')
-  element.innerHTML = buildHtml(cierre, lista, completo, verMontos)
+  element.innerHTML = buildHtml(cierre, lista, completo, verMontos, rango, resumen)
 
   const printer = new Printd()
   printer.print(element, [CSS], [], ({ launchPrint }) => launchPrint())

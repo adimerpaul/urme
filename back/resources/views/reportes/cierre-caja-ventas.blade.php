@@ -25,6 +25,9 @@
         .mod { color: #c62828; font-weight: bold; }
         .com { color: #8a5a00; font-size: 7px; font-style: italic; }
         .nota { color: #64748b; font-size: 7px; margin-top: 4px; }
+        .rango { background: #FFF8E1; border: 1px solid #FFCC80; padding: 6px 8px; margin-bottom: 8px; }
+        .rango td { font-size: 8px; padding: 1px 6px; }
+        .rango .r-val { color: #E65100; }
         .empty { border: 1px dashed #cbd5e1; color: #64748b; padding: 22px; text-align: center; margin-top: 18px; }
         tfoot td { font-weight: bold; border-top: 2px solid #00695C; padding: 4px 3px; }
     </style>
@@ -49,8 +52,22 @@
         </tr>
     </table>
 
+    {{-- Filtro por fecha y hora: turnos que cruzan la medianoche o duran poco. --}}
+    @if ($rango)
+        <table class="rango" width="100%">
+            <tr>
+                <td><span class="r-label">Desde</span><br><span class="r-val">{{ $rango[0]->format('d/m/Y H:i') }}</span></td>
+                <td><span class="r-label">Hasta</span><br><span class="r-val">{{ $rango[1]->format('d/m/Y H:i') }}</span></td>
+                <td><span class="r-label">Ventas ({{ $resumen['cantidad_ventas'] }})</span><br><span class="r-val">{{ number_format($resumen['ingresos'], 2) }} Bs</span></td>
+                <td><span class="r-label">Gastos ({{ $resumen['cantidad_gastos'] }})</span><br><span class="r-val">-{{ number_format($resumen['egresos'], 2) }} Bs</span></td>
+                <td><span class="r-label">Neto del rango</span><br><span class="r-val">{{ number_format($resumen['neto'], 2) }} Bs</span></td>
+                <td><span class="r-label">Declarado − neto</span><br><span class="r-val">{{ number_format((float) $cierre->monto - $resumen['neto'], 2) }} Bs</span></td>
+            </tr>
+        </table>
+    @endif
+
     @if ($ventas->isEmpty())
-        <div class="empty">Este cierre no tiene movimientos registrados.</div>
+        <div class="empty">{{ $rango ? 'No hay movimientos en el rango indicado.' : 'Este cierre no tiene movimientos registrados.' }}</div>
     @else
         <table class="items">
             <thead>
@@ -89,7 +106,7 @@
             </tbody>
             <tfoot>
                 <tr>
-                    <td colspan="7" class="num">Total del cierre (ventas menos gastos)</td>
+                    <td colspan="7" class="num">{{ $rango ? 'Total del rango' : 'Total del cierre' }} (ventas menos gastos)</td>
                     <td class="num">{{ number_format((float) $ventas->sum(fn ($venta) => $venta->esEgreso() ? -(float) $venta->total : (float) $venta->total), 2) }} Bs</td>
                 </tr>
             </tfoot>

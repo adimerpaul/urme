@@ -157,7 +157,7 @@
                     </div>
                     <div class="col-12">
                       <q-input v-model="user.username" label="Nombre de usuario" dense outlined
-                               :rules="[v => !!v || 'Requerido']" :disable="!!user.id" />
+                               :rules="[v => !!v || 'Requerido']" />
                     </div>
                   </div>
                 </div>

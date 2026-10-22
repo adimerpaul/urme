@@ -14,8 +14,8 @@ const CLINICA = {
 const CSS = `
   @page { size: 5.5in 8.5in; margin: 10mm; }
   body { margin: 0; }
-  .proforma { font-family: 'Courier New', Courier, monospace; font-size: 11px; color: #000; line-height: 1.35; position: relative; }
-  .titulo-doc { display: inline-block; border: 1.5px solid #000; padding: 2px 10px; font-weight: bold; font-size: 12px; }
+  .proforma { font-family: Arial, Helvetica, sans-serif; font-size: 13px; color: #000; line-height: 1.25; position: relative; }
+  .titulo-doc { display: inline-block; border: 1.5px solid #000; padding: 2px 10px; font-weight: bold; font-size: 13px; }
   table { width: 100%; border-collapse: collapse; }
   td { vertical-align: top; }
   .head { margin-top: 8px; }
@@ -24,7 +24,7 @@ const CSS = `
   .center { text-align: center; }
   .right { text-align: right; }
   .dashed { border: none; border-top: 1.5px dashed #000; margin: 6px 0; }
-  .detalle-title { text-align: center; font-weight: bold; text-decoration: underline; font-size: 13px; margin: 8px 0 6px; }
+  .detalle-title { text-align: center; font-weight: bold; text-decoration: underline; font-size: 14px; margin: 8px 0 6px; }
   .items th { text-align: left; border-bottom: 1.5px solid #000; padding: 2px 4px; }
   .items td { padding: 2px 4px; }
   .items th.precio, .items td.precio { border-left: 1.5px solid #000; }
@@ -32,7 +32,7 @@ const CSS = `
   .totales .monto { border-top: 1.5px solid #000; }
   .son { text-align: center; font-weight: bold; margin-top: 6px; }
   .obs { margin-top: 6px; }
-  .pie { text-align: center; font-size: 10px; margin-top: 16px; }
+  .pie { text-align: center; font-size: 11px; margin-top: 16px; }
   .anulado { position: absolute; top: 40%; left: 50%; transform: translate(-50%, -50%) rotate(-25deg);
              font-size: 52px; font-weight: bold; color: rgba(200, 0, 0, 0.35); letter-spacing: 6px; }
 `

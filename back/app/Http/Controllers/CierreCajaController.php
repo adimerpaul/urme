@@ -6,6 +6,7 @@ use App\Exports\CierreCajaVentasExport;
 use App\Models\CierreCaja;
 use App\Models\Venta;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Maatwebsite\Excel\Facades\Excel;
 
@@ -217,14 +218,19 @@ class CierreCajaController extends Controller
         ]);
     }
 
-    /** Ventas que componen un cierre ya guardado (las del usuario en esa fecha). */
+    /**
+     * Ventas que componen un cierre ya guardado: por defecto las del usuario en
+     * la fecha del cierre. Con 'desde' y 'hasta' (fecha y hora) se ven las de
+     * ese rango, para turnos que cruzan la medianoche o duran media hora.
+     */
     public function ventas(Request $request, $id)
     {
         $this->req($request, 'Ver Cierres Caja');
 
         $cierre = self::recalcular(CierreCaja::with(self::RELACIONES)->findOrFail($id));
+        $rango = $this->rangoSolicitado($request);
 
-        $ventas = self::ventasDelDia($cierre->user_id, $cierre->fecha->toDateString())
+        $ventas = $this->ventasDelCierre($cierre, $rango)
             ->with([
                 'paciente:id,nombre_completo,ci',
                 'user:id,name',
@@ -237,6 +243,8 @@ class CierreCajaController extends Controller
         return response()->json([
             'cierre' => $this->ocultarMontos($cierre, $request->user()),
             'ventas' => $ventas,
+            'rango' => $rango ? self::rangoTexto($rango) : null,
+            'resumen' => self::resumen($this->ventasDelCierre($cierre, $rango)),
         ]);
     }
 
@@ -245,10 +253,11 @@ class CierreCajaController extends Controller
         $this->req($request, 'Ver Cierres Caja');
 
         $cierre = self::recalcular(CierreCaja::with(self::RELACIONES)->findOrFail($id));
+        $rango = $this->rangoSolicitado($request);
 
         return Excel::download(
-            new CierreCajaVentasExport($cierre),
-            'cierre_caja_'.$cierre->fecha->format('Ymd').'_'.$cierre->id.'.xlsx'
+            new CierreCajaVentasExport($this->ventasDelCierre($cierre, $rango)),
+            'cierre_caja_'.$cierre->fecha->format('Ymd').'_'.$cierre->id.($rango ? '_'.$rango[0]->format('Ymd_Hi').'-'.$rango[1]->format('Ymd_Hi') : '').'.xlsx'
         );
     }
 
@@ -258,8 +267,9 @@ class CierreCajaController extends Controller
         ini_set('memory_limit', '1024M');
 
         $cierre = self::recalcular(CierreCaja::with(self::RELACIONES)->findOrFail($id));
+        $rango = $this->rangoSolicitado($request);
 
-        $ventas = self::ventasDelDia($cierre->user_id, $cierre->fecha->toDateString())
+        $ventas = $this->ventasDelCierre($cierre, $rango)
             ->with(['paciente:id,nombre_completo,ci', 'detalles:id,venta_id,nombre,cantidad,precio,precio_original,total'])
             ->orderBy('fecha_hora')
             ->get();
@@ -267,6 +277,8 @@ class CierreCajaController extends Controller
         $pdf = Pdf::loadView('reportes.cierre-caja-ventas', [
             'cierre' => $cierre,
             'ventas' => $ventas,
+            'rango' => $rango,
+            'resumen' => self::resumen($this->ventasDelCierre($cierre, $rango)),
         ])->setPaper('letter');
 
         return $pdf->stream('cierre_caja_'.$cierre->fecha->format('Ymd').'_'.$cierre->id.'.pdf');
@@ -328,6 +340,94 @@ class CierreCajaController extends Controller
         }
 
         return $cierre;
+    }
+
+    /** Máximo de días que abarca el filtro por fecha y hora de las ventas. */
+    private const RANGO_MAX_DIAS = 31;
+
+    /**
+     * Rango 'desde'/'hasta' (fecha y hora de Bolivia) pedido para ver las
+     * ventas de un cierre, o null si no se pidió. 'hasta' incluye todo ese
+     * minuto: hasta las 08:00 abarca las ventas de las 08:00:59.
+     *
+     * @return array{0: Carbon, 1: Carbon}|null
+     */
+    private function rangoSolicitado(Request $request): ?array
+    {
+        if (! $request->filled('desde') && ! $request->filled('hasta')) {
+            return null;
+        }
+
+        $request->validate([
+            'desde' => 'required|date',
+            'hasta' => 'required|date|after_or_equal:desde',
+        ], [
+            'desde.required' => 'Indique desde qué fecha y hora',
+            'hasta.required' => 'Indique hasta qué fecha y hora',
+            'hasta.after_or_equal' => 'La fecha y hora "hasta" debe ser posterior a "desde"',
+        ]);
+
+        $desde = Carbon::parse($request->desde)->startOfMinute();
+        $hasta = Carbon::parse($request->hasta)->startOfMinute();
+
+        if ($desde->diffInDays($hasta) > self::RANGO_MAX_DIAS) {
+            abort(422, 'El rango no puede pasar de '.self::RANGO_MAX_DIAS.' días');
+        }
+
+        return [$desde, $hasta];
+    }
+
+    /** Ventas del cierre: las de su día, o las del usuario en el rango pedido. */
+    private function ventasDelCierre(CierreCaja $cierre, ?array $rango)
+    {
+        return $rango
+            ? self::ventasEnRango($cierre->user_id, $rango[0], $rango[1])
+            : self::ventasDelDia($cierre->user_id, $cierre->fecha->toDateString());
+    }
+
+    /**
+     * Ventas que entran a la caja de un usuario entre dos momentos: las que
+     * registró cobradas y las pendientes que él cobró en ese lapso.
+     */
+    public static function ventasEnRango(int $userId, Carbon $desde, Carbon $hasta)
+    {
+        $inicio = $desde->format('Y-m-d H:i:00');
+        $fin = $hasta->copy()->addMinute()->format('Y-m-d H:i:00');
+
+        return Venta::where(function ($query) use ($userId, $inicio, $fin) {
+            $query->where(function ($directas) use ($userId, $inicio, $fin) {
+                $directas->where('user_id', $userId)
+                    ->where('estado', 'ACTIVO')
+                    ->where('fecha_hora', '>=', $inicio)
+                    ->where('fecha_hora', '<', $fin);
+            })->orWhere(function ($cobros) use ($userId, $inicio, $fin) {
+                $cobros->where('estado', 'PENDIENTE')
+                    ->where('cobrado_por_id', $userId)
+                    ->where('fecha_hora_cobro', '>=', $inicio)
+                    ->where('fecha_hora_cobro', '<', $fin);
+            });
+        });
+    }
+
+    /** @param array{0: Carbon, 1: Carbon} $rango */
+    private static function rangoTexto(array $rango): array
+    {
+        return ['desde' => $rango[0]->format('Y-m-d H:i'), 'hasta' => $rango[1]->format('Y-m-d H:i')];
+    }
+
+    /** Totales de todos los movimientos de la consulta (no solo de la página). */
+    private static function resumen($ventas): array
+    {
+        $ingresos = (float) (clone $ventas)->where('tipo_movimiento', 'INGRESO')->sum('total');
+        $egresos = (float) (clone $ventas)->where('tipo_movimiento', 'EGRESO')->sum('total');
+
+        return [
+            'ingresos' => round($ingresos, 2),
+            'egresos' => round($egresos, 2),
+            'neto' => round($ingresos - $egresos, 2),
+            'cantidad_ventas' => (clone $ventas)->where('tipo_movimiento', 'INGRESO')->count(),
+            'cantidad_gastos' => (clone $ventas)->where('tipo_movimiento', 'EGRESO')->count(),
+        ];
     }
 
     /** Cierre vigente de un usuario en una fecha, o null. */

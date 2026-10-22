@@ -25,6 +25,8 @@
               : 'Registro de una nueva venta o proforma de pago' }}
           </div>
         </div>
+        <q-space />
+        <caja-acciones :solo-farmacia="soloFarmacia" @caja="val => cajaCerrada = !!val.cerrada" />
       </div>
       <q-separator class="q-mb-sm" />
 
@@ -113,7 +115,10 @@
                     </q-btn>
                   </td>
                   <td>{{ p.codigo || '—' }}</td>
-                  <td>{{ p.nombre }}</td>
+                  <td>
+                    {{ p.nombre }}
+                    <div v-if="p.nombre_comercial" class="text-caption text-grey-7">{{ p.nombre_comercial }}</div>
+                  </td>
                   <td>
                     <q-badge v-if="p.tipo_producto" rounded :style="{ background: p.tipo_producto.color || '#607d8b' }">
                       {{ p.tipo_producto.nombre }}
@@ -561,6 +566,7 @@ import { ref, computed, watch, getCurrentInstance, nextTick } from 'vue'
 import { imprimirVenta } from '../../../addons/ventaPrint'
 import { pagoVacio, validarPago, payloadPago } from '../../../addons/pagoVenta'
 import PagoVenta from '../../../components/PagoVenta.vue'
+import CajaAcciones from '../../../components/CajaAcciones.vue'
 
 const { proxy } = getCurrentInstance()
 const ultimaVenta = ref(null)
@@ -1143,17 +1149,8 @@ async function docQuickSave () {
 
 // ── Cierre de caja ─────────────────────────────────────────────
 // Con la caja del día cerrada el backend rechaza la venta; aquí se avisa antes.
+// El estado lo carga CajaAcciones (botones Cerrar caja / Nuevo gasto).
 const cajaCerrada = ref(false)
-
-async function cargarEstadoCaja () {
-  if (!proxy.$store.hasPermission('Cerrar Caja')) return
-  try {
-    const { data } = await proxy.$axios.get('cierres-caja/estado')
-    cajaCerrada.value = !!data.cerrada
-  } catch {
-    cajaCerrada.value = false
-  }
-}
 
 // ── Init ───────────────────────────────────────────────────────
 function init () {
@@ -1161,7 +1158,6 @@ function init () {
   loadTiposProducto()
   loadSeguros()
   loadEspecialidades()
-  cargarEstadoCaja()
 }
 
 watch(() => proxy.$store.isLogged, (val) => { if (val) init() }, { immediate: true })

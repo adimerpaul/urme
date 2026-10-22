@@ -103,6 +103,14 @@
                       <q-item-label caption>Lo deja cerrado: ya no admite correcciones</q-item-label>
                     </q-item-section>
                   </q-item>
+                  <q-item v-if="canAutorizar && !row.validado && esHoy(row)" clickable v-close-popup
+                          @click="abrirAutorizar(row)">
+                    <q-item-section avatar><q-icon name="more_time" color="orange-9" size="18px" /></q-item-section>
+                    <q-item-section>
+                      <q-item-label class="text-orange-9">Autorizar más ventas</q-item-label>
+                      <q-item-label caption>Da tiempo extra para vender con la caja cerrada</q-item-label>
+                    </q-item-section>
+                  </q-item>
                   <q-item clickable v-close-popup @click="verVentas(row)">
                     <q-item-section avatar><q-icon name="receipt_long" size="18px" /></q-item-section>
                     <q-item-section><q-item-label>Ver todas las ventas</q-item-label></q-item-section>
@@ -153,6 +161,11 @@
                 <div class="text-grey-6">{{ formatFecha(row.validado_en) }}</div>
               </template>
               <q-badge v-else color="orange-1" text-color="orange-9" class="text-weight-bold">SIN VALIDAR</q-badge>
+              <div v-if="row.autorizado_hasta" :class="row.autorizado ? 'text-orange-9 text-weight-bold' : 'text-grey-6'">
+                <q-icon name="more_time" size="12px" />
+                {{ row.autorizado ? 'Vendiendo hasta' : 'Autorizado hasta' }} {{ formatHora(row.autorizado_hasta) }}
+                <q-tooltip>Autorizado por {{ row.autorizado_por?.name || '—' }}</q-tooltip>
+              </div>
             </td>
             <td>{{ row.comentario || '—' }}</td>
           </tr>
@@ -167,6 +180,36 @@
                       boundary-links direction-links size="sm" @update:model-value="cargar" />
       </div>
 
+      <!-- ── Autorizar más ventas con la caja cerrada ── -->
+      <q-dialog v-model="dialogAutorizar">
+        <q-card style="width:min(96vw,420px)">
+          <q-card-section class="row items-center bg-orange-9 text-white q-py-sm">
+            <q-icon name="more_time" size="20px" class="q-mr-sm" />
+            <div>
+              <div class="text-subtitle1 text-weight-bold">Autorizar más ventas</div>
+              <div class="text-caption">{{ cierreAutorizar?.user?.name || '—' }} · {{ formatSoloFecha(cierreAutorizar?.fecha) }}</div>
+            </div>
+            <q-space />
+            <q-btn icon="close" flat round dense color="white" v-close-popup />
+          </q-card-section>
+          <q-card-section class="q-pa-sm">
+            <div class="text-caption text-grey-7 q-mb-xs">¿Por cuánto tiempo puede seguir vendiendo?</div>
+            <q-btn-toggle v-model="minutosAutorizar" dense unelevated no-caps spread toggle-color="orange-9"
+                          color="grey-3" text-color="grey-8" :options="opcionesMinutos" />
+            <q-banner dense rounded class="bg-blue-1 text-blue-10 q-mt-sm">
+              <template v-slot:avatar><q-icon name="info" /></template>
+              El total del sistema se recalcula con las nuevas ventas y el usuario podrá
+              corregir su cierre una vez más para declarar el efectivo final.
+            </q-banner>
+          </q-card-section>
+          <q-card-actions align="right" class="q-pa-sm">
+            <q-btn flat dense label="Cancelar" no-caps v-close-popup />
+            <q-btn dense padding="4px 14px" color="orange-9" icon="more_time" label="Autorizar" no-caps
+                   :loading="autorizando" @click="autorizar" />
+          </q-card-actions>
+        </q-card>
+      </q-dialog>
+
       <!-- ── Todas las ventas del cierre ── -->
       <q-dialog v-model="dialogVentas" :maximized="$q.screen.lt.md">
         <q-card class="ventas-card">
@@ -180,15 +223,62 @@
             </div>
             <q-space />
             <q-btn flat dense no-caps color="white" icon="print" label="Voucher"
-                   :loading="exportando === 'voucher'" @click="imprimirVoucher(cierreSel)" />
+                   :loading="exportando === 'voucher'" @click="imprimirVoucher(cierreSel, true)" />
             <q-btn flat dense no-caps color="white" icon="grid_on" label="Excel" class="q-ml-xs"
-                   :loading="exportando === 'excel'" @click="exportarExcel(cierreSel)" />
+                   :loading="exportando === 'excel'" @click="exportarExcel(cierreSel, true)" />
             <q-btn flat dense no-caps color="white" icon="picture_as_pdf" label="PDF" class="q-mx-xs"
-                   :loading="exportando === 'pdf'" @click="exportarPdf(cierreSel)" />
+                   :loading="exportando === 'pdf'" @click="exportarPdf(cierreSel, true)" />
             <q-btn icon="close" flat round dense color="white" v-close-popup />
           </q-card-section>
 
           <q-card-section class="q-pa-sm">
+            <!-- Filtro por fecha y hora: hay turnos de media hora y turnos que
+                 cruzan la medianoche, que no caben en "el día del cierre". -->
+            <div class="row q-col-gutter-xs q-mb-xs items-center">
+              <div class="col-auto">
+                <q-input v-model="rangoVentas.desde" label="Desde (fecha y hora)" dense outlined
+                         type="datetime-local" style="width:200px" />
+              </div>
+              <div class="col-auto">
+                <q-input v-model="rangoVentas.hasta" label="Hasta (fecha y hora)" dense outlined
+                         type="datetime-local" style="width:200px" />
+              </div>
+              <div class="col-auto">
+                <q-btn dense unelevated no-caps color="primary" icon="filter_alt" label="Filtrar"
+                       padding="3px 10px" :loading="loadingVentas" @click="filtrarVentas" />
+              </div>
+              <div class="col-auto">
+                <q-btn dense flat no-caps color="primary" icon="history" label="24 h antes del cierre"
+                       padding="3px 8px" @click="rango24h">
+                  <q-tooltip>Para turnos de noche que cierran al día siguiente</q-tooltip>
+                </q-btn>
+              </div>
+              <div class="col-auto">
+                <q-btn dense flat no-caps color="grey-8" icon="today" label="Día del cierre"
+                       padding="3px 8px" :disable="!rangoAplicado" @click="quitarRango">
+                  <q-tooltip>Quitar el filtro: ventas del día del cierre</q-tooltip>
+                </q-btn>
+              </div>
+            </div>
+
+            <q-banner v-if="rangoAplicado && resumenVentas" dense rounded class="bg-orange-1 text-orange-10 q-mb-xs text-caption">
+              <template v-slot:avatar><q-icon name="schedule" color="orange-9" /></template>
+              Del <b>{{ rangoAplicado.desde }}</b> al <b>{{ rangoAplicado.hasta }}</b> ·
+              Ventas ({{ resumenVentas.cantidad_ventas }}): <b>{{ money(resumenVentas.ingresos) }} Bs</b>
+              <template v-if="resumenVentas.cantidad_gastos">
+                · Gastos ({{ resumenVentas.cantidad_gastos }}): <b>-{{ money(resumenVentas.egresos) }} Bs</b>
+              </template>
+              · Neto: <b>{{ money(resumenVentas.neto) }} Bs</b>
+              <template v-if="canMontos">
+                · Declarado − neto:
+                <b :class="diferencia(difRango).texto">
+                  <q-icon :name="diferencia(difRango).icono" size="13px" />
+                  {{ diferencia(difRango).monto }} Bs
+                  <q-tooltip>{{ diferencia(difRango).titulo }}</q-tooltip>
+                </b>
+              </template>
+            </q-banner>
+
             <div class="row q-col-gutter-xs q-mb-xs items-center text-caption text-grey-8">
               <div v-if="canMontos" class="col-auto">Sistema: <b>{{ money(cierreSel?.monto_sistema) }} Bs</b></div>
               <div class="col-auto">{{ canMontos ? '· ' : '' }}Declarado: <b>{{ money(cierreSel?.monto) }} Bs</b></div>
@@ -208,7 +298,7 @@
               </div>
             </div>
 
-            <q-markup-table dense flat bordered separator="cell" class="full-width tabla-compacta">
+            <q-markup-table dense flat bordered separator="cell" class="full-width tabla-compacta tabla-ventas">
               <thead>
                 <tr class="bg-grey-1 text-grey-7 text-uppercase">
                   <th class="text-left">N°</th>
@@ -218,7 +308,7 @@
                   <th class="text-left">Detalle</th>
                   <th class="text-center">Estado</th>
                   <th class="text-left">Pago</th>
-                  <th class="text-right">Ítems</th>
+                  <th class="text-left">Comentario</th>
                   <th class="text-right">Total (Bs)</th>
                 </tr>
               </thead>
@@ -227,7 +317,9 @@
                   <td colspan="9" class="text-center q-pa-md"><q-spinner color="primary" size="24px" /></td>
                 </tr>
                 <tr v-else-if="!ventas.length">
-                  <td colspan="9" class="text-center text-grey-5 q-pa-md">Este cierre no tiene movimientos</td>
+                  <td colspan="9" class="text-center text-grey-5 q-pa-md">
+                    {{ rangoAplicado ? 'No hay movimientos en el rango indicado' : 'Este cierre no tiene movimientos' }}
+                  </td>
                 </tr>
                 <tr v-else v-for="v in ventas" :key="v.id">
                   <td>{{ v.id }}</td>
@@ -239,7 +331,14 @@
                              class="text-weight-bold">{{ esEgreso(v) ? 'GASTO' : 'VENTA' }}</q-badge>
                   </td>
                   <td>{{ v.paciente?.nombre_completo || v.cliente || (esEgreso(v) ? 'GASTO DE CAJA' : 'SIN CLIENTE') }}</td>
-                  <td class="text-grey-7">{{ (v.detalles || []).map(d => d.nombre).join(', ') || '—' }}</td>
+                  <!-- Cada ítem con su precio; el "*" marca el precio que cambió la vendedora -->
+                  <td class="detalle">
+                    <div v-for="d in (v.detalles || [])" :key="d.id" :class="{ 'precio-mod': precioModificado(d) }">
+                      {{ Number(d.cantidad) }} x {{ d.nombre }} · {{ money(d.precio) }}<b v-if="precioModificado(d)">*</b>
+                      <span v-if="precioModificado(d)" class="text-grey-6"> (lista {{ money(d.precio_original) }})</span>
+                    </div>
+                    <span v-if="!(v.detalles || []).length" class="text-grey-5">—</span>
+                  </td>
                   <td class="text-center">
                     <q-badge :color="v.estado === 'ACTIVO' ? 'positive'
                       : (v.estado === 'PENDIENTE' ? 'orange-8' : 'negative')">
@@ -247,7 +346,7 @@
                     </q-badge>
                   </td>
                   <td>{{ v.tipo_pago || '—' }}</td>
-                  <td class="text-right">{{ (v.detalles || []).length }}</td>
+                  <td class="comentario">{{ v.comentario || '' }}</td>
                   <!-- El gasto se muestra en negativo: es dinero que salió de caja -->
                   <td class="text-right text-weight-bold" :class="{ 'text-deep-orange-8': esEgreso(v) }">
                     {{ esEgreso(v) ? '-' : '' }}{{ money(v.total) }}
@@ -258,6 +357,7 @@
 
             <div class="row items-center justify-between q-mt-xs q-px-xs">
               <div class="text-caption text-grey-6">
+                <b class="text-negative">*</b> Precio modificado por la vendedora ·
                 Total: {{ totalVentas }} | Página {{ pageVentas }} de {{ paginasVentas }}
               </div>
               <q-pagination v-model="pageVentas" :max="paginasVentas" :max-pages="6"
@@ -272,7 +372,7 @@
 
 <script setup>
 import { computed, getCurrentInstance, ref, watch } from 'vue'
-import { formatBoliviaDate, formatBoliviaDateTime } from '../../../addons/dateTime'
+import { formatBoliviaDate, formatBoliviaDateTime, formatBoliviaTime } from '../../../addons/dateTime'
 import { imprimirCierreCaja } from '../../../addons/cierreCajaPrint'
 
 const { proxy } = getCurrentInstance()
@@ -281,6 +381,7 @@ const canVer = computed(() => proxy.$store.hasPermission('Ver Cierres Caja'))
 // Sin 'Ver Montos Caja' se ve solo el efectivo declarado, no el sistema ni la diferencia.
 const canMontos = computed(() => proxy.$store.hasPermission('Ver Montos Caja'))
 const canValidar = computed(() => proxy.$store.hasPermission('Validar Cierres Caja'))
+const canAutorizar = computed(() => proxy.$store.hasPermission('Autorizar Ventas Caja Cerrada'))
 
 const cierres = ref([])
 const usuarios = ref([])
@@ -372,6 +473,7 @@ function diferencia (valor) {
 
 function formatFecha (v) { return formatBoliviaDateTime(v) }
 function formatSoloFecha (v) { return formatBoliviaDate(v, '—') }
+function formatHora (v) { return formatBoliviaTime(v, '—') }
 
 function buscar () {
   page.value = 1
@@ -425,6 +527,43 @@ function validar (row) {
   })
 }
 
+// ── Autorizar más ventas (solo el cierre de hoy) ──────────────────
+const dialogAutorizar = ref(false)
+const cierreAutorizar = ref(null)
+const minutosAutorizar = ref(30)
+const autorizando = ref(false)
+const opcionesMinutos = [
+  { label: '15 min', value: 15 },
+  { label: '30 min', value: 30 },
+  { label: '1 hora', value: 60 },
+  { label: '2 horas', value: 120 },
+  { label: 'Resto del día', value: 720 },
+]
+
+function esHoy (row) { return String(row.fecha || '').slice(0, 10) === ymd(new Date()) }
+
+function abrirAutorizar (row) {
+  cierreAutorizar.value = row
+  minutosAutorizar.value = 30
+  dialogAutorizar.value = true
+}
+
+async function autorizar () {
+  autorizando.value = true
+  try {
+    const { data } = await proxy.$axios.put('cierres-caja/' + cierreAutorizar.value.id + '/autorizar', {
+      minutos: minutosAutorizar.value,
+    })
+    proxy.$alert.success(data.message || 'Ventas autorizadas')
+    dialogAutorizar.value = false
+    cargar()
+  } catch (error) {
+    proxy.$alert.error(error.response?.data?.message || 'No se pudo autorizar')
+  } finally {
+    autorizando.value = false
+  }
+}
+
 // ── Ventas de un cierre ───────────────────────────────────────────
 const dialogVentas = ref(false)
 const cierreSel = ref(null)
@@ -432,16 +571,77 @@ const ventas = ref([])
 
 // Un movimiento de caja puede ser una venta (INGRESO) o un gasto (EGRESO).
 function esEgreso (v) { return v?.tipo_movimiento === 'EGRESO' }
+
+/** La vendedora cobró un precio distinto al de lista. */
+function precioModificado (d) {
+  return d?.precio_original != null && Number(d.precio).toFixed(2) !== Number(d.precio_original).toFixed(2)
+}
 const loadingVentas = ref(false)
 const pageVentas = ref(1)
 const totalVentas = ref(0)
 const porPaginaVentas = ref(15)
 const paginasVentas = computed(() => Math.max(1, Math.ceil(totalVentas.value / porPaginaVentas.value)))
 
+// Rango de fecha y hora para ver las ventas; sin aplicar, se ve el día del cierre.
+const rangoVentas = ref({ desde: '', hasta: '' })
+const rangoAplicado = ref(null)
+const resumenVentas = ref(null)
+const difRango = computed(() =>
+  Math.round((Number(cierreSel.value?.monto || 0) - Number(resumenVentas.value?.neto || 0)) * 100) / 100)
+
+/** "2026-10-06T22:30" (datetime-local) a partir de una fecha en hora de Bolivia. */
+function inputFechaHora (valor) {
+  const texto = formatBoliviaDateTime(valor, '')
+  return texto ? texto.replace(' ', 'T') : ''
+}
+
+/** Los campos arrancan con el día del cierre, de 00:00 hasta la hora en que cerró. */
+function rangoDelDia (cierre) {
+  const dia = String(cierre?.fecha || '').slice(0, 10)
+  return { desde: dia + 'T00:00', hasta: inputFechaHora(cierre?.fecha_hora) || dia + 'T23:59' }
+}
+
 function verVentas (row) {
   cierreSel.value = row
+  rangoVentas.value = rangoDelDia(row)
+  rangoAplicado.value = null
+  resumenVentas.value = null
   dialogVentas.value = true
   cargarVentas(1)
+}
+
+function filtrarVentas () {
+  const { desde, hasta } = rangoVentas.value
+  if (!desde || !hasta) {
+    proxy.$alert.error('Indique la fecha y hora de inicio y de fin')
+    return
+  }
+  if (hasta < desde) {
+    proxy.$alert.error('La fecha y hora "hasta" debe ser posterior a "desde"')
+    return
+  }
+  rangoAplicado.value = { desde: desde.replace('T', ' '), hasta: hasta.replace('T', ' ') }
+  cargarVentas(1)
+}
+
+/** Turno de noche: las 24 horas anteriores a la hora en que se cerró la caja. */
+function rango24h () {
+  const hasta = inputFechaHora(cierreSel.value?.fecha_hora)
+  if (!hasta) return
+  const cierre = new Date(cierreSel.value.fecha_hora)
+  rangoVentas.value = { desde: inputFechaHora(new Date(cierre.getTime() - 24 * 3600 * 1000)), hasta }
+  filtrarVentas()
+}
+
+function quitarRango () {
+  rangoVentas.value = rangoDelDia(cierreSel.value)
+  rangoAplicado.value = null
+  cargarVentas(1)
+}
+
+/** Parámetros del rango aplicado, para la lista y las exportaciones del diálogo. */
+function paramsRango (conRango) {
+  return conRango && rangoAplicado.value ? { ...rangoAplicado.value } : {}
 }
 
 async function cargarVentas (pagina) {
@@ -450,11 +650,12 @@ async function cargarVentas (pagina) {
   loadingVentas.value = true
   try {
     const { data } = await proxy.$axios.get('cierres-caja/' + cierreSel.value.id + '/ventas', {
-      params: { page: pageVentas.value, per_page: porPaginaVentas.value },
+      params: { page: pageVentas.value, per_page: porPaginaVentas.value, ...paramsRango(true) },
     })
     cierreSel.value = data.cierre || cierreSel.value
     ventas.value = data.ventas?.data || []
     totalVentas.value = data.ventas?.total || 0
+    resumenVentas.value = data.resumen || null
   } catch (error) {
     proxy.$alert.error(error.response?.data?.message || 'No se pudieron cargar las ventas del cierre')
   } finally {
@@ -471,16 +672,18 @@ const exportando = ref(null)
  * pago; si el cierre tiene más, el voucher sale con el resumen y avisa que el
  * detalle completo está en el PDF.
  */
-async function imprimirVoucher (cierre) {
+async function imprimirVoucher (cierre, conRango = false) {
   if (!cierre) return
   exportando.value = 'voucher'
   try {
     const { data } = await proxy.$axios.get('cierres-caja/' + cierre.id + '/ventas', {
-      params: { page: 1, per_page: 100 },
+      params: { page: 1, per_page: 100, ...paramsRango(conRango) },
     })
     imprimirCierreCaja(data.cierre || cierre, data.ventas?.data || [], {
       totalVentas: data.ventas?.total ?? null,
       verMontos: canMontos.value,
+      rango: data.rango || null,
+      resumen: data.resumen || null,
     })
   } catch (error) {
     proxy.$alert.error(error.response?.data?.message || 'No se pudo imprimir el voucher del cierre')
@@ -493,11 +696,12 @@ function nombreArchivo (cierre, extension) {
   return 'cierre_caja_' + String(cierre.fecha || '').slice(0, 10) + '_' + cierre.id + '.' + extension
 }
 
-async function exportarExcel (cierre) {
+async function exportarExcel (cierre, conRango = false) {
   if (!cierre) return
   exportando.value = 'excel'
   try {
     const res = await proxy.$axios.get('cierres-caja/' + cierre.id + '/ventas/export-excel', {
+      params: paramsRango(conRango),
       responseType: 'blob',
     })
     const url = window.URL.createObjectURL(new Blob([res.data], {
@@ -515,11 +719,12 @@ async function exportarExcel (cierre) {
   }
 }
 
-async function exportarPdf (cierre) {
+async function exportarPdf (cierre, conRango = false) {
   if (!cierre) return
   exportando.value = 'pdf'
   try {
     const res = await proxy.$axios.get('cierres-caja/' + cierre.id + '/ventas/export-pdf', {
+      params: paramsRango(conRango),
       responseType: 'blob',
     })
     window.open(window.URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' })), '_blank')
@@ -546,9 +751,22 @@ watch(() => proxy.$store.isLogged, logged => {
 }
 
 .ventas-card {
-  width: min(96vw, 1100px);
-  max-width: 1100px;
+  width: 98vw;
+  max-width: 1500px;
 }
+
+/* Diálogo de ventas: letra más chica y filas apretadas para ver el detalle */
+.tabla-ventas :deep(th),
+.tabla-ventas :deep(td) {
+  font-size: 10px;
+  padding: 1px 4px;
+  line-height: 1.25;
+  height: auto;
+  vertical-align: top;
+}
+.tabla-ventas .detalle { color: #555; }
+.tabla-ventas .precio-mod { color: #c62828; font-weight: 600; }
+.tabla-ventas .comentario { color: #8a5a00; font-style: italic; max-width: 260px; white-space: normal; }
 
 .cierres-caja :deep(.q-field--dense .q-field__control),
 .cierres-caja :deep(.q-field--dense .q-field__marginal) {

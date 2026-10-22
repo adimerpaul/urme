@@ -42,6 +42,20 @@
                   <q-item-label caption>Internaciones y ventas pendientes, una por una</q-item-label>
                 </q-item-section>
               </q-item>
+              <q-item clickable v-close-popup @click="imprimirEstadoCuenta('agrupado')">
+                <q-item-section avatar><q-icon name="summarize" color="teal" /></q-item-section>
+                <q-item-section>
+                  <q-item-label>Por ventas agrupado</q-item-label>
+                  <q-item-label caption>Un solo listado, sumando los productos repetidos</q-item-label>
+                </q-item-section>
+              </q-item>
+              <q-item clickable v-close-popup @click="imprimirEstadoCuenta('unico')">
+                <q-item-section avatar><q-icon name="format_list_bulleted" color="indigo" /></q-item-section>
+                <q-item-section>
+                  <q-item-label>Todo en uno</q-item-label>
+                  <q-item-label caption>Internaciones agrupadas y productos en una sola línea</q-item-label>
+                </q-item-section>
+              </q-item>
               <q-item clickable v-close-popup @click="imprimirEstadoCuenta('categoria')">
                 <q-item-section avatar><q-icon name="account_tree" color="deep-purple" /></q-item-section>
                 <q-item-section>
@@ -240,6 +254,7 @@
                   <th class="text-left" style="width:120px">Fecha</th>
                   <th class="text-left">Doctor</th>
                   <th class="text-left">Seguro</th>
+                  <th v-if="canDetalleVenta" class="text-left" style="min-width:220px">Detalle</th>
                   <th class="text-left" style="width:120px">Usuario</th>
                   <th class="text-right" style="width:60px">Ítems</th>
                   <th class="text-left" style="width:90px">Pago</th>
@@ -250,7 +265,7 @@
               </thead>
               <tbody>
                 <tr v-if="!ventas.length && !loadingVentas">
-                  <td colspan="11" class="text-center text-grey-5 q-pa-md">Sin ventas registradas</td>
+                  <td :colspan="colsVentas" class="text-center text-grey-5 q-pa-md">Sin ventas registradas</td>
                 </tr>
                 <template v-for="v in ventas" :key="v.id">
                   <tr :class="[
@@ -267,6 +282,13 @@
                     <td>{{ formatFecha(v.fecha_hora) }}</td>
                     <td>{{ v.doctor?.nombre || '—' }}</td>
                     <td>{{ v.seguro?.nombre || 'PARTICULAR' }}</td>
+                    <!-- Qué llevó cada venta, sin tener que desplegar la fila -->
+                    <td v-if="canDetalleVenta" class="detalle-venta">
+                      <div v-for="d in v.detalles || []" :key="d.id" class="ellipsis" :title="d.nombre">
+                        <b>{{ formatCantidad(d.cantidad) }}×</b> {{ d.nombre }}
+                      </div>
+                      <span v-if="!v.detalles?.length" class="text-grey-5">—</span>
+                    </td>
                     <!-- Quien registró la venta; si otro la cobró, se ve al desplegar la fila -->
                     <td class="ellipsis" :title="v.user?.name || ''">{{ v.user?.name || '—' }}</td>
                     <td class="text-right">{{ v.detalles_count ?? (v.detalles?.length || 0) }}</td>
@@ -289,7 +311,7 @@
                     </td>
                   </tr>
                   <tr v-if="expandidas.includes(v.id)" class="bg-grey-1">
-                    <td colspan="11">
+                    <td :colspan="colsVentas">
                       <div v-for="d in v.detalles || []" :key="d.id" class="row items-center no-wrap">
                         <div class="col ellipsis">
                           {{ d.nombre }}
@@ -745,6 +767,7 @@ const perVentas     = 15
 const totalVentas   = ref(0)
 const expandidas    = ref([])
 
+const colsVentas  = computed(() => canDetalleVenta.value ? 12 : 11)
 const pagesVentas = computed(() => Math.max(1, Math.ceil(totalVentas.value / perVentas)))
 
 const hayPendientes = computed(() => Number(resumenVentas.value.total_pendientes || 0) > 0)
@@ -973,13 +996,15 @@ const printingCuenta = ref(null)
 
 /**
  * Estado de cuenta: todas las internaciones y productos que siguen pendientes,
- * por ventas (una por una) o por categoría (agrupado por tipo de producto padre).
+ * por ventas (una por una), por ventas agrupado (productos repetidos sumados)
+ * o por categoría (agrupado por tipo de producto padre).
  */
 async function imprimirEstadoCuenta (modo = 'ventas') {
   printingCuenta.value = modo
   const ruta = modo === 'categoria' ? 'estado-cuenta-categoria-pdf' : 'estado-cuenta-pdf'
   try {
     const res = await proxy.$axios.get('pacientes/' + proxy.$route.params.id + '/' + ruta, {
+      params: modo === 'agrupado' ? { agrupado: 1 } : modo === 'unico' ? { unico: 1 } : {},
       responseType: 'blob',
     })
     window.open(window.URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' })), '_blank')
@@ -1181,6 +1206,13 @@ function itemDelete (intRow, id) {
 .tabla-compacta :deep(td) {
   font-size: 11px;
   padding: 2px 6px;
+}
+
+.detalle-venta {
+  max-width: 320px;
+  line-height: 1.3;
+  padding-top: 3px !important;
+  padding-bottom: 3px !important;
 }
 
 /* El spinner se superpone: la tabla no cambia de tamano al cargar */

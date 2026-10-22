@@ -18,6 +18,7 @@ class Producto extends Model implements AuditableContract
         'codigo', 'nombre', 'nombre_comercial', 'descripcion', 'marca',
         'fabricante_id', 'unidad_id',
         'tipo_producto_id', 'precio', 'precio_seguro',
+        'grupo_reporte', 'orden_reporte',
     ];
 
     protected $hidden = ['created_at', 'updated_at', 'deleted_at'];

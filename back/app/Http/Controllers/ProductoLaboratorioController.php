@@ -27,6 +27,29 @@ class ProductoLaboratorioController extends Controller
         ]));
     }
 
+    /**
+     * Agrupación en el informe impreso. El grupo se guarda tal como se escribe
+     * (solo trim); el informe lo muestra en mayúsculas.
+     */
+    public function updateReporte(Request $request, Producto $producto)
+    {
+        $this->authorizeAny($request, 'Editar Productos');
+        $this->ensureLaboratorio($producto);
+
+        $data = $request->validate([
+            'grupo_reporte' => 'nullable|string|max:100',
+            'orden_reporte' => 'nullable|integer|min:0|max:65535',
+        ]);
+        $grupo = trim($data['grupo_reporte'] ?? '');
+
+        $producto->update([
+            'grupo_reporte' => $grupo !== '' ? $grupo : null,
+            'orden_reporte' => $data['orden_reporte'] ?? null,
+        ]);
+
+        return response()->json($producto->only(['id', 'grupo_reporte', 'orden_reporte']));
+    }
+
     public function storeDato(Request $request, Producto $producto)
     {
         $this->authorizeAny($request, 'Editar Productos');

@@ -95,7 +95,7 @@ class PacienteController extends Controller
             'observacion' => 'nullable|string|max:255',
         ]);
 
-        if (CierreCajaController::cierreDelDia($request->user()->id, now()->toDateString())) {
+        if (CierreCajaController::cajaBloqueada($request->user()->id, now()->toDateString())) {
             abort(422, 'Su caja de hoy ya fue cerrada: no puede registrar más cobros hasta mañana');
         }
 
@@ -161,16 +161,42 @@ class PacienteController extends Controller
         $totalInternaciones = $internaciones->sum(fn ($internacion) => (float) $internacion->items->sum('total'));
         $totalVentas = (float) $ventas->sum('total');
 
+        // Agrupado: un solo listado por sección, sumando el mismo producto al mismo precio.
+        // Todo en uno: internaciones agrupadas y todas las ventas en una sola línea.
+        $unico = $request->boolean('unico');
+        $agrupado = $unico || $request->boolean('agrupado');
+
         $pdf = Pdf::loadView('reportes.estado-cuenta', [
             'paciente' => $paciente,
             'internaciones' => $internaciones,
             'ventas' => $ventas,
+            'agrupado' => $agrupado,
+            'unico' => $unico,
+            'itemsInternaciones' => $agrupado ? $this->agruparFilas($internaciones->flatMap->items) : collect(),
+            'itemsVentas' => $agrupado ? $this->agruparFilas($ventas->flatMap->detalles) : collect(),
             'totalInternaciones' => round($totalInternaciones, 2),
             'totalVentas' => round($totalVentas, 2),
             'total' => round($totalInternaciones + $totalVentas, 2),
         ])->setPaper('letter', 'portrait');
 
-        return $pdf->stream('estado_cuenta_'.$paciente->id.'_'.now()->format('Ymd_His').'.pdf');
+        $nombre = $unico ? 'estado_cuenta_resumido_' : ($agrupado ? 'estado_cuenta_agrupado_' : 'estado_cuenta_');
+
+        return $pdf->stream($nombre.$paciente->id.'_'.now()->format('Ymd_His').'.pdf');
+    }
+
+    /** Junta las filas del mismo producto y precio en una sola, sumando cantidad e importe. */
+    private function agruparFilas($filas)
+    {
+        return $filas
+            ->groupBy(fn ($fila) => mb_strtoupper(trim($fila->nombre)).'|'.number_format((float) $fila->precio, 2, '.', ''))
+            ->map(fn ($grupo) => [
+                'nombre' => $grupo->first()->nombre,
+                'precio' => (float) $grupo->first()->precio,
+                'cantidad' => (float) $grupo->sum('cantidad'),
+                'total' => round((float) $grupo->sum('total'), 2),
+            ])
+            ->sortBy('nombre', SORT_NATURAL | SORT_FLAG_CASE)
+            ->values();
     }
 
     /**

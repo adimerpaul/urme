@@ -5,6 +5,8 @@
     $money = fn ($v) => number_format((float) $v, 2, ',', '.');
     // Las cantidades enteras se imprimen sin decimales: 5 en vez de 5,00.
     $cant = fn ($v) => rtrim(rtrim(number_format((float) $v, 2, ',', '.'), '0'), ',');
+    $agrupado = $agrupado ?? false;
+    $unico = $unico ?? false;
 @endphp
 <!doctype html>
 <html lang="es">
@@ -90,7 +92,7 @@
                 <div class="brand-sub">Atención de emergencias las 24 horas, los 365 días del año</div>
             </td>
             <td class="r" style="width:31%">
-                <span class="doc-tag">ESTADO DE CUENTA</span>
+                <span class="doc-tag">ESTADO DE CUENTA{{ $unico ? ' · RESUMIDO' : ($agrupado ? ' · AGRUPADO' : '') }}</span>
                 <div class="doc-meta">
                     {!! PdfTema::icono('reloj', '#64748b', 7) !!} Emitido {{ now()->format('d/m/Y H:i') }}
                 </div>
@@ -155,11 +157,25 @@
                     <th class="c-cant">Cant.</th>
                     <th class="c-prec">P. unit. Bs.</th>
                     <th class="c-tot">Importe Bs.</th>
-                    <th class="c-por">Registró</th>
+                    <th class="c-por">{{ $agrupado ? '' : 'Registró' }}</th>
                 </tr>
             </thead>
             <tbody>
                 @php $n = 0; @endphp
+                @if ($agrupado)
+                    @foreach ($itemsInternaciones as $item)
+                        @php $n++; @endphp
+                        <tr class="{{ $n % 2 === 0 ? 'par' : '' }}">
+                            <td class="marca" style="background: {{ $azul }}"></td>
+                            <td class="c-num">{{ $n }}</td>
+                            <td class="item-nom">{{ $item['nombre'] }}</td>
+                            <td class="c-cant">{{ $cant($item['cantidad']) }}</td>
+                            <td class="c-prec">{{ $money($item['precio']) }}</td>
+                            <td class="c-tot"><b>{{ $money($item['total']) }}</b></td>
+                            <td class="c-por"></td>
+                        </tr>
+                    @endforeach
+                @else
                 @foreach ($internaciones as $internacion)
                     <tr class="grupo">
                         <td class="marca" style="background: {{ $azul }}"></td>
@@ -194,6 +210,7 @@
                         </tr>
                     @endforelse
                 @endforeach
+                @endif
             </tbody>
         </table>
     @endif
@@ -211,11 +228,36 @@
                     <th class="c-cant">Cant.</th>
                     <th class="c-prec">P. unit. Bs.</th>
                     <th class="c-tot">Importe Bs.</th>
-                    <th class="c-por">Doctor</th>
+                    <th class="c-por">{{ $agrupado ? '' : 'Doctor' }}</th>
                 </tr>
             </thead>
             <tbody>
                 @php $m = 0; @endphp
+                @if ($unico)
+                    {{-- Todo en uno: todas las ventas pendientes en una sola línea --}}
+                    <tr>
+                        <td class="marca" style="background: #b26a00"></td>
+                        <td class="c-num">1</td>
+                        <td class="item-nom">PRODUCTOS Y SERVICIOS</td>
+                        <td class="c-cant">1</td>
+                        <td class="c-prec">{{ $money($totalVentas) }}</td>
+                        <td class="c-tot"><b>{{ $money($totalVentas) }}</b></td>
+                        <td class="c-por"></td>
+                    </tr>
+                @elseif ($agrupado)
+                    @foreach ($itemsVentas as $detalle)
+                        @php $m++; @endphp
+                        <tr class="{{ $m % 2 === 0 ? 'par' : '' }}">
+                            <td class="marca" style="background: #b26a00"></td>
+                            <td class="c-num">{{ $m }}</td>
+                            <td class="item-nom">{{ $detalle['nombre'] }}</td>
+                            <td class="c-cant">{{ $cant($detalle['cantidad']) }}</td>
+                            <td class="c-prec">{{ $money($detalle['precio']) }}</td>
+                            <td class="c-tot"><b>{{ $money($detalle['total']) }}</b></td>
+                            <td class="c-por"></td>
+                        </tr>
+                    @endforeach
+                @else
                 @foreach ($ventas as $venta)
                     <tr class="grupo">
                         <td class="marca" style="background: #b26a00"></td>
@@ -251,6 +293,7 @@
                         </tr>
                     @endforelse
                 @endforeach
+                @endif
             </tbody>
         </table>
     @endif

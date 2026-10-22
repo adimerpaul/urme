@@ -115,12 +115,13 @@ class UserController extends Controller
 
         $request->validate([
             'name' => 'sometimes|required|string|max:255',
+            'username' => 'sometimes|required|string|unique:users,username,'.$user->id,
             'email' => 'nullable|email|max:255',
             'celular' => 'nullable|string|max:50',
             'ci' => 'nullable|string|max:50',
         ]);
 
-        $data = $request->only(['name', 'email', 'celular', 'ci']);
+        $data = $request->only(['name', 'username', 'email', 'celular', 'ci']);
         if (isset($data['name'])) {
             $data['name'] = mb_strtoupper($data['name']);
         }

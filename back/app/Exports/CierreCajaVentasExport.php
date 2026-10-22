@@ -22,7 +22,7 @@ class CierreCajaVentasExport implements FromCollection, ShouldAutoSize, WithHead
     public function collection()
     {
         return CierreCajaController::ventasDelDia($this->cierre->user_id, $this->cierre->fecha->toDateString())
-            ->with(['paciente:id,nombre_completo,ci', 'detalles:id,venta_id,nombre,cantidad,precio,total'])
+            ->with(['paciente:id,nombre_completo,ci', 'detalles:id,venta_id,nombre,cantidad,precio,precio_original,total'])
             ->orderBy('fecha_hora')
             ->get()
             ->map(fn ($venta) => [
@@ -34,7 +34,11 @@ class CierreCajaVentasExport implements FromCollection, ShouldAutoSize, WithHead
                 $venta->estado,
                 $venta->tipo_pago ?: '',
                 $venta->detalles->count(),
-                $venta->detalles->pluck('nombre')->implode(', '),
+                // "*" marca el precio cambiado por la vendedora respecto al de lista.
+                $venta->detalles->map(fn ($d) => (float) $d->cantidad.' x '.$d->nombre.' @ '
+                    .number_format((float) $d->precio, 2).($d->precio_modificado ? '* (lista '.number_format((float) $d->precio_original, 2).')' : ''))
+                    ->implode(', '),
+                $venta->comentario ?: '',
                 // El gasto va en negativo: así la columna suma el neto que queda en caja.
                 $venta->esEgreso() ? -(float) $venta->total : (float) $venta->total,
             ]);
@@ -42,7 +46,7 @@ class CierreCajaVentasExport implements FromCollection, ShouldAutoSize, WithHead
 
     public function headings(): array
     {
-        return ['N°', 'Fecha y hora', 'Cliente / Paciente', 'CI', 'Tipo', 'Estado', 'Pago', 'Ítems', 'Detalle', 'Total (Bs)'];
+        return ['N°', 'Fecha y hora', 'Cliente / Paciente', 'CI', 'Tipo', 'Estado', 'Pago', 'Ítems', 'Detalle', 'Comentario', 'Total (Bs)'];
     }
 
     public function title(): string
@@ -54,7 +58,7 @@ class CierreCajaVentasExport implements FromCollection, ShouldAutoSize, WithHead
     {
         $last = $sheet->getHighestRow();
 
-        $sheet->getStyle('A1:J1')->applyFromArray([
+        $sheet->getStyle('A1:K1')->applyFromArray([
             'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF'], 'size' => 11],
             'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => '00695C']],
             'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER],
@@ -64,7 +68,7 @@ class CierreCajaVentasExport implements FromCollection, ShouldAutoSize, WithHead
 
         for ($row = 2; $row <= $last; $row++) {
             $color = ($row % 2 === 0) ? 'E0F2F1' : 'FFFFFF';
-            $sheet->getStyle("A{$row}:J{$row}")->applyFromArray([
+            $sheet->getStyle("A{$row}:K{$row}")->applyFromArray([
                 'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => $color]],
                 'alignment' => ['vertical' => Alignment::VERTICAL_CENTER],
                 'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_HAIR, 'color' => ['rgb' => 'CCCCCC']]],

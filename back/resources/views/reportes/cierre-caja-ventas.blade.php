@@ -22,6 +22,9 @@
         table.items tbody tr:nth-child(even) td { background: #F1F8F7; }
         .num { text-align: right; }
         .det { color: #64748b; font-size: 7px; }
+        .mod { color: #c62828; font-weight: bold; }
+        .com { color: #8a5a00; font-size: 7px; font-style: italic; }
+        .nota { color: #64748b; font-size: 7px; margin-top: 4px; }
         .empty { border: 1px dashed #cbd5e1; color: #64748b; padding: 22px; text-align: center; margin-top: 18px; }
         tfoot td { font-weight: bold; border-top: 2px solid #00695C; padding: 4px 3px; }
     </style>
@@ -69,7 +72,12 @@
                         <td>{{ optional($venta->fecha_hora_cobro ?: $venta->fecha_hora)->format('d/m/Y H:i') }}</td>
                         <td>
                             {{ $venta->paciente?->nombre_completo ?: ($venta->cliente ?: ($venta->esEgreso() ? 'GASTO DE CAJA' : 'SIN CLIENTE')) }}
-                            <div class="det">{{ $venta->detalles->pluck('nombre')->implode(', ') }}</div>
+                            @foreach ($venta->detalles as $d)
+                                <div class="det">{{ (float) $d->cantidad }} x {{ $d->nombre }} · {{ number_format((float) $d->precio, 2) }}@if ($d->precio_modificado)<span class="mod">* (lista {{ number_format((float) $d->precio_original, 2) }})</span>@endif</div>
+                            @endforeach
+                            @if ($venta->comentario)
+                                <div class="com">Coment.: {{ $venta->comentario }}</div>
+                            @endif
                         </td>
                         <td>{{ $venta->esEgreso() ? 'GASTO' : 'VENTA' }}</td>
                         <td>{{ $venta->estado }}</td>
@@ -86,6 +94,7 @@
                 </tr>
             </tfoot>
         </table>
+        <div class="nota"><span class="mod">*</span> Precio modificado por la vendedora (distinto al precio de lista).</div>
     @endif
 </body>
 </html>

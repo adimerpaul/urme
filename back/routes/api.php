@@ -241,6 +241,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/cierres-caja/{id}/ventas', [CierreCajaController::class, 'ventas']);
     Route::post('/cierres-caja', [CierreCajaController::class, 'store']);
     Route::put('/cierres-caja/{id}/validar', [CierreCajaController::class, 'validar']);
+    Route::put('/cierres-caja/{id}/autorizar', [CierreCajaController::class, 'autorizar']);
     Route::put('/cierres-caja/{id}', [CierreCajaController::class, 'update']);
 
     // Ingresos y gastos de Caja Administrativa y Caja General

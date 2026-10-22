@@ -20,10 +20,13 @@ use Maatwebsite\Excel\Facades\Excel;
  *  - Con la caja cerrada, ese usuario ya no puede registrar ventas ese día.
  *  - Quien tiene 'Validar Cierres Caja' valida el cierre (queda quién y cuándo);
  *    validado, el cierre queda cerrado y ya no admite correcciones.
+ *  - Quien tiene 'Autorizar Ventas Caja Cerrada' da tiempo extra a un usuario
+ *    que ya cerró: vende hasta la hora autorizada, el total del sistema se
+ *    recalcula y el usuario vuelve a tener una corrección para su efectivo.
  */
 class CierreCajaController extends Controller
 {
-    private const RELACIONES = ['user:id,name,username', 'validadoPor:id,name,username'];
+    private const RELACIONES = ['user:id,name,username', 'validadoPor:id,name,username', 'autorizadoPor:id,name,username'];
 
     public function index(Request $request)
     {
@@ -46,7 +49,7 @@ class CierreCajaController extends Controller
         $cierres = $query->paginate((int) $request->input('per_page', 15));
 
         // Sin 'Ver Montos Caja' solo se ve lo declarado, nunca el sistema ni la diferencia.
-        $cierres->getCollection()->transform(fn ($cierre) => $this->ocultarMontos($cierre, $request->user()));
+        $cierres->getCollection()->transform(fn ($cierre) => $this->ocultarMontos(self::recalcular($cierre), $request->user()));
 
         return response()->json($cierres);
     }
@@ -64,13 +67,14 @@ class CierreCajaController extends Controller
 
         $user = $request->user();
         $fecha = $this->hoy();
-        $cierre = self::cierreDelDia($user->id, $fecha);
+        $cierre = self::recalcular(self::cierreDelDia($user->id, $fecha));
         $verMontos = $user->can('Ver Montos Caja');
-        $totales = $verMontos ? $this->totalesDelDia($user->id, $fecha) : null;
+        $totales = $verMontos ? self::totalesDelDia($user->id, $fecha) : null;
 
         return response()->json([
             'fecha' => $fecha,
-            'cerrada' => (bool) $cierre,
+            // 'cerrada' es si hoy no puede vender: con autorización vigente sigue abierta.
+            'cerrada' => (bool) $cierre && ! $cierre->autorizado,
             'ver_montos' => $verMontos,
             'cierre' => $this->ocultarMontos($cierre?->load(self::RELACIONES), $user),
             'total_sistema' => $totales['total'] ?? null,
@@ -96,7 +100,7 @@ class CierreCajaController extends Controller
             ]);
         }
 
-        $totales = $this->totalesDelDia($user->id, $fecha);
+        $totales = self::totalesDelDia($user->id, $fecha);
         [$monto, $detalle] = $this->efectivoDeclarado($request);
 
         $cierre = CierreCaja::create([
@@ -138,6 +142,7 @@ class CierreCajaController extends Controller
             abort(422, 'Este cierre ya fue modificado una vez y no admite más cambios');
         }
 
+        self::recalcular($cierre);
         [$monto, $detalle] = $this->efectivoDeclarado($request);
         $cierre->update([
             'monto' => $monto,
@@ -162,6 +167,10 @@ class CierreCajaController extends Controller
         if ($cierre->validado) {
             abort(422, 'Este cierre ya fue validado');
         }
+        if ($cierre->autorizado) {
+            abort(422, 'El usuario todavía tiene tiempo autorizado para vender: valide cuando termine');
+        }
+        self::recalcular($cierre);
 
         $cierre->update([
             'validado_por_id' => $request->user()->id,
@@ -174,19 +183,53 @@ class CierreCajaController extends Controller
         ]);
     }
 
+    /**
+     * Da tiempo extra para vender con la caja ya cerrada. Solo el cierre de hoy
+     * y sin validar. Se le devuelve la corrección al usuario para que, al
+     * terminar, declare el efectivo final con las nuevas ventas.
+     */
+    public function autorizar(Request $request, $id)
+    {
+        $this->req($request, 'Autorizar Ventas Caja Cerrada');
+
+        $request->validate(['minutos' => 'required|integer|min:5|max:720']);
+
+        $cierre = CierreCaja::findOrFail($id);
+        if ($cierre->validado) {
+            abort(422, 'Este cierre ya fue validado: no se puede autorizar más ventas');
+        }
+        if ($cierre->fecha->toDateString() !== $this->hoy()) {
+            abort(422, 'Solo se puede autorizar más ventas en el cierre de hoy');
+        }
+
+        // La autorización no pasa de la medianoche: al día siguiente la caja es otra.
+        $hasta = now()->addMinutes((int) $request->minutos)->min(now()->endOfDay());
+
+        $cierre->update([
+            'autorizado_hasta' => $hasta,
+            'autorizado_por_id' => $request->user()->id,
+            'modificado_en' => null,
+        ]);
+
+        return response()->json([
+            'message' => 'Ventas autorizadas hasta las '.$hasta->format('H:i'),
+            'cierre' => $this->ocultarMontos($cierre->load(self::RELACIONES), $request->user()),
+        ]);
+    }
+
     /** Ventas que componen un cierre ya guardado (las del usuario en esa fecha). */
     public function ventas(Request $request, $id)
     {
         $this->req($request, 'Ver Cierres Caja');
 
-        $cierre = CierreCaja::with(self::RELACIONES)->findOrFail($id);
+        $cierre = self::recalcular(CierreCaja::with(self::RELACIONES)->findOrFail($id));
 
         $ventas = self::ventasDelDia($cierre->user_id, $cierre->fecha->toDateString())
             ->with([
                 'paciente:id,nombre_completo,ci',
                 'user:id,name',
                 'cobradoPor:id,name',
-                'detalles:id,venta_id,nombre,cantidad,precio,total',
+                'detalles:id,venta_id,nombre,cantidad,precio,precio_original,total',
             ])
             ->orderBy('fecha_hora')
             ->paginate(min((int) $request->input('per_page', 15), 100));
@@ -201,7 +244,7 @@ class CierreCajaController extends Controller
     {
         $this->req($request, 'Ver Cierres Caja');
 
-        $cierre = CierreCaja::with(self::RELACIONES)->findOrFail($id);
+        $cierre = self::recalcular(CierreCaja::with(self::RELACIONES)->findOrFail($id));
 
         return Excel::download(
             new CierreCajaVentasExport($cierre),
@@ -214,10 +257,10 @@ class CierreCajaController extends Controller
         $this->req($request, 'Ver Cierres Caja');
         ini_set('memory_limit', '1024M');
 
-        $cierre = CierreCaja::with(self::RELACIONES)->findOrFail($id);
+        $cierre = self::recalcular(CierreCaja::with(self::RELACIONES)->findOrFail($id));
 
         $ventas = self::ventasDelDia($cierre->user_id, $cierre->fecha->toDateString())
-            ->with(['paciente:id,nombre_completo,ci', 'detalles:id,venta_id,nombre,cantidad,precio,total'])
+            ->with(['paciente:id,nombre_completo,ci', 'detalles:id,venta_id,nombre,cantidad,precio,precio_original,total'])
             ->orderBy('fecha_hora')
             ->get();
 
@@ -293,6 +336,40 @@ class CierreCajaController extends Controller
         return CierreCaja::where('user_id', $userId)->whereDate('fecha', $fecha)->first();
     }
 
+    /**
+     * El usuario no puede vender ni cobrar si ya cerró hoy, salvo que tenga una
+     * autorización vigente.
+     */
+    public static function cajaBloqueada(int $userId, string $fecha): bool
+    {
+        $cierre = self::cierreDelDia($userId, $fecha);
+
+        return $cierre !== null && ! $cierre->autorizado;
+    }
+
+    /**
+     * Un cierre con autorización pudo sumar ventas después de cerrado: su total
+     * del sistema se vuelve a calcular y la diferencia se ajusta a lo declarado.
+     */
+    public static function recalcular(?CierreCaja $cierre): ?CierreCaja
+    {
+        if (! $cierre || $cierre->autorizado_hasta === null || $cierre->validado) {
+            return $cierre;
+        }
+
+        $totales = self::totalesDelDia($cierre->user_id, $cierre->fecha->toDateString());
+        $cierre->fill([
+            'monto_sistema' => $totales['total'],
+            'cantidad_ventas' => $totales['cantidad'],
+            'diferencia' => round((float) $cierre->monto - $totales['total'], 2),
+        ]);
+        if ($cierre->isDirty()) {
+            $cierre->save();
+        }
+
+        return $cierre;
+    }
+
     private function hoy(): string
     {
         return now()->toDateString();
@@ -321,7 +398,7 @@ class CierreCajaController extends Controller
      * Movimientos ACTIVO del usuario en el día. El total del sistema es lo que
      * debería quedar en caja: los ingresos menos los gastos registrados.
      */
-    private function totalesDelDia(int $userId, string $fecha): array
+    private static function totalesDelDia(int $userId, string $fecha): array
     {
         $ventas = self::ventasDelDia($userId, $fecha);
 

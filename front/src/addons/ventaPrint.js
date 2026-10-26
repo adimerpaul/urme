@@ -1,4 +1,5 @@
 import { Printd } from 'printd'
+import { formatBoliviaDateTime } from './dateTime'
 
 const CLINICA = {
   nombre: 'CLÍNICA URME',
@@ -105,7 +106,8 @@ function enteroALetras (n) {
 // ── HTML de la proforma ─────────────────────────────────────────
 function buildHtml (venta) {
   const logoUrl = window.location.origin + '/logo.png'
-  const fecha = (venta.fecha_hora || '').replace('T', ' ').slice(0, 19) || '—'
+  // La API manda la fecha en UTC: se muestra en hora de Bolivia, igual que en la tabla.
+  const fecha = formatBoliviaDateTime(venta.fecha_hora)
   // Un gasto de caja no tiene cliente: el comprobante cambia de rótulos.
   const egreso = venta.tipo_movimiento === 'EGRESO'
   const cliente = venta.paciente?.nombre_completo || venta.cliente ||

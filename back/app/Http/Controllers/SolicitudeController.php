@@ -15,6 +15,7 @@ use BaconQrCode\Renderer\ImageRenderer;
 use BaconQrCode\Renderer\RendererStyle\RendererStyle;
 use BaconQrCode\Writer;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use OwenIt\Auditing\Models\Audit;
@@ -187,8 +188,10 @@ class SolicitudeController extends Controller
     {
         $this->authorizeAny($request, ['Ver Solicitudes Laboratorio', 'Crear Solicitudes Laboratorio', 'Editar Solicitudes Laboratorio']);
         $solicitude->load([
-            'paciente',
-            'doctor.especialidades:id,nombre',
+            'paciente.seguro:id,nombre',
+            'doctor.especialidades' => fn ($query) => $query
+                ->select('especialidades.id', 'especialidades.nombre')
+                ->wherePivotNull('deleted_at'),
             'user',
             'laboratorioItems.producto.tipoProducto:id,nombre',
             'laboratorioItems.resultados',
@@ -202,8 +205,11 @@ class SolicitudeController extends Controller
 
         $paraNavegador = $html;
         $bloques = $this->bloquesInforme($solicitude);
+        $edadPaciente = $this->edadALaSolicitud($solicitude);
+        $especialidades = $solicitude->doctor?->especialidades->pluck('nombre')->implode(', ') ?: '—';
         $datos = compact(
-            'solicitude', 'impresoPor', 'urlVerificacion', 'qrDataUri', 'paraNavegador', 'bloques'
+            'solicitude', 'impresoPor', 'urlVerificacion', 'qrDataUri', 'paraNavegador', 'bloques',
+            'edadPaciente', 'especialidades'
         );
         if ($html) {
             return response()->view('reportes.solicitud-laboratorio', $datos);
@@ -365,6 +371,34 @@ class SolicitudeController extends Controller
             $productos,
             collect($validated['resultados'] ?? [])->keyBy('producto_laboratorio_dato_id'),
         ];
+    }
+
+    /**
+     * Edad del paciente a la fecha de la solicitud (no a la de impresión, para que
+     * una reimpresión no la cambie): "49 AÑOS", "8 MESES" o "12 DÍAS". Devuelve "—"
+     * si la fecha de nacimiento falta, es inválida o es posterior a la solicitud.
+     */
+    private function edadALaSolicitud(Solicitude $solicitude): string
+    {
+        $nacimiento = $solicitude->paciente?->getAttributes()['fecha_nacimiento'] ?? null;
+        if (! is_string($nacimiento) || ! preg_match('/^(\d{4})-(\d{2})-(\d{2})/', $nacimiento, $partes)
+            || ! checkdate((int) $partes[2], (int) $partes[3], (int) $partes[1]) || ! $solicitude->fecha_solicitud) {
+            return '—';
+        }
+
+        $desde = Carbon::createFromDate((int) $partes[1], (int) $partes[2], (int) $partes[3])->startOfDay();
+        $hasta = $solicitude->fecha_solicitud->copy()->startOfDay();
+        if ($desde->gt($hasta)) {
+            return '—';
+        }
+
+        $diferencia = $desde->diff($hasta);
+
+        return match (true) {
+            $diferencia->y > 0 => $diferencia->y.($diferencia->y === 1 ? ' AÑO' : ' AÑOS'),
+            $diferencia->m > 0 => $diferencia->m.($diferencia->m === 1 ? ' MES' : ' MESES'),
+            default => $diferencia->d.($diferencia->d === 1 ? ' DÍA' : ' DÍAS'),
+        };
     }
 
     /**

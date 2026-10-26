@@ -11,12 +11,15 @@
         .header { margin-bottom: 3px; border-bottom: 2px solid #1a73e8; }
         .header td { vertical-align: middle; padding-bottom: 5px; }
         .laboratory-logo { width: 205px; height: auto; display: block; }
-        .document-code { color: #0b5ed7; font-size: 11px; }
-        .codelab { color: #0b5ed7; font-weight: bold; }
+        /* CODELAB y código de la solicitud: un solo bloque, mismo estilo. */
+        .document-code, .codelab { color: #0b5ed7; font-size: 15px; font-weight: bold; }
         .meta { color: #4b5563; font-size: 10px; line-height: 1.45; }
+        /* El JPG del logo trae ~25px de blanco abajo: se sube el bloque para que quede justo bajo el dibujo. */
+        .lab-direccion { width: 205px; margin-top: -22px; text-align: center; }
         .title { color: #0b5ed7; font-size: 13px; font-weight: bold; text-align: center; margin: 5px 0 6px; letter-spacing: .3px; }
         .patient { margin-bottom: 7px; }
-        .patient td { border: 1px solid #aeb9c5; padding: 3px 5px; }
+        .patient { table-layout: fixed; }
+        .patient td { border: 1px solid #aeb9c5; padding: 3px 5px; vertical-align: top; }
         .label { font-weight: bold; color: #374151; }
         .service-title { color: #1f2937; font-size: 10.5px; font-weight: bold; text-align: center; margin: 7px 0 2px; }
         .results { margin-bottom: 4px; }
@@ -28,7 +31,10 @@
         .result { font-weight: bold; }
         .reference p, .reference div, .reference ul, .reference ol, .reference blockquote { margin: 0; }
         .reference ul, .reference ol { padding-left: 12px; }
-        .signature { margin-top: 60px; width: 300px; border-top: 1px solid #374151; text-align: center; padding-top: 3px; font-size: 9px; }
+        /* Espacio para firmar + línea + textos: no se parten entre páginas. */
+        .bloque-firma { page-break-inside: avoid; break-inside: avoid; }
+        .espacio-firma { height: 70px; }
+        .signature { width: 300px; border-top: 1px solid #374151; text-align: center; padding-top: 3px; font-size: 9px; }
         .signature-name { margin-top: 2px; font-weight: bold; color: #0b5ed7; font-size: 9.5px; }
         .page-footer { position: fixed; left: 0; right: 0; bottom: -78px; height: 70px; border-top: 1px solid #c2cad3; color: #374151; }
         .page-footer table { width: 100%; height: 66px; border-collapse: collapse; }
@@ -57,10 +63,16 @@
 <table class="header"><tr>
     <td style="width:42%">
         <img class="laboratory-logo" src="data:image/jpeg;base64,{{ base64_encode(file_get_contents(public_path('images/logo-laboratorio-urme.jpg'))) }}" alt="Laboratorio de Diagnóstico Clínico URME">
+        <div class="meta lab-direccion">
+            {{ config('laboratorio.horario') }}<br>
+            {{ config('laboratorio.direccion_1') }}<br>
+            {{ config('laboratorio.direccion_2') }}<br>
+            Cel. {{ config('laboratorio.celular') }}
+        </div>
     </td>
     <td class="meta" style="width:58%;text-align:right">
+        <span class="codelab">COD. CODELAB {{ config('laboratorio.codelab') }}</span><br>
         <strong class="document-code">{{ $solicitude->codigo_solicitud }}</strong><br>
-        <span class="codelab">COD. CODELAB 000043</span><br>
         Fecha de solicitud: {{ $solicitude->fecha_solicitud->format('d/m/Y') }} {{ substr($solicitude->hora_solicitud, 0, 5) }}<br>
         Fecha de impresión: {{ now()->format('d/m/Y H:i') }}
     </td>
@@ -68,14 +80,21 @@
 <div class="title">INFORME DE LABORATORIO CLÍNICO</div>
 <table class="patient">
     <tr>
-        <td colspan="2"><span class="label">PACIENTE:</span> {{ $solicitude->paciente->nombre_completo }}</td>
-        <td><span class="label">CI:</span> {{ $solicitude->paciente->ci ?: '-' }}</td>
+        <td style="width:40%"><span class="label">PACIENTE:</span> {{ $solicitude->paciente->nombre_completo }}</td>
+        <td style="width:22%"></td>
+        <td style="width:38%"><span class="label">CI:</span> {{ $solicitude->paciente->ci ?: '-' }}</td>
     </tr>
     <tr>
         <td><span class="label">SEXO:</span> {{ $solicitude->paciente->sexo === 'F' ? 'FEMENINO' : ($solicitude->paciente->sexo === 'M' ? 'MASCULINO' : '-') }}</td>
-        <td colspan="2"><span class="label">MÉDICO:</span> {{ $solicitude->doctor?->nombre ?: 'NO ASIGNADO' }}</td>
+        <td><span class="label">EDAD:</span> {{ $edadPaciente }}</td>
+        <td><span class="label">MÉDICO:</span> {{ $solicitude->doctor?->nombre ?: 'NO ASIGNADO' }}</td>
     </tr>
-    <tr><td colspan="3"><span class="label">DIAGNÓSTICO:</span> {{ $solicitude->diagnostico_clinico ?: '-' }}</td></tr>
+    <tr>
+        <td><span class="label">INSTITUCIÓN:</span> {{ $solicitude->paciente->seguro?->nombre ?: 'PARTICULAR' }}</td>
+        {{-- Tipo de paciente: en blanco por ahora (pacientes.estado guarda ACTIVO/INACTIVO, no el tipo). --}}
+        <td><span class="label">TIPO DE PACIENTE:</span></td>
+        <td><span class="label">ESPECIALIDAD:</span> {{ $especialidades }}</td>
+    </tr>
 </table>
 @foreach($bloques as $bloque)
 @if($bloque['tipo'] === 'grupo')
@@ -144,9 +163,12 @@
 @if($solicitude->observaciones)
     <div style="margin-top:12px"><span class="label">OBSERVACIONES:</span> {{ $solicitude->observaciones }}</div>
 @endif
-<div class="signature">
-    <div>RESPONSABLE DE LABORATORIO</div>
-    <div class="signature-name">{{ $impresoPor->name }}</div>
+<div class="bloque-firma">
+    <div class="espacio-firma"></div>
+    <div class="signature">
+        <div>RESPONSABLE DE LABORATORIO</div>
+        <div class="signature-name">{{ $impresoPor->name }}</div>
+    </div>
 </div>
 @if($paraNavegador ?? false)
 </td></tr></tbody></table>

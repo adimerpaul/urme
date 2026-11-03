@@ -13,7 +13,7 @@ class Solicitude extends Model implements AuditableContract
     use AuditableTrait, SoftDeletes;
 
     protected $fillable = [
-        'paciente_id', 'doctor_id', 'user_id', 'codigo_solicitud', 'codigo_verificacion',
+        'paciente_id', 'doctor_id', 'user_id', 'codigo_solicitud', 'codigo_verificacion', 'codigo_laboratorio',
         'fecha_solicitud', 'hora_solicitud', 'diagnostico_clinico',
         'observaciones', 'estado', 'total',
     ];

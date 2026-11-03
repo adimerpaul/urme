@@ -26,10 +26,10 @@
 
     <q-form ref="formRef" @submit.prevent="guardar" class="col column no-wrap">
 
-      <!-- Datos de la solicitud: una sola fila compacta -->
+      <!-- Datos de la solicitud: fila 1 paciente, doctor, fecha, hora y código; fila 2 diagnóstico y observaciones -->
       <q-card flat bordered class="q-pa-xs q-mb-xs">
         <div class="row q-col-gutter-xs">
-          <div class="col-12 col-md-3">
+          <div class="col-12 col-sm-6 col-md-4">
             <q-select v-model="form.paciente_id" :options="pacientesOpciones" option-value="id"
                       :option-label="pacienteLabel" emit-value map-options use-input input-debounce="200"
                       dense outlined label="Paciente *" :rules="[required]" hide-bottom-space
@@ -43,7 +43,7 @@
               </template>
             </q-select>
           </div>
-          <div class="col-12 col-md-2">
+          <div class="col-12 col-sm-6 col-md-3">
             <q-select v-model="form.doctor_id" :options="doctores" option-value="id" option-label="nombre"
                       emit-value map-options clearable dense outlined label="Doctor solicitante"
                       use-input input-debounce="200" hide-bottom-space @filter="filtrarDoctores">
@@ -61,24 +61,24 @@
               </template>
             </q-select>
           </div>
-          <div class="col-6 col-md-2">
+          <div class="col-12 col-sm-4 col-md-2">
             <q-input v-model="form.fecha_solicitud" type="date" dense outlined label="Fecha *"
                      :rules="[required]" hide-bottom-space />
           </div>
-          <div class="col-6 col-md-1">
+          <div class="col-12 col-sm-4 col-md-1">
             <q-input v-model="form.hora_solicitud" type="time" dense outlined label="Hora *"
                      :rules="[required]" hide-bottom-space />
           </div>
-          <div class="col-12 col-md-2">
-            <q-input v-model="form.diagnostico_clinico" v-uppercase dense outlined
-                     label="Diagnóstico clínico" hide-bottom-space />
-          </div>
-          <div class="col-12 col-md-2">
+          <div class="col-12 col-sm-4 col-md-2">
             <q-input :model-value="form.codigo_laboratorio" @update:model-value="normalizarCodigoLaboratorio"
                      dense outlined :label="codigoObligatorio ? 'Código laboratorio *' : 'Código laboratorio'" maxlength="20"
                      :rules="codigoObligatorio ? [required, codigoLaboratorioValido] : [codigoLaboratorioOpcional]" hide-bottom-space />
           </div>
-          <div class="col-12">
+          <div class="col-12 col-md-6">
+            <q-input v-model="form.diagnostico_clinico" v-uppercase dense outlined
+                     label="Diagnóstico clínico" hide-bottom-space />
+          </div>
+          <div class="col-12 col-md-6">
             <q-input v-model="form.observaciones" v-uppercase dense outlined
                      label="Observaciones" hide-bottom-space />
           </div>

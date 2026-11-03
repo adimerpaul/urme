@@ -35,7 +35,7 @@
         </q-td>
       </template>
       <template #body-cell-codigo="props">
-        <q-td :props="props"><q-badge outline color="primary">{{ props.row.codigo_solicitud }}</q-badge></q-td>
+        <q-td :props="props"><q-badge outline color="primary">{{ props.row.codigo_completo }}</q-badge></q-td>
       </template>
       <template #body-cell-pruebas="props">
         <q-td :props="props" class="sol-pruebas">
@@ -100,7 +100,7 @@
       <q-card style="width:min(94vw,850px);max-width:850px">
         <q-card-section class="row items-center bg-primary text-white q-py-sm">
           <q-icon name="biotech" class="q-mr-sm" />
-          <span class="text-subtitle2 text-weight-bold">{{ detalle?.codigo_solicitud }}</span>
+          <span class="text-subtitle2 text-weight-bold">{{ detalle?.codigo_completo }}</span>
           <q-space /><q-btn flat round dense icon="close" v-close-popup />
         </q-card-section>
         <q-card-section v-if="detalle" class="q-pa-sm">
@@ -160,7 +160,7 @@ const canEliminar = computed(() => proxy.$store.hasPermission('Eliminar Solicitu
 
 const columns = [
   { name: 'opciones', label: 'Opciones', field: 'id', align: 'left' },
-  { name: 'codigo', label: 'Código', field: 'codigo_solicitud', align: 'left' },
+  { name: 'codigo', label: 'Código', field: 'codigo_completo', align: 'left' },
   { name: 'fecha', label: 'Fecha', field: 'fecha_solicitud', align: 'left' },
   { name: 'paciente', label: 'Paciente', field: row => row.paciente?.nombre_completo, align: 'left' },
   { name: 'doctor', label: 'Doctor', field: row => row.doctor?.nombre || 'NO ASIGNADO', align: 'left' },
@@ -244,7 +244,7 @@ async function enviarWhatsApp (row) {
     const mensaje = [
       `Clínica URME - Laboratorio Clínico`,
       `Paciente: ${row.paciente?.nombre_completo || ''}`,
-      `Informe: ${row.codigo_solicitud}`,
+      `Informe: ${row.codigo_completo}`,
       `Adjuntamos su informe de laboratorio en formato PDF.`,
     ].join('\n')
     const whatsappUrl = `https://wa.me/${telefono}?text=${encodeURIComponent(mensaje)}`
@@ -267,7 +267,7 @@ function normalizarTelefono (value) {
   return numero.length >= 11 && numero.length <= 15 ? numero : null
 }
 function eliminar (row) {
-  proxy.$alert.dialog(`¿Eliminar la solicitud ${row.codigo_solicitud}?`).onOk(async () => {
+  proxy.$alert.dialog(`¿Eliminar la solicitud ${row.codigo_completo}?`).onOk(async () => {
     try {
       await proxy.$axios.delete(`solicitudes-laboratorio/${row.id}`)
       proxy.$alert.success('Solicitud eliminada')

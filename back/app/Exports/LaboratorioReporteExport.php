@@ -23,14 +23,15 @@ class LaboratorioReporteExport extends StringValueBinder implements FromQuery, S
 
     public function headings(): array
     {
-        return ['Fecha de solicitud', 'Solicitud', 'Paciente', 'CI', 'Laboratorio / prueba', 'Estado', 'Importe (Bs)'];
+        return ['Fecha de solicitud', 'Solicitud', 'Código laboratorio', 'Paciente', 'CI', 'Laboratorio / prueba', 'Estado', 'Importe (Bs)'];
     }
 
     public function map($item): array
     {
         return [
             $item->solicitude->fecha_solicitud->format('d/m/Y'),
-            $item->solicitude->codigo_solicitud,
+            $item->solicitude->codigo_completo,
+            $item->solicitude->codigo_laboratorio,
             $item->solicitude->paciente?->nombre_completo,
             $item->solicitude->paciente?->ci,
             $item->producto_nombre,

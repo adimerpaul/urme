@@ -25,7 +25,7 @@
             <div class="row q-col-gutter-sm">
               <div class="col-12 col-sm-3"><q-input v-model="form.codigo" label="Código" dense outlined :readonly="soloLectura" v-uppercase /></div>
               <div class="col-12 col-sm-6"><q-input v-model="form.nombre" label="Nombre *" dense outlined :readonly="soloLectura" v-uppercase :rules="[required]" /></div>
-              <div class="col-12 col-sm-3"><q-select v-model="form.unidad" label="Unidad *" dense outlined :readonly="soloLectura" :options="unidades" use-input new-value-mode="add-unique" :rules="[required]" /></div>
+              <div class="col-12 col-sm-3"><q-select :model-value="form.unidad" @update:model-value="v => form.unidad = normalizarUnidad(v)" label="Unidad *" dense outlined :readonly="soloLectura" :options="unidades" use-input new-value-mode="add-unique" :rules="[required]" /></div>
               <div class="col-6 col-sm-3"><q-input v-model.number="form.stock_actual" type="number" step="0.001" min="0" label="Stock actual *" dense outlined :readonly="soloLectura" /></div>
               <div class="col-6 col-sm-3"><q-input v-model.number="form.stock_minimo" type="number" step="0.001" min="0" label="Stock mínimo *" dense outlined :readonly="soloLectura" /></div>
               <div class="col-12 col-sm-3"><q-select v-model="form.estado" label="Estado" dense outlined :readonly="soloLectura" :options="['ACTIVO', 'INACTIVO']" /></div>
@@ -56,7 +56,9 @@ const { proxy } = getCurrentInstance()
 const tableRef = ref(null); const rows = ref([]); const loading = ref(false); const saving = ref(false); const filtro = ref('')
 const dialog = ref(false); const soloLectura = ref(false); const serviciosTodos = ref([]); const servicios = ref([])
 const pagination = ref({ page: 1, rowsPerPage: 15, rowsNumber: 0 })
-const unidades = ['ML', 'L', 'MG', 'G', 'UNIDAD', 'TIRA', 'KIT', 'FRASCO']
+const unidades = ['ML', 'L', 'MG', 'G', 'UNIDAD', 'TIRA', 'KIT', 'FRASCO', '\u00B5L', 'DETERMINACIÓN', 'TACO']
+// µ siempre como U+00B5 (signo micro): si se escribe o pega la mu griega U+03BC, se reemplaza
+const normalizarUnidad = value => typeof value === 'string' ? value.replace(/\u03BC/g, '\u00B5') : value
 const canCrear = computed(() => proxy.$store.hasPermission('Crear Reactivos')); const canEditar = computed(() => proxy.$store.hasPermission('Editar Reactivos')); const canEliminar = computed(() => proxy.$store.hasPermission('Eliminar Reactivos'))
 const columns = [{ name: 'opciones', label: 'Opciones', field: 'id', align: 'left' }, { name: 'codigo', label: 'Código', field: 'codigo', align: 'left' }, { name: 'nombre', label: 'Reactivo', field: 'nombre', align: 'left' }, { name: 'stock', label: 'Stock', field: 'stock_actual', align: 'center' }, { name: 'servicios', label: 'Servicios', field: 'servicios', align: 'left' } /* antes: 'Servicios y consumo' */, { name: 'estado', label: 'Estado', field: 'estado', align: 'center' }]
 const vacio = () => ({ codigo: '', nombre: '', unidad: 'ML', stock_actual: 0, stock_minimo: 0, estado: 'ACTIVO', descripcion: '', servicios: [] })

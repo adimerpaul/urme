@@ -13,12 +13,14 @@ class Solicitude extends Model implements AuditableContract
     use AuditableTrait, SoftDeletes;
 
     protected $fillable = [
-        'paciente_id', 'doctor_id', 'user_id', 'codigo_solicitud', 'codigo_verificacion',
+        'paciente_id', 'doctor_id', 'user_id', 'codigo_solicitud', 'codigo_verificacion', 'codigo_laboratorio',
         'fecha_solicitud', 'hora_solicitud', 'diagnostico_clinico',
         'observaciones', 'estado', 'total',
     ];
 
     protected $hidden = ['deleted_at'];
+
+    protected $appends = ['codigo_completo'];
 
     protected $casts = [
         'fecha_solicitud' => 'date:Y-m-d',
@@ -38,6 +40,18 @@ class Solicitude extends Model implements AuditableContract
 
             $solicitude->codigo_verificacion = $codigo;
         });
+    }
+
+    /**
+     * Código para mostrar: LAB-20261025-00026-A19. Las solicitudes antiguas sin
+     * código laboratorio muestran solo el código de solicitud. No se guarda: el
+     * codigo_solicitud almacenado no cambia.
+     */
+    public function getCodigoCompletoAttribute(): ?string
+    {
+        return filled($this->codigo_laboratorio)
+            ? $this->codigo_solicitud.'-'.$this->codigo_laboratorio
+            : $this->codigo_solicitud;
     }
 
     public function paciente()

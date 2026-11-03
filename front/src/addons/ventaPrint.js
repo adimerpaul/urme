@@ -162,6 +162,7 @@ function buildHtml (venta) {
           <td style="width:35%">
             <span class="bold">CI/NIT:</span> ${esc(venta.paciente?.ci || '0')}<br>
             <span class="bold">Estado:</span> ${esc(venta.estado || '—')}
+            ${egreso ? '' : `<br><span class="bold">Seguro:</span> ${esc(venta.seguro?.nombre || 'PARTICULAR')}`}
           </td>
         </tr>
       </table>

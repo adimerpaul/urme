@@ -72,7 +72,7 @@
     </td>
     <td class="meta" style="width:58%;text-align:right">
         <span class="codelab">COD. CODELAB {{ config('laboratorio.codelab') }}</span><br>
-        <strong class="document-code">{{ $solicitude->codigo_solicitud }}</strong><br>
+        <strong class="document-code">{{ $solicitude->codigo_completo }}</strong><br>
         Fecha de solicitud: {{ $solicitude->fecha_solicitud->format('d/m/Y') }} {{ substr($solicitude->hora_solicitud, 0, 5) }}<br>
         Fecha de impresión: {{ now()->format('d/m/Y H:i') }}
     </td>

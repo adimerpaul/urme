@@ -31,7 +31,7 @@
         @forelse ($items as $item)
             <tr>
                 <td>{{ $item->solicitude->fecha_solicitud->format('d/m/Y') }}</td>
-                <td>{{ $item->solicitude->codigo_solicitud }}</td>
+                <td>{{ $item->solicitude->codigo_completo }}</td>
                 <td>{{ $item->solicitude->paciente?->nombre_completo }}</td>
                 <td>{{ $item->solicitude->paciente?->ci }}</td>
                 <td>{{ $item->producto_nombre }}</td>

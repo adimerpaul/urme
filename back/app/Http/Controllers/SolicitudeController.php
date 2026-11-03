@@ -304,6 +304,7 @@ class SolicitudeController extends Controller
 
         return response()->json([
             'codigo_solicitud' => $solicitude->codigo_solicitud,
+            'codigo_completo' => $solicitude->codigo_completo,
             'codigo_verificacion' => $solicitude->codigo_verificacion,
             'fecha_solicitud' => $solicitude->fecha_solicitud->format('Y-m-d'),
             'hora_solicitud' => substr($solicitude->hora_solicitud, 0, 5),

@@ -20,6 +20,8 @@ class Solicitude extends Model implements AuditableContract
 
     protected $hidden = ['deleted_at'];
 
+    protected $appends = ['codigo_completo'];
+
     protected $casts = [
         'fecha_solicitud' => 'date:Y-m-d',
         'total' => 'decimal:2',
@@ -38,6 +40,18 @@ class Solicitude extends Model implements AuditableContract
 
             $solicitude->codigo_verificacion = $codigo;
         });
+    }
+
+    /**
+     * Código para mostrar: LAB-20261025-00026-A19. Las solicitudes antiguas sin
+     * código laboratorio muestran solo el código de solicitud. No se guarda: el
+     * codigo_solicitud almacenado no cambia.
+     */
+    public function getCodigoCompletoAttribute(): ?string
+    {
+        return filled($this->codigo_laboratorio)
+            ? $this->codigo_solicitud.'-'.$this->codigo_laboratorio
+            : $this->codigo_solicitud;
     }
 
     public function paciente()

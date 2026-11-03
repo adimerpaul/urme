@@ -33,7 +33,7 @@
 
             <q-card flat bordered>
               <q-card-section class="row q-col-gutter-md">
-                <div class="col-12 col-sm-6"><b>Solicitud:</b> {{ informe.codigo_solicitud }}</div>
+                <div class="col-12 col-sm-6"><b>Solicitud:</b> {{ informe.codigo_completo }}</div>
                 <div class="col-12 col-sm-6"><b>Fecha:</b> {{ fecha(informe.fecha_solicitud) }} {{ informe.hora_solicitud }}</div>
                 <div class="col-12 col-sm-8"><b>Paciente:</b> {{ informe.paciente.nombre_completo }}</div>
                 <div class="col-12 col-sm-4"><b>CI:</b> {{ informe.paciente.ci || '-' }}</div>

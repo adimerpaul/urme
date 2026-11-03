@@ -828,7 +828,7 @@ async function guardarConfirmado () {
     const { data } = editId.value
       ? await proxy.$axios.put(`solicitudes-laboratorio/${editId.value}`, payload)
       : await proxy.$axios.post('solicitudes-laboratorio', payload)
-    proxy.$alert.success(`Laboratorio ${data.codigo_solicitud} ${editId.value ? 'actualizado' : 'creado'}`)
+    proxy.$alert.success(`Laboratorio ${data.codigo_completo} ${editId.value ? 'actualizado' : 'creado'}`)
     try {
       await imprimirSolicitudLaboratorio(proxy.$axios, data.id)
     } catch {

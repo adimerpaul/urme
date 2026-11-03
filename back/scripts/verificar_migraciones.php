@@ -13,7 +13,8 @@
  *      del 2026-11-02, y un AVISO si hay alguna de DATOS pendiente sin neutralizar;
  *   2. si la migración de precios figura como ejecutada y en qué estado están
  *      los precios de su lista original (si el archivo aún la trae);
- *   3. si SODIO, POTASIO y CLORO ya tienen grupo_reporte.
+ *   3. si SODIO, POTASIO y CLORO ya tienen grupo_reporte;
+ *   4. qué migraciones de datos están neutralizadas en este código.
  */
 
 use Illuminate\Contracts\Console\Kernel;
@@ -108,7 +109,7 @@ const CLASIFICACION = [
     '2026_09_02_001000_seed_reactivos_examples' => ['DATOS', 'inserta reactivos de ejemplo y vínculos'],
     '2026_09_10_000100_add_nombre_comercial_to_productos_table' => ['ESQUEMA', 'productos + nombre_comercial'],
     '2026_09_10_000200_add_tipo_movimiento_to_ventas_table' => ['ESQUEMA', 'ventas + tipo_movimiento'],
-    '2026_09_10_000200_seed_inventario_inicial_farmacia' => ['DATOS', 'BORRA compras/compra_detalles; crea compra inicial, productos, fabricantes, unidades'],
+    '2026_09_10_000200_seed_inventario_inicial_farmacia' => ['DATOS', 'BORRA compras/compra_detalles; crea compra inicial, productos, fabricantes, unidades (la versión del repositorio está neutralizada desde 2026-11-03)'],
     '2026_09_10_000300_create_bajas_tables' => ['ESQUEMA', 'crea bajas, baja_detalles'],
     '2026_09_10_000400_add_bajas_permissions' => ['DATOS', 'permisos + admin'],
     '2026_09_10_000500_add_editar_lotes_farmacia_permission' => ['DATOS', 'permiso'],
@@ -122,7 +123,7 @@ const CLASIFICACION = [
     '2026_09_26_000400_add_validar_cierres_caja_permission' => ['DATOS', 'permiso + admin'],
     '2026_09_26_000500_add_ver_compras_pacientes_permission' => ['DATOS', 'permiso + admin'],
     '2026_09_26_000600_add_autorizacion_to_cierres_caja_table' => ['DATOS', 'cierres_caja + autorización; permiso + admin'],
-    '2026_09_28_000100_reiniciar_inventario_oficial_farmacia' => ['DATOS', 'BORRA compras, bajas, ventas de farmacia y cierres; da de baja y recrea productos de farmacia'],
+    '2026_09_28_000100_reiniciar_inventario_oficial_farmacia' => ['DATOS', 'BORRA compras, bajas, ventas de farmacia y cierres; da de baja y recrea productos de farmacia (la versión del repositorio está neutralizada desde 2026-11-03)'],
     '2026_10_05_000100_actualizar_precios_oferta_servicios' => ['DATOS', 'actualiza productos.precio'],
     '2026_10_06_000100_actualizar_inventario_farmacia_con_precios' => ['DATOS', 'actualiza productos, compra_detalles, venta_detalles, baja_detalles'],
     '2026_10_07_000100_actualizar_precios_laboratorio' => ['DATOS', 'actualiza productos.precio de 247 exámenes (la versión del repositorio está neutralizada desde 2026-11-02)'],
@@ -156,6 +157,15 @@ if ($pendientes->isEmpty()) {
 echo $riesgo
     ? "\n!!! AVISO: hay migraciones pendientes que modificarían datos o estructura existente (o sin clasificar):\n".implode("\n", array_map(fn ($m) => "!!!   $m", $riesgo))."\n!!! No ejecutar `php artisan migrate` sin --path.\n"
     : "\nOK: ninguna migración pendiente modifica datos existentes.\n";
+
+echo "\n== Migraciones de DATOS neutralizadas en este código (up() y down() sin efecto):\n";
+$neutralizadas = $archivos->filter($neutralizada);
+foreach ($neutralizadas as $m) {
+    echo "  - [DATOS (neutralizada, sin efecto)] $m: ".($ejecutadas->has($m) ? 'ya ejecutada (lote '.$ejecutadas[$m].')' : 'pendiente')."\n";
+}
+if ($neutralizadas->isEmpty()) {
+    echo "  (ninguna: este código todavía no trae las migraciones neutralizadas)\n";
+}
 
 $precios = '2026_10_07_000100_actualizar_precios_laboratorio';
 echo "\n== $precios: ".($ejecutadas->has($precios) ? 'YA EJECUTADA (lote '.$ejecutadas[$precios].')' : 'PENDIENTE')

@@ -15,13 +15,18 @@ migraciones de datos neutralizadas que ya están en `master`.
 **En producción nunca se ejecuta `php artisan migrate`, `migrate:fresh`,
 `migrate:refresh`, `migrate:reset` ni `db:seed` sin `--path`.**
 
-Motivo: de las 96 migraciones de `back/database/migrations`, **43 modifican
+Motivo: de las 96 migraciones de `back/database/migrations`, **45 son de
 datos** (insertan, actualizan o borran filas) y 3 cambian o borran columnas.
-Si alguna estuviera pendiente en producción, un `migrate` sin `--path` la
-ejecutaría junto con las demás. Entre ellas hay migraciones que:
+Cuatro de las de datos ya están neutralizadas en el repositorio (ver más
+abajo), pero **41 siguen activas**, y un servidor con una versión anterior del
+código todavía tiene también las cuatro originales. Si alguna estuviera
+pendiente en producción, un `migrate` sin `--path` la ejecutaría junto con las
+demás. Entre ellas hay migraciones que:
 
-- **borran inventario y ventas**: `2026_09_10_000200_seed_inventario_inicial_farmacia`
-  y `2026_09_28_000100_reiniciar_inventario_oficial_farmacia` (borran compras,
+- **borraban inventario y ventas** (neutralizadas desde 2026-11-03, pero activas
+  en cualquier copia del código anterior a esa fecha):
+  `2026_09_10_000200_seed_inventario_inicial_farmacia` y
+  `2026_09_28_000100_reiniciar_inventario_oficial_farmacia` (borran compras,
   bajas, ventas de farmacia y cierres de caja, y recrean los productos de farmacia);
 - **cambian precios**: `2026_09_26_000300_actualizar_precios_lista_2026`,
   `2026_10_05_000100_actualizar_precios_oferta_servicios`,
@@ -39,10 +44,21 @@ php artisan migrate --pretend --path=database/migrations/<archivo>.php
 php artisan migrate          --path=database/migrations/<archivo>.php
 ```
 
-Dos migraciones de datos están **neutralizadas** (su `up()` y `down()` no hacen
-nada), así que aunque figuren como pendientes no cambian nada:
-`2026_10_07_000100_actualizar_precios_laboratorio` y
-`2026_10_22_000200_agrupar_electrolitos_en_informe_laboratorio`.
+Cuatro migraciones de datos están **neutralizadas** (su `up()` y `down()` no
+hacen nada), así que aunque figuren como pendientes no cambian nada. El script
+de verificación las muestra como **DATOS (neutralizada, sin efecto)**:
+
+| Migración | Qué hacía | Neutralizada | Versión original |
+|---|---|---|---|
+| `2026_09_10_000200_seed_inventario_inicial_farmacia` | Borraba compras y cargaba el inventario inicial de farmacia | 2026-11-03 | `143a350` |
+| `2026_09_28_000100_reiniciar_inventario_oficial_farmacia` | Borraba compras, bajas, ventas de farmacia y cierres de caja; recreaba productos de farmacia | 2026-11-03 | `87bcc39` |
+| `2026_10_07_000100_actualizar_precios_laboratorio` | Cambiaba el precio de 247 exámenes | 2026-11-02 | `2064e28` |
+| `2026_10_22_000200_agrupar_electrolitos_en_informe_laboratorio` | Asignaba `grupo_reporte` a SODIO, POTASIO y CLORO | 2026-11-02 | `09d43a6` |
+
+Consecuencia para entornos nuevos: en una instalación desde cero (base vacía),
+`2026_10_06_000100_actualizar_inventario_farmacia_con_precios` falla, porque
+espera los productos que creaba el reinicio del 28-09. No afecta a producción,
+donde esos productos ya existen.
 
 ---
 
@@ -164,11 +180,15 @@ Guardar la salida. Muestra:
 - si la migración de precios figura como ejecutada y, si el archivo todavía
   trae su lista, en qué estado están esos precios;
 - el `grupo_reporte` de SODIO, POTASIO y CLORO (para saber si la migración de
-  electrolitos ya se aplicó allí).
+  electrolitos ya se aplicó allí);
+- la lista de migraciones neutralizadas que trae ese código, con su estado
+  (ya ejecutada o pendiente).
 
-Con el código actual de producción es esperable que aparezca el aviso por las
-dos migraciones que todavía no están neutralizadas allí. **No se ejecuta
-ninguna migración en este paso.**
+Con el código actual de producción, las cuatro migraciones de la tabla de
+arriba todavía son las originales: si alguna figura pendiente allí, el script
+dará el aviso y la lista de neutralizadas saldrá vacía. Es esperable. **No se
+ejecuta ninguna migración en este paso**, y anotar cuáles de esas cuatro
+aparecen pendientes.
 
 ---
 
@@ -197,8 +217,8 @@ php scripts/verificar_migraciones.php
 php artisan migrate:status
 ```
 
-Resultado esperado: solo quedan pendientes migraciones **ESQUEMA** y las dos
-**neutralizadas**, y el script dice `OK: ninguna migración pendiente modifica
+Resultado esperado: solo quedan pendientes migraciones **ESQUEMA** y, si las
+hubiera, alguna de las cuatro **neutralizadas**, y el script dice `OK: ninguna migración pendiente modifica
 datos existentes.`
 
 **Si aparece `!!! AVISO`, detenerse**: no aplicar migraciones, volver a la

@@ -1,40 +1,30 @@
 <?php
 
 use Illuminate\Database\Migrations\Migration;
-use Illuminate\Support\Facades\DB;
 
+/**
+ * NEUTRALIZADA A PROPÓSITO (2026-11-02). up() y down() no tocan la base.
+ *
+ * Esta migración completaba grupo_reporte = 'Electrolitos' y orden_reporte 1/2/3
+ * en los productos de laboratorio SODIO, POTASIO y CLORO que no tuvieran grupo.
+ * Se dejó sin efecto porque en producción ninguna migración debe modificar datos
+ * existentes: solo se admiten migraciones de esquema aditivas. Los grupos del
+ * informe (grupo_reporte / orden_reporte) los asigna el bioquímico desde la
+ * pantalla de laboratorio.
+ *
+ * Se conserva el archivo (y no se borra ni se mueve) para que quede registrada
+ * como ejecutada donde aún esté pendiente, sin cambiar nada. La versión original
+ * está en el historial de git de este archivo (commit 09d43a6).
+ */
 return new class extends Migration
 {
-    /**
-     * La migración anterior solo agregó las columnas grupo_reporte/orden_reporte;
-     * en producción quedaron vacías y el informe no agrupa los electrolitos.
-     * Se buscan por nombre dentro de los tipos de laboratorio (los ids pueden
-     * diferir entre entornos) y solo se completan los que aún no tienen grupo,
-     * para no pisar lo configurado a mano desde la pantalla de laboratorio.
-     */
-    private const ELECTROLITOS = [
-        'SODIO' => 1,
-        'POTASIO' => 2,
-        'CLORO' => 3,
-    ];
-
     public function up(): void
     {
-        foreach (self::ELECTROLITOS as $nombre => $orden) {
-            DB::table('productos')
-                ->join('tipo_productos', 'tipo_productos.id', '=', 'productos.tipo_producto_id')
-                ->where('tipo_productos.es_laboratorio', true)
-                ->whereRaw('UPPER(TRIM(productos.nombre)) = ?', [$nombre])
-                ->where(fn ($query) => $query->whereNull('productos.grupo_reporte')->orWhere('productos.grupo_reporte', ''))
-                ->update([
-                    'productos.grupo_reporte' => 'Electrolitos',
-                    'productos.orden_reporte' => $orden,
-                ]);
-        }
+        // Sin efecto a propósito: ver el comentario de la clase.
     }
 
     public function down(): void
     {
-        // Sin reversión: no se distingue lo cargado aquí de lo editado después a mano.
+        // Sin efecto a propósito: ver el comentario de la clase.
     }
 };

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\TieneCategoriaGasto;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use OwenIt\Auditing\Auditable as AuditableTrait;
@@ -9,12 +10,12 @@ use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
 
 class Venta extends Model implements AuditableContract
 {
-    use AuditableTrait, SoftDeletes;
+    use AuditableTrait, SoftDeletes, TieneCategoriaGasto;
 
     protected $table = 'ventas';
 
     protected $fillable = [
-        'user_id', 'cobrado_por_id', 'tipo_movimiento', 'paciente_id', 'doctor_id', 'seguro_id', 'cliente', 'fecha_hora',
+        'user_id', 'cobrado_por_id', 'tipo_movimiento', 'tipo_producto_padre_id', 'tipo_producto_id', 'paciente_id', 'doctor_id', 'seguro_id', 'cliente', 'fecha_hora',
         'fecha_hora_cobro',
         'tipo_pago', 'comentario', 'estado', 'total', 'total_original', 'pago', 'cambio',
         'monto_efectivo', 'monto_qr',

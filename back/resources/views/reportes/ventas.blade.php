@@ -65,9 +65,11 @@
                         <td class="{{ $venta->esEgreso() ? 'gasto' : '' }}">{{ $venta->esEgreso() ? 'GASTO' : 'VENTA' }}</td>
                         <td>
                             {{ VentasExport::cliente($venta) }}
-                            @unless ($venta->esEgreso())
+                            @if ($venta->esEgreso())
+                                <div class="det">{{ $venta->categoriaGastoTexto() }}</div>
+                            @else
                                 <div class="det">{{ $venta->detalles->pluck('nombre')->implode(', ') }}</div>
-                            @endunless
+                            @endif
                         </td>
                         <td>{{ $venta->doctor?->nombre ?: '—' }}</td>
                         <td>{{ $venta->seguro?->nombre ?: 'PARTICULAR' }}</td>

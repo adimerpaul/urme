@@ -130,6 +130,8 @@ const CLASIFICACION = [
     '2026_10_22_000100_add_grupo_reporte_to_productos_table' => ['ESQUEMA', 'productos + grupo_reporte, orden_reporte (nullable)'],
     '2026_10_22_000200_agrupar_electrolitos_en_informe_laboratorio' => ['DATOS', 'actualiza productos.grupo_reporte/orden_reporte de SODIO, POTASIO y CLORO (la versión del repositorio está neutralizada desde 2026-11-02)'],
     '2026_11_02_000100_add_codigo_laboratorio_to_solicitudes_table' => ['ESQUEMA', 'solicitudes + codigo_laboratorio (nullable, índice)'],
+    '2026_11_04_000100_add_categoria_gasto_to_ventas_table' => ['ESQUEMA', 'ventas + tipo_producto_padre_id, tipo_producto_id (nullable, índices y claves foráneas)'],
+    '2026_11_04_000200_add_categoria_gasto_to_caja_movimientos_table' => ['ESQUEMA', 'caja_movimientos + tipo_producto_padre_id, tipo_producto_id (nullable, índices y claves foráneas)'],
 ];
 
 $base = $raiz.'/database/migrations';

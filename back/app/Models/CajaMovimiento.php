@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\TieneCategoriaGasto;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use OwenIt\Auditing\Auditable as AuditableTrait;
@@ -9,10 +10,10 @@ use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
 
 class CajaMovimiento extends Model implements AuditableContract
 {
-    use AuditableTrait, SoftDeletes;
+    use AuditableTrait, SoftDeletes, TieneCategoriaGasto;
 
     protected $fillable = [
-        'user_id', 'caja', 'tipo', 'fecha_hora', 'categoria', 'concepto',
+        'user_id', 'caja', 'tipo', 'fecha_hora', 'categoria', 'tipo_producto_padre_id', 'tipo_producto_id', 'concepto',
         'descripcion', 'beneficiario', 'documento', 'importe', 'estado',
         'anulado_por_id', 'anulado_en', 'motivo_anulacion',
     ];

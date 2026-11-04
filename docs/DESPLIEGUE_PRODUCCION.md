@@ -66,14 +66,13 @@ donde esos productos ya existen.
 
 | Parte | Cambio |
 |---|---|
-| Base de datos | `2026_10_22_000100_add_grupo_reporte_to_productos_table` (si está pendiente) y `2026_11_02_000100_add_codigo_laboratorio_to_solicitudes_table`. Ambas solo agregan columnas nullable. |
-| Backend | Informe de laboratorio (firma, dirección, CODELAB, datos del paciente en 3 columnas), campo código laboratorio obligatorio en solicitudes nuevas, código compuesto `LAB-AAAAMMDD-00000-<código>` en informes y pantallas. |
+| Base de datos | `2026_10_22_000100_add_grupo_reporte_to_productos_table` (si está pendiente), `2026_11_02_000100_add_codigo_laboratorio_to_solicitudes_table`, `2026_11_04_000100_add_categoria_gasto_to_ventas_table` y `2026_11_04_000200_add_categoria_gasto_to_caja_movimientos_table`. Todas solo agregan columnas nullable (las dos últimas, con índice y clave foránea). |
+| Backend | Informe de laboratorio (firma, dirección, CODELAB, datos del paciente en 3 columnas), campo código laboratorio obligatorio en solicitudes nuevas, código compuesto `LAB-AAAAMMDD-00000-<código>` en informes y pantallas. Categoría (obligatoria) y subcategoría de los gastos de Ventas y de las dos cajas, con `GET /categorias-gasto`. |
 | `.env` del backend | 5 variables nuevas (paso 8). |
-| Frontend | Campo "Código laboratorio" en Crear laboratorio, código compuesto en listado, WhatsApp, verificación y reporte general. **Se publica en el mismo despliegue** (paso 10). |
+| Frontend | Campo "Código laboratorio" en Crear laboratorio, código compuesto en listado, WhatsApp, verificación y reporte general. Categoría y subcategoría en "Nuevo gasto" de Ventas y en los gastos de las cajas. Corrección de la hora al editar movimientos de caja (antes se corría +4 h). **Se publica en el mismo despliegue** (paso 10). |
 | Dependencias | No hay cambios en `composer.lock` ni en `pnpm-lock.yaml`. |
 
-Antes de desplegar, la rama `informe-laboratorio-encabezado` debe estar
-integrada en `master`.
+Todo esto ya está en `master`: se despliega `master`.
 
 ---
 
@@ -266,7 +265,56 @@ Si coincide:
 php artisan migrate --path=database/migrations/2026_11_02_000100_add_codigo_laboratorio_to_solicitudes_table.php
 ```
 
-**7.3 Migraciones neutralizadas:** pueden quedar pendientes sin riesgo. Si se
+**7.3 Categoría de gasto en ventas:**
+
+```bash
+php artisan migrate --pretend --path=database/migrations/2026_11_04_000100_add_categoria_gasto_to_ventas_table.php
+```
+
+Debe mostrar solo:
+
+```
+alter table `ventas` add `tipo_producto_padre_id` bigint unsigned null after `tipo_movimiento`
+alter table `ventas` add `tipo_producto_id` bigint unsigned null after `tipo_producto_padre_id`
+alter table `ventas` add index `ventas_tipo_producto_padre_id_index`(`tipo_producto_padre_id`)
+alter table `ventas` add index `ventas_tipo_producto_id_index`(`tipo_producto_id`)
+alter table `ventas` add constraint `ventas_tipo_producto_padre_id_foreign` foreign key (`tipo_producto_padre_id`) references `tipo_producto_padres` (`id`) on delete restrict on update cascade
+alter table `ventas` add constraint `ventas_tipo_producto_id_foreign` foreign key (`tipo_producto_id`) references `tipo_productos` (`id`) on delete restrict on update cascade
+```
+
+Si coincide:
+
+```bash
+php artisan migrate --path=database/migrations/2026_11_04_000100_add_categoria_gasto_to_ventas_table.php
+```
+
+**7.4 Categoría de gasto en caja_movimientos:**
+
+```bash
+php artisan migrate --pretend --path=database/migrations/2026_11_04_000200_add_categoria_gasto_to_caja_movimientos_table.php
+```
+
+Debe mostrar solo:
+
+```
+alter table `caja_movimientos` add `tipo_producto_padre_id` bigint unsigned null after `categoria`
+alter table `caja_movimientos` add `tipo_producto_id` bigint unsigned null after `tipo_producto_padre_id`
+alter table `caja_movimientos` add index `caja_movimientos_tipo_producto_padre_id_index`(`tipo_producto_padre_id`)
+alter table `caja_movimientos` add index `caja_movimientos_tipo_producto_id_index`(`tipo_producto_id`)
+alter table `caja_movimientos` add constraint `caja_movimientos_tipo_producto_padre_id_foreign` foreign key (`tipo_producto_padre_id`) references `tipo_producto_padres` (`id`) on delete restrict on update cascade
+alter table `caja_movimientos` add constraint `caja_movimientos_tipo_producto_id_foreign` foreign key (`tipo_producto_id`) references `tipo_productos` (`id`) on delete restrict on update cascade
+```
+
+Si coincide:
+
+```bash
+php artisan migrate --path=database/migrations/2026_11_04_000200_add_categoria_gasto_to_caja_movimientos_table.php
+```
+
+Las ventas y movimientos existentes quedan sin categoría (`NULL`): no se
+rellena nada. La columna de texto `caja_movimientos.categoria` no se toca.
+
+**7.5 Migraciones neutralizadas:** pueden quedar pendientes sin riesgo. Si se
 quiere limpiar `migrate:status`, se registran igual con `--path`, solo después
 de que su `--pretend` no muestre **ninguna** consulta.
 
@@ -379,7 +427,7 @@ Cómo resolverlo, en este orden:
    existía, `con_grupo` y `huella_grupos` también deben ser idénticos. Si la
    columna se creó en el paso 7.1, `con_grupo` debe ser **0**.
 2. `php scripts/verificar_migraciones.php` → `OK`, con solo las neutralizadas
-   pendientes (si no se registraron en 7.3).
+   pendientes (si no se registraron en 7.5).
 3. Prueba funcional:
    - crear un laboratorio con código laboratorio (por ejemplo `A19`) y abrir su
      PDF: CODELAB encima, código `LAB-…-A19`, dirección bajo el logo, datos del
@@ -387,7 +435,19 @@ Cómo resolverlo, en este orden:
    - abrir el PDF de una solicitud anterior: el código sin sufijo;
    - escanear el QR de un informe: la página de verificación abre y muestra el
      código;
-   - en "Laboratorios creados", buscar por el código laboratorio.
+   - en "Laboratorios creados", buscar por el código laboratorio;
+   - registrar un gasto en Ventas y otro en Caja General con categoría y
+     subcategoría, y comprobar que el listado y el comprobante las muestran; los
+     gastos anteriores deben verse como "Sin categoría" (o "Sin categoría
+     (TEXTO)" en las cajas);
+   - editar un movimiento de caja sin tocar la fecha: la hora no debe cambiar.
+4. **Categoría para gastos generales (decisión de la administración).** Las
+   categorías de gasto son las de los tipos de producto (Laboratorio, Farmacia,
+   Servicios médicos, Hospitalización, Imagenología), y ninguna sirve para gastos
+   generales como administración, limpieza o refrigerios. Después del despliegue,
+   la administración debe decidir si crea una desde la pantalla de tipos de
+   producto. **No se crea por migración.** Tenga en cuenta que esa categoría
+   aparecerá también entre las categorías de productos.
 
 ---
 
@@ -398,7 +458,9 @@ Cómo resolverlo, en este orden:
 - **Esquema:** las columnas nuevas no molestan a la versión anterior y pueden
   quedarse. Si hubiera que quitar la de código laboratorio:
   `php artisan migrate:rollback --path=database/migrations/2026_11_02_000100_add_codigo_laboratorio_to_solicitudes_table.php`
-  (borra los códigos laboratorio cargados desde el despliegue).
+  (borra los códigos laboratorio cargados desde el despliegue). Lo mismo con las
+  de categoría de gasto (`2026_11_04_000200_…` primero y luego
+  `2026_11_04_000100_…`), que borran las categorías cargadas en los gastos.
 - **Datos:** si las comprobaciones del paso 12 muestran cambios, restaurar el
   respaldo del paso 1.
 

@@ -88,7 +88,22 @@
               <div class="row q-col-gutter-sm">
                 <div class="col-12 col-sm-6"><q-input v-model="form.fecha_hora" dense outlined type="datetime-local" label="Fecha y hora" /></div>
                 <div class="col-12 col-sm-6"><q-input v-model.number="form.importe" dense outlined type="number" step="0.01" min="0.01" label="Importe Bs *" input-class="text-right" :rules="[v => Number(v) > 0 || 'Ingrese un importe válido']" /></div>
-                <div class="col-12 col-sm-6"><q-input v-model="form.categoria" dense outlined label="Categoría" v-uppercase /></div>
+                <div v-if="esIngreso" class="col-12 col-sm-6"><q-input v-model="form.categoria" dense outlined label="Categoría" v-uppercase /></div>
+                <template v-else>
+                  <!-- Gastos: categoría (obligatoria, salvo en un gasto antiguo sin ella) y subcategoría de esa categoría -->
+                  <div class="col-12 col-sm-6">
+                    <q-select v-model="form.tipo_producto_padre_id" dense outlined :label="categoriaObligatoria ? 'Categoría *' : 'Categoría'"
+                              :options="opcionesCategoria" option-value="id" option-label="nombre" emit-value map-options
+                              use-input input-debounce="0" :clearable="!categoriaObligatoria" :loading="cargandoCategorias"
+                              @filter="filtrarCategorias" @update:model-value="form.tipo_producto_id = null"
+                              :rules="categoriaObligatoria ? [v => !!v || 'Seleccione la categoría'] : []" />
+                  </div>
+                  <div class="col-12 col-sm-6">
+                    <q-select v-model="form.tipo_producto_id" dense outlined label="Subcategoría" clearable
+                              :options="opcionesSubcategoria" option-value="id" option-label="nombre" emit-value map-options
+                              use-input input-debounce="0" :disable="!form.tipo_producto_padre_id" @filter="filtrarSubcategorias" />
+                  </div>
+                </template>
                 <div class="col-12 col-sm-6"><q-input v-model="form.documento" dense outlined label="N.º documento / referencia" v-uppercase /></div>
                 <div class="col-12"><q-input v-model="form.concepto" dense outlined label="Concepto *" v-uppercase :rules="[v => !!v || 'Requerido']" /></div>
                 <div class="col-12"><q-input v-model="form.descripcion" dense outlined autogrow label="Descripción / detalle" v-uppercase /></div>
@@ -124,8 +139,9 @@
 
 <script setup>
 import { computed, getCurrentInstance, ref, watch } from 'vue'
-import { formatBoliviaDateTime } from '../../../../addons/dateTime'
+import { boliviaDateTimeInput, formatBoliviaDateTime } from '../../../../addons/dateTime'
 import { imprimirCajaMovimiento } from '../../../../addons/cajaMovimientoPrint'
+import { cargarCategoriasGasto, textoCategoriaGasto } from '../../../../addons/categoriaGasto'
 
 const { proxy } = getCurrentInstance()
 const caja = computed(() => String(proxy.$route.params.caja || '').toUpperCase() === 'GENERAL' ? 'GENERAL' : 'ADMINISTRATIVA')
@@ -174,7 +190,7 @@ const columns = computed(() => [
   { name: 'actions', label: 'Opciones', align: 'center' },
   { name: 'fecha_hora', label: 'Fecha y hora', field: row => formatBoliviaDateTime(row.fecha_hora), align: 'left' },
   { name: 'estado', label: 'Estado', field: 'estado', align: 'center' },
-  { name: 'categoria', label: 'Categoría', field: row => row.categoria || '—', align: 'left' },
+  { name: 'categoria', label: 'Categoría', field: row => esIngreso.value ? (row.categoria || '—') : textoCategoriaGasto(row), align: 'left' },
   { name: 'concepto', label: 'Concepto', field: 'concepto', align: 'left' },
   { name: 'beneficiario', label: esIngreso.value ? 'Origen' : 'Beneficiario', field: row => row.beneficiario || '—', align: 'left' },
   { name: 'documento', label: 'Documento', field: row => row.documento || '—', align: 'left' },
@@ -188,12 +204,52 @@ function fechaLocal () {
   return d.toISOString().slice(0, 16)
 }
 function nuevo () {
-  form.value = { fecha_hora: fechaLocal(), categoria: '', concepto: '', descripcion: '', beneficiario: '', documento: '', importe: null }
+  form.value = { fecha_hora: fechaLocal(), categoria: '', tipo_producto_padre_id: null, tipo_producto_id: null, concepto: '', descripcion: '', beneficiario: '', documento: '', importe: null }
+  categoriaGuardada.value = null
   dialog.value = true
+  if (!esIngreso.value) cargarCategorias()
 }
+// Fecha con que se abrió la edición (ya en hora de Bolivia): si no se cambia, no se reenvía.
+const fechaAlEditar = ref(null)
 function editar (row) {
-  form.value = { ...row, fecha_hora: row.fecha_hora ? String(row.fecha_hora).replace(' ', 'T').slice(0, 16) : fechaLocal() }
+  // La API manda fecha_hora en UTC: se pasa a hora de Bolivia para el input.
+  form.value = { ...row, fecha_hora: row.fecha_hora ? boliviaDateTimeInput(row.fecha_hora) : fechaLocal() }
+  fechaAlEditar.value = form.value.fecha_hora
+  categoriaGuardada.value = row.tipo_producto_padre_id || null
   dialog.value = true
+  if (!esIngreso.value) cargarCategorias()
+}
+
+// Categoría y subcategoría de los gastos. Al editar un gasto antiguo sin
+// categoría es opcional; si ya la tiene, no se puede quitar.
+const categoriasGasto = ref([])
+const cargandoCategorias = ref(false)
+const categoriaGuardada = ref(null)
+const categoriaObligatoria = computed(() => !form.value.id || !!categoriaGuardada.value)
+const busquedaCategoria = ref('')
+const busquedaSubcategoria = ref('')
+const coincide = (texto, busqueda) => String(texto || '').toUpperCase().includes(busqueda)
+// Si el gasto tiene una categoría que luego se eliminó, se muestra marcada (para guardar hay que elegir una activa).
+const conEliminada = (lista, actual) => actual && !lista.some(x => x.id === actual.id)
+  ? [{ ...actual, nombre: `${actual.nombre} (ELIMINADA)`, subcategorias: [] }, ...lista]
+  : lista
+const opcionesCategoria = computed(() => conEliminada(categoriasGasto.value, form.value.categoria_gasto)
+  .filter(c => coincide(c.nombre, busquedaCategoria.value)))
+const opcionesSubcategoria = computed(() => conEliminada(categoriasGasto.value.find(c => c.id === form.value.tipo_producto_padre_id)?.subcategorias || [],
+  form.value.subcategoria_gasto?.id === form.value.tipo_producto_id ? form.value.subcategoria_gasto : null)
+  .filter(s => coincide(s.nombre, busquedaSubcategoria.value)))
+function filtrarCategorias (valor, update) { update(() => { busquedaCategoria.value = String(valor || '').toUpperCase() }) }
+function filtrarSubcategorias (valor, update) { update(() => { busquedaSubcategoria.value = String(valor || '').toUpperCase() }) }
+async function cargarCategorias () {
+  if (categoriasGasto.value.length) return
+  cargandoCategorias.value = true
+  try {
+    categoriasGasto.value = await cargarCategoriasGasto(proxy.$axios)
+  } catch (e) {
+    proxy.$alert.error(e.response?.data?.message || 'No se pudieron cargar las categorías de gasto')
+  } finally {
+    cargandoCategorias.value = false
+  }
 }
 function buscar () {
   if (!validarRango()) return
@@ -223,7 +279,12 @@ async function cargar () {
 async function guardar () {
   saving.value = true
   try {
-    if (form.value.id) await proxy.$axios.put('caja-movimientos/' + form.value.id, form.value)
+    if (form.value.id) {
+      // Sin cambio de fecha no se envía: el backend conserva la original (con sus segundos).
+      // Si cambió, va en hora de Bolivia sin zona, igual que al crear.
+      const { fecha_hora: fecha, ...resto } = form.value
+      await proxy.$axios.put('caja-movimientos/' + form.value.id, fecha === fechaAlEditar.value ? resto : form.value)
+    }
     else await proxy.$axios.post('caja-movimientos', { ...form.value, caja: caja.value, tipo: tipo.value })
     proxy.$alert.success(tituloSingular.value + ' guardado correctamente')
     dialog.value = false; cargar()

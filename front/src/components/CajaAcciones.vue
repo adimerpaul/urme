@@ -31,6 +31,14 @@
                    v-uppercase autofocus class="q-mb-sm"
                    hint="Ej.: COMPRA DE REFRESCO, PERIÓDICO, TAXI"
                    :rules="[v => !!(v || '').trim() || 'Requerido']" />
+          <q-select v-model="gastoForm.tipo_producto_padre_id" label="Categoría *" dense outlined class="q-mb-sm"
+                    :options="opcionesCategoria" option-value="id" option-label="nombre" emit-value map-options
+                    use-input input-debounce="0" :loading="cargandoCategorias" @filter="filtrarCategorias"
+                    @update:model-value="gastoForm.tipo_producto_id = null"
+                    :rules="[v => !!v || 'Seleccione la categoría']" />
+          <q-select v-model="gastoForm.tipo_producto_id" label="Subcategoría" dense outlined class="q-mb-sm" clearable
+                    :options="opcionesSubcategoria" option-value="id" option-label="nombre" emit-value map-options
+                    use-input input-debounce="0" :disable="!gastoForm.tipo_producto_padre_id" @filter="filtrarSubcategorias" />
           <q-input v-model.number="gastoForm.monto" label="Monto Bs *" dense outlined type="number"
                    step="0.01" min="0" input-class="text-right" class="q-mb-sm"
                    :rules="[v => Number(v) > 0 || 'Indique el monto del gasto']" />
@@ -197,6 +205,7 @@
 import { ref, computed, watch, getCurrentInstance } from 'vue'
 import { formatBoliviaDate, formatBoliviaDateTime } from '../addons/dateTime'
 import { imprimirVenta } from '../addons/ventaPrint'
+import { cargarCategoriasGasto } from '../addons/categoriaGasto'
 
 const { proxy } = getCurrentInstance()
 
@@ -335,16 +344,42 @@ async function guardarCierre () {
 // ── Nuevo gasto (salida de dinero de caja) ─────────────────────
 const dialogGasto = ref(false)
 const guardandoGasto = ref(false)
-const gastoForm = ref({ descripcion: '', monto: null, comentario: '' })
+const gastoVacio = () => ({ descripcion: '', tipo_producto_padre_id: null, tipo_producto_id: null, monto: null, comentario: '' })
+const gastoForm = ref(gastoVacio())
 
-function abrirGasto () {
-  gastoForm.value = { descripcion: '', monto: null, comentario: '' }
+// Categoría y subcategoría del gasto (la subcategoría se filtra por la categoría elegida)
+const categoriasGasto = ref([])
+const cargandoCategorias = ref(false)
+const busquedaCategoria = ref('')
+const busquedaSubcategoria = ref('')
+const coincide = (texto, busqueda) => String(texto || '').toUpperCase().includes(busqueda)
+const opcionesCategoria = computed(() => categoriasGasto.value.filter(c => coincide(c.nombre, busquedaCategoria.value)))
+const opcionesSubcategoria = computed(() => (categoriasGasto.value.find(c => c.id === gastoForm.value.tipo_producto_padre_id)?.subcategorias || [])
+  .filter(s => coincide(s.nombre, busquedaSubcategoria.value)))
+function filtrarCategorias (valor, update) { update(() => { busquedaCategoria.value = String(valor || '').toUpperCase() }) }
+function filtrarSubcategorias (valor, update) { update(() => { busquedaSubcategoria.value = String(valor || '').toUpperCase() }) }
+
+async function abrirGasto () {
+  gastoForm.value = gastoVacio()
   dialogGasto.value = true
+  if (categoriasGasto.value.length) return
+  cargandoCategorias.value = true
+  try {
+    categoriasGasto.value = await cargarCategoriasGasto(proxy.$axios)
+  } catch (e) {
+    proxy.$alert.error(e.response?.data?.message || 'No se pudieron cargar las categorías de gasto')
+  } finally {
+    cargandoCategorias.value = false
+  }
 }
 
 async function guardarGasto () {
   if (!gastoForm.value.descripcion.trim()) {
     proxy.$alert.error('Indique en qué se gastó')
+    return
+  }
+  if (!gastoForm.value.tipo_producto_padre_id) {
+    proxy.$alert.error('Seleccione la categoría del gasto')
     return
   }
   if (!(Number(gastoForm.value.monto) > 0)) {

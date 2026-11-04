@@ -1,5 +1,6 @@
 import { Printd } from 'printd'
 import { formatBoliviaDateTime } from './dateTime'
+import { textoCategoriaGasto } from './categoriaGasto'
 
 const CLINICA = {
   nombre: 'CLÍNICA URME',
@@ -156,6 +157,7 @@ function buildHtml (venta) {
             <span class="bold">Cajero:</span> ${esc(venta.user?.name || '—')}<br>
             <span class="bold">Fecha:</span> ${esc(fecha)}<br>
             <span class="bold">Cliente:</span> ${esc(cliente)}<br>
+            ${egreso ? `<span class="bold">Categoría:</span> ${esc(textoCategoriaGasto(venta))}<br>` : ''}
             ${doctor ? `<span class="bold">Doctor:</span> ${esc(doctor)}<br>` : ''}
             <span class="bold">Pago:</span> ${esc(venta.tipo_pago || '—')}
           </td>

@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\BajaController;
 use App\Http\Controllers\CajaMovimientoController;
+use App\Http\Controllers\CategoriaGastoController;
 use App\Http\Controllers\CierreCajaController;
 use App\Http\Controllers\CompraController;
 use App\Http\Controllers\DashboardController;
@@ -230,6 +231,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/ventas/{id}', [VentaController::class, 'show']);
     // Antes de POST /ventas: un gasto de caja se registra por su propia ruta.
     Route::post('/ventas/gasto', [VentaController::class, 'gasto']);
+    // Categorías y subcategorías de los gastos (Ventas y cajas), solo lectura
+    Route::get('/categorias-gasto', [CategoriaGastoController::class, 'index']);
     Route::post('/ventas', [VentaController::class, 'store']);
     Route::put('/ventas/{id}/completar', [VentaController::class, 'completar']);
     Route::delete('/ventas/{id}', [VentaController::class, 'destroy']);

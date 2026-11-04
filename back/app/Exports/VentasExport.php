@@ -35,6 +35,9 @@ class VentasExport implements FromCollection, ShouldAutoSize, WithHeadings, With
                 self::estado($venta),
                 $venta->tipo_pago ?: '',
                 $venta->detalles->pluck('nombre')->implode(', '),
+                // Categoría y subcategoría solo en los gastos.
+                $venta->esEgreso() ? ($venta->categoriaGasto?->nombre ?: 'Sin categoría') : '',
+                $venta->esEgreso() ? ($venta->subcategoriaGasto?->nombre ?: '') : '',
             ];
             if ($this->verMontos) {
                 // El gasto va en negativo, como en la pantalla.
@@ -45,7 +48,7 @@ class VentasExport implements FromCollection, ShouldAutoSize, WithHeadings, With
         });
 
         if ($this->verMontos) {
-            $filas->push(array_merge(array_fill(0, 10, ''), ['NETO EN CAJA (ventas cobradas menos gastos)', self::neto($this->ventas)]));
+            $filas->push(array_merge(array_fill(0, 12, ''), ['NETO EN CAJA (ventas cobradas menos gastos)', self::neto($this->ventas)]));
         }
 
         return $filas;
@@ -53,7 +56,7 @@ class VentasExport implements FromCollection, ShouldAutoSize, WithHeadings, With
 
     public function headings(): array
     {
-        $cols = ['N°', 'Fecha y hora', 'Tipo', 'Cliente / Paciente', 'CI', 'Doctor', 'Seguro', 'Usuario', 'Estado', 'Pago', 'Detalle'];
+        $cols = ['N°', 'Fecha y hora', 'Tipo', 'Cliente / Paciente', 'CI', 'Doctor', 'Seguro', 'Usuario', 'Estado', 'Pago', 'Detalle', 'Categoría', 'Subcategoría'];
         if ($this->verMontos) {
             $cols[] = 'Total (Bs)';
         }

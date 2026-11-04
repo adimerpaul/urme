@@ -1,4 +1,5 @@
 import { Printd } from 'printd'
+import { formatBoliviaDateTimeSeconds } from './dateTime'
 
 const CLINICA = {
   nombre: 'CLÍNICA URME',
@@ -104,7 +105,8 @@ function enteroALetras (n) {
 // ── HTML de la proforma ─────────────────────────────────────────
 function buildHtml (compra) {
   const logoUrl = window.location.origin + '/logo.png'
-  const fecha = (compra.fecha_hora || '').replace('T', ' ').slice(0, 19) || '—'
+  // La API manda la fecha en UTC: se imprime en hora de Bolivia.
+  const fecha = formatBoliviaDateTimeSeconds(compra.fecha_hora)
   const detalles = compra.detalles || []
 
   const filas = detalles.length

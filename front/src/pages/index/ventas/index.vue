@@ -235,7 +235,10 @@
                          class="text-weight-bold">{{ esEgreso(row) ? 'GASTO' : 'VENTA' }}</q-badge>
               </td>
               <!-- title: al recortarse con puntos suspensivos, el texto completo se ve al pasar el mouse -->
-              <td :title="clienteRow(row)">{{ clienteRow(row) }}</td>
+              <td :title="clienteRow(row)">
+                {{ clienteRow(row) }}
+                <div v-if="esEgreso(row)" class="text-caption text-grey-7 ellipsis" :title="textoCategoriaGasto(row)">{{ textoCategoriaGasto(row) }}</div>
+              </td>
               <td :title="row.doctor ? row.doctor.nombre : ''">{{ row.doctor ? row.doctor.nombre : '—' }}</td>
               <td :title="row.seguro ? row.seguro.nombre : 'PARTICULAR'">{{ row.seguro ? row.seguro.nombre : 'PARTICULAR' }}</td>
               <td :title="row.user ? row.user.name : ''">{{ row.user ? row.user.name : '—' }}</td>
@@ -280,6 +283,7 @@
         <q-card-section style="max-height:70vh;overflow-y:auto">
           <div class="row q-col-gutter-sm q-mb-sm text-body2">
             <div class="col-6"><b>Cliente:</b> {{ clienteRow(detalleVenta) }}</div>
+            <div v-if="esEgreso(detalleVenta)" class="col-6"><b>Categoría:</b> {{ textoCategoriaGasto(detalleVenta) }}</div>
             <div class="col-6"><b>Doctor:</b> {{ detalleVenta?.doctor?.nombre || '—' }}</div>
             <div class="col-6"><b>Seguro:</b> {{ detalleVenta?.seguro?.nombre || 'PARTICULAR' }}</div>
             <div class="col-6"><b>Usuario:</b> {{ detalleVenta?.user?.name || '—' }}</div>
@@ -349,6 +353,7 @@
 <script setup>
 import { ref, computed, watch, getCurrentInstance } from 'vue'
 import { imprimirVenta } from '../../../addons/ventaPrint'
+import { textoCategoriaGasto } from '../../../addons/categoriaGasto'
 import { formatBoliviaDate, formatBoliviaDateTime, formatBoliviaTime } from '../../../addons/dateTime'
 import { pagoVacio, validarPago, payloadPago } from '../../../addons/pagoVenta'
 import PagoVenta from '../../../components/PagoVenta.vue'

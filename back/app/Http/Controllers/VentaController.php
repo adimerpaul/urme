@@ -8,6 +8,7 @@ use App\Models\Producto;
 use App\Models\Venta;
 use App\Models\VentaDetalle;
 use App\Services\StockLote;
+use App\Support\CategoriaGasto;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -39,6 +40,8 @@ class VentaController extends Controller
             'seguro:id,nombre',
             'user:id,name',
             'cobradoPor:id,name',
+            'categoriaGasto:id,nombre',
+            'subcategoriaGasto:id,nombre',
         ];
         if ($verDetalle) {
             $relaciones[] = 'detalles:id,venta_id,nombre,lote,precio,precio_original,cantidad,total,total_original';
@@ -124,6 +127,8 @@ class VentaController extends Controller
             'doctor:id,nombre',
             'seguro:id,nombre',
             'user:id,name',
+            'categoriaGasto:id,nombre',
+            'subcategoriaGasto:id,nombre',
             'detalles:id,venta_id,nombre',
         ])->orderBy('fecha_hora');
 
@@ -182,7 +187,7 @@ class VentaController extends Controller
     public function show(Request $request, $id)
     {
         $this->req($request, 'Ver Detalle Ventas');
-        $venta = Venta::with(['paciente:id,nombre_completo,ci', 'doctor:id,nombre', 'seguro:id,nombre', 'user:id,name', 'cobradoPor:id,name', 'detalles.producto:id,nombre,codigo'])
+        $venta = Venta::with(['paciente:id,nombre_completo,ci', 'doctor:id,nombre', 'seguro:id,nombre', 'user:id,name', 'cobradoPor:id,name', 'categoriaGasto:id,nombre', 'subcategoriaGasto:id,nombre', 'detalles.producto:id,nombre,codigo'])
             ->findOrFail($id);
 
         return response()->json($venta);
@@ -338,12 +343,14 @@ class VentaController extends Controller
             'tipo_pago' => 'nullable|string|max:50',
             'comentario' => 'nullable|string|max:500',
         ]);
+        $categoria = CategoriaGasto::validar($request);
 
         $monto = round((float) $request->monto, 2);
         $descripcion = mb_strtoupper(trim($request->descripcion));
 
-        $venta = DB::transaction(function () use ($request, $monto, $descripcion) {
+        $venta = DB::transaction(function () use ($request, $monto, $descripcion, $categoria) {
             $venta = Venta::create([
+                ...$categoria,
                 'user_id' => $request->user()->id,
                 'tipo_movimiento' => 'EGRESO',
                 // La fecha la pone el servidor (zona America/La_Paz), igual que en las ventas.
@@ -372,8 +379,8 @@ class VentaController extends Controller
             return $venta;
         });
 
-        // Mismas relaciones que show(): la venta recién creada se imprime con este JSON.
-        return response()->json($venta->load(['paciente:id,nombre_completo,ci', 'doctor:id,nombre', 'seguro:id,nombre', 'user:id,name', 'detalles.producto:id,nombre,codigo']), 201);
+        // Mismas relaciones que show(): el comprobante del gasto se imprime con este JSON.
+        return response()->json($venta->load(['paciente:id,nombre_completo,ci', 'doctor:id,nombre', 'seguro:id,nombre', 'user:id,name', 'categoriaGasto:id,nombre', 'subcategoriaGasto:id,nombre', 'detalles.producto:id,nombre,codigo']), 201);
     }
 
     public function completar(Request $request, $id)

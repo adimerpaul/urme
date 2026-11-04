@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Exports\CajaMovimientosExport;
 use App\Models\CajaMovimiento;
+use App\Support\CategoriaGasto;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -21,7 +22,7 @@ class CajaMovimientoController extends Controller
         $this->autorizar($request, 'Ver', $caja);
         $this->validarRango($request);
 
-        $query = CajaMovimiento::with(['user:id,name,username', 'anuladoPor:id,name,username'])
+        $query = CajaMovimiento::with(['user:id,name,username', 'categoriaGasto:id,nombre', 'subcategoriaGasto:id,nombre', 'anuladoPor:id,name,username'])
             ->where('caja', $caja)
             ->where('tipo', $tipo)
             ->orderByDesc('fecha_hora')
@@ -90,7 +91,7 @@ class CajaMovimientoController extends Controller
         $desde = Carbon::parse($request->input('desde') ?: now()->toDateString())->startOfDay();
         $hasta = Carbon::parse($request->input('hasta') ?: now()->toDateString())->endOfDay();
 
-        $movimientos = CajaMovimiento::with('user:id,name,username')
+        $movimientos = CajaMovimiento::with(['user:id,name,username', 'categoriaGasto:id,nombre', 'subcategoriaGasto:id,nombre'])
             ->where('caja', $caja)
             ->whereBetween('fecha_hora', [$desde, $hasta])
             ->orderBy('fecha_hora')
@@ -138,7 +139,7 @@ class CajaMovimientoController extends Controller
     {
         [$caja, $tipo] = $this->contexto($request);
         $this->autorizar($request, 'Crear', $caja);
-        $datos = $this->validar($request);
+        $datos = $this->validar($request, $tipo);
 
         $movimiento = CajaMovimiento::create([
             ...$datos,
@@ -148,16 +149,16 @@ class CajaMovimientoController extends Controller
             'fecha_hora' => $datos['fecha_hora'] ?? now(),
         ]);
 
-        return response()->json($movimiento->load('user:id,name,username'), 201);
+        return response()->json($movimiento->load(['user:id,name,username', 'categoriaGasto:id,nombre', 'subcategoriaGasto:id,nombre']), 201);
     }
 
     public function update(Request $request, CajaMovimiento $cajaMovimiento)
     {
         $this->autorizar($request, 'Editar', $cajaMovimiento->caja);
         abort_if($cajaMovimiento->estado === 'ANULADO', 422, 'Un movimiento anulado no puede modificarse');
-        $cajaMovimiento->update($this->validar($request));
+        $cajaMovimiento->update($this->validar($request, $cajaMovimiento->tipo, $cajaMovimiento));
 
-        return response()->json($cajaMovimiento->load('user:id,name,username'));
+        return response()->json($cajaMovimiento->load(['user:id,name,username', 'categoriaGasto:id,nombre', 'subcategoriaGasto:id,nombre']));
     }
 
     public function anular(Request $request, CajaMovimiento $cajaMovimiento)
@@ -178,9 +179,15 @@ class CajaMovimientoController extends Controller
         ]);
     }
 
-    private function validar(Request $request): array
+    /**
+     * Los ingresos siguen con la categoría de texto libre. Los gastos usan
+     * categoría y subcategoría (tipo_producto_padres / tipo_productos) y ya no
+     * escriben el texto `categoria`, que queda como dato histórico. Al editar un
+     * gasto antiguo sin categoría, la categoría es opcional.
+     */
+    private function validar(Request $request, string $tipo, ?CajaMovimiento $editando = null): array
     {
-        return $request->validate([
+        $reglas = [
             'fecha_hora' => 'nullable|date',
             'categoria' => 'nullable|string|max:100',
             'concepto' => 'required|string|max:255',
@@ -188,7 +195,15 @@ class CajaMovimientoController extends Controller
             'beneficiario' => 'nullable|string|max:255',
             'documento' => 'nullable|string|max:100',
             'importe' => 'required|numeric|gt:0|max:999999999999.99',
-        ]);
+        ];
+        if ($tipo !== 'GASTO') {
+            return $request->validate($reglas);
+        }
+        unset($reglas['categoria']);
+        $datos = $request->validate($reglas);
+        $obligatoria = ! $editando || filled($editando->tipo_producto_padre_id);
+
+        return [...$datos, ...CategoriaGasto::validar($request, $obligatoria)];
     }
 
     private function contexto(Request $request): array

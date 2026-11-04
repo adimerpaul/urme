@@ -32,7 +32,8 @@ class CajaMovimientosExport implements FromCollection, ShouldAutoSize, WithHeadi
                     $movimiento->fecha_hora?->format('d/m/Y H:i'),
                     $tipo,
                     $movimiento->estado,
-                    $movimiento->categoria ?: '',
+                    // Gastos: categoría y subcategoría. Ingresos: la categoría de texto libre.
+                    ...$this->categorias($movimiento, $tipo),
                     $movimiento->concepto,
                     $movimiento->beneficiario ?: '',
                     $movimiento->documento ?: '',
@@ -49,7 +50,7 @@ class CajaMovimientosExport implements FromCollection, ShouldAutoSize, WithHeadi
     public function headings(): array
     {
         return [
-            'N°', 'Fecha y hora', 'Tipo', 'Estado', 'Categoría', 'Concepto',
+            'N°', 'Fecha y hora', 'Tipo', 'Estado', 'Categoría', 'Subcategoría', 'Concepto',
             'Origen / Beneficiario', 'Documento', 'Registrado por', 'Importe (Bs)',
         ];
     }
@@ -63,7 +64,7 @@ class CajaMovimientosExport implements FromCollection, ShouldAutoSize, WithHeadi
     {
         $ultima = $sheet->getHighestRow();
 
-        $sheet->getStyle('A1:J1')->applyFromArray([
+        $sheet->getStyle('A1:K1')->applyFromArray([
             'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF'], 'size' => 11],
             'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => '00695C']],
             'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER],
@@ -77,17 +78,29 @@ class CajaMovimientosExport implements FromCollection, ShouldAutoSize, WithHeadi
             $estado = $sheet->getCell("D{$fila}")->getValue();
             $color = $estado === 'ANULADO' ? 'ECEFF1' : ($tipo === 'INGRESO' ? 'E8F5E9' : 'FFEBEE');
 
-            $sheet->getStyle("A{$fila}:J{$fila}")->applyFromArray([
+            $sheet->getStyle("A{$fila}:K{$fila}")->applyFromArray([
                 'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => $color]],
                 'alignment' => ['vertical' => Alignment::VERTICAL_CENTER],
                 'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_HAIR, 'color' => ['rgb' => 'CCCCCC']]],
             ]);
-            $sheet->getStyle("J{$fila}")->getNumberFormat()->setFormatCode('#,##0.00');
+            $sheet->getStyle("K{$fila}")->getNumberFormat()->setFormatCode('#,##0.00');
         }
 
         $this->escribirResumen($sheet, $ultima + 2);
 
         return [];
+    }
+
+    /** [Categoría, Subcategoría] de la fila: los gastos sin categoría muestran "Sin categoría (TEXTO)". */
+    private function categorias($movimiento, string $tipo): array
+    {
+        if ($tipo !== 'GASTO') {
+            return [$movimiento->categoria ?: '', ''];
+        }
+
+        return $movimiento->categoriaGasto
+            ? [$movimiento->categoriaGasto->nombre, $movimiento->subcategoriaGasto?->nombre ?: '']
+            : [$movimiento->categoriaGastoTexto(), ''];
     }
 
     /** Bloque de totales al pie: ingresos, gastos y saldo del periodo. */
@@ -98,7 +111,7 @@ class CajaMovimientosExport implements FromCollection, ShouldAutoSize, WithHeadi
             .$this->datos['desde'].' a '.$this->datos['hasta'];
 
         $sheet->setCellValue("A{$fila}", $encabezado);
-        $sheet->mergeCells("A{$fila}:J{$fila}");
+        $sheet->mergeCells("A{$fila}:K{$fila}");
         $sheet->getStyle("A{$fila}")->applyFromArray([
             'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF']],
             'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => '37474F']],
@@ -112,14 +125,14 @@ class CajaMovimientosExport implements FromCollection, ShouldAutoSize, WithHeadi
 
         foreach ($lineas as [$etiqueta, $valor, $color]) {
             $fila++;
-            $sheet->setCellValue("H{$fila}", $etiqueta);
-            $sheet->setCellValue("J{$fila}", $valor);
-            $sheet->getStyle("H{$fila}:J{$fila}")->applyFromArray([
+            $sheet->setCellValue("I{$fila}", $etiqueta);
+            $sheet->setCellValue("K{$fila}", $valor);
+            $sheet->getStyle("I{$fila}:K{$fila}")->applyFromArray([
                 'font' => ['bold' => true],
                 'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => $color]],
                 'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_HAIR, 'color' => ['rgb' => 'AAAAAA']]],
             ]);
-            $sheet->getStyle("J{$fila}")->getNumberFormat()->setFormatCode('#,##0.00');
+            $sheet->getStyle("K{$fila}")->getNumberFormat()->setFormatCode('#,##0.00');
         }
     }
 }

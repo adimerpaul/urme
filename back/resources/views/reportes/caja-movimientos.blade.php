@@ -83,7 +83,7 @@
                     @foreach ($bloque['filas'] as $movimiento)
                         <tr @class(['anulado' => $movimiento->estado === 'ANULADO'])>
                             <td>{{ $movimiento->fecha_hora?->format('d/m/Y H:i') }}</td>
-                            <td>{{ $movimiento->categoria ?: '—' }}</td>
+                            <td>{{ $movimiento->tipo === 'GASTO' ? $movimiento->categoriaGastoTexto() : ($movimiento->categoria ?: '—') }}</td>
                             <td>{{ $movimiento->concepto }}</td>
                             <td>{{ $movimiento->beneficiario ?: '—' }}</td>
                             <td>{{ $movimiento->documento ?: '—' }}</td>

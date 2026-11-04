@@ -55,6 +55,16 @@ export function nowBoliviaDateTimeInput () {
   return `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}`
 }
 
+/**
+ * Valor para un input datetime-local ("AAAA-MM-DDTHH:mm") en hora de Bolivia.
+ * La API manda las fechas en UTC (…Z): sin convertir, el formulario mostraría
+ * la hora UTC y, al guardar, la fecha se correría 4 horas.
+ */
+export function boliviaDateTimeInput (value) {
+  const p = value ? resolveParts(value) : null
+  return p ? `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}` : nowBoliviaDateTimeInput()
+}
+
 export function formatBoliviaDateTime (value, empty = '—') {
   if (!value) return empty
   const p = resolveParts(value)

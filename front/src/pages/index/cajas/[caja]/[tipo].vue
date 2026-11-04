@@ -139,7 +139,7 @@
 
 <script setup>
 import { computed, getCurrentInstance, ref, watch } from 'vue'
-import { formatBoliviaDateTime } from '../../../../addons/dateTime'
+import { boliviaDateTimeInput, formatBoliviaDateTime } from '../../../../addons/dateTime'
 import { imprimirCajaMovimiento } from '../../../../addons/cajaMovimientoPrint'
 import { cargarCategoriasGasto, textoCategoriaGasto } from '../../../../addons/categoriaGasto'
 
@@ -209,8 +209,12 @@ function nuevo () {
   dialog.value = true
   if (!esIngreso.value) cargarCategorias()
 }
+// Fecha con que se abrió la edición (ya en hora de Bolivia): si no se cambia, no se reenvía.
+const fechaAlEditar = ref(null)
 function editar (row) {
-  form.value = { ...row, fecha_hora: row.fecha_hora ? String(row.fecha_hora).replace(' ', 'T').slice(0, 16) : fechaLocal() }
+  // La API manda fecha_hora en UTC: se pasa a hora de Bolivia para el input.
+  form.value = { ...row, fecha_hora: row.fecha_hora ? boliviaDateTimeInput(row.fecha_hora) : fechaLocal() }
+  fechaAlEditar.value = form.value.fecha_hora
   categoriaGuardada.value = row.tipo_producto_padre_id || null
   dialog.value = true
   if (!esIngreso.value) cargarCategorias()
@@ -275,7 +279,12 @@ async function cargar () {
 async function guardar () {
   saving.value = true
   try {
-    if (form.value.id) await proxy.$axios.put('caja-movimientos/' + form.value.id, form.value)
+    if (form.value.id) {
+      // Sin cambio de fecha no se envía: el backend conserva la original (con sus segundos).
+      // Si cambió, va en hora de Bolivia sin zona, igual que al crear.
+      const { fecha_hora: fecha, ...resto } = form.value
+      await proxy.$axios.put('caja-movimientos/' + form.value.id, fecha === fechaAlEditar.value ? resto : form.value)
+    }
     else await proxy.$axios.post('caja-movimientos', { ...form.value, caja: caja.value, tipo: tipo.value })
     proxy.$alert.success(tituloSingular.value + ' guardado correctamente')
     dialog.value = false; cargar()

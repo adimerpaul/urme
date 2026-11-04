@@ -104,12 +104,10 @@ fechas de la API recortadas como texto en UTC.** Una sola observación, menor:
 - **Gravedad:** baja. En «Nuevo reactivo» o al editar, el campo Unidad permite
   escribir (`use-input`), pero al confirmar con Enter o Tab el campo se queda con
   la opción resaltada, no con el texto escrito: escribir `XYZ` deja `ML`. Solo
-  se pueden usar las unidades de la lista. Pasa igual en `master` y en la rama
-  `reactivos-unidades`.
+  se pueden usar las unidades de la lista, que desde el merge de
+  `reactivos-unidades` en `master` (`1484a76`) incluye µL, DETERMINACIÓN y TACO.
 - **Decide:** desarrollo, junto con el laboratorio: si debe admitir unidades
   libres, o quitar la escritura y dejar solo la lista.
-- **Nota:** la rama `reactivos-unidades` (µL, DETERMINACIÓN y TACO) todavía no
-  está integrada en `master`.
 
 ### Reactivo R-001 vinculado al producto 286, dado de baja
 
@@ -135,7 +133,8 @@ fechas de la API recortadas como texto en UTC.** Una sola observación, menor:
 
 - **Origen:** estado conocido de la suite (`CLAUDE.md`), revisado el 2026-11-04.
 - **Gravedad:** media: hoy la suite no sirve como red de seguridad.
-- **Estado en `master`:** `php artisan test` → **8 de 12 fallan** (pasan 4).
+- **Estado en `master`:** `php artisan test` → **8 de 18 fallan** (pasan 10,
+  entre ellos los 6 de `ReactivoUnidadTest`, que llegaron con `reactivos-unidades`).
   - `EditarLotesFarmaciaTest` (4) y `LaboratorioDescripcionHtmlTest` (2): corren
     las migraciones sobre SQLite y fallan con «no such table:
     tipo_producto_padres».
@@ -155,7 +154,7 @@ fechas de la API recortadas como texto en UTC.** Una sola observación, menor:
   - solicitudes 41 a 50 (incluidas `LAB-PRUEBA-*` y `LAB-ROTULO-*`), pacientes
     11 a 14 y doctores 1 a 3 (todos con «PRUEBA» en el nombre); el paciente 12
     tiene un teléfono ficticio;
-  - reactivos 11 a 15 (`P-*`) y la edición de R-001;
+  - reactivos 11 a 16 (`P-*`) y la edición de R-001;
   - la venta pagada #1 de prueba, los gastos de Ventas 2 a 6 y los movimientos
     de caja 1 a 14;
   - la categoría borrada «PRUEBA GASTO BORRADA» (#6) y su subcategoría #52;

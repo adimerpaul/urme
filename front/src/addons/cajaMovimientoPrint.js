@@ -1,4 +1,5 @@
 import { Printd } from 'printd'
+import { textoCategoriaGasto } from './categoriaGasto'
 
 const CSS = `
   @page { size: 5.5in 8.5in; margin: 10mm; }
@@ -61,7 +62,7 @@ function buildHtml (movimiento, cajaLabel) {
     <hr class="dashed"><div class="titulo">${titulo}</div>
     <table class="items"><thead><tr><th>Descripción</th><th class="importe">Importe</th></tr></thead><tbody><tr><td><span class="bold">${esc(movimiento.concepto)}</span><br>${esc(movimiento.descripcion || '')}</td><td class="importe">${money(movimiento.importe)}</td></tr></tbody></table>
     <div class="total">TOTAL Bs. : ${money(movimiento.importe)}</div><div class="son">SON: ${esc(numeroALetras(Number(movimiento.importe || 0)))}</div>
-    <div class="datos"><span class="bold">${persona}:</span> ${esc(movimiento.beneficiario || '—')}<br><span class="bold">Documento:</span> ${esc(movimiento.documento || '—')}<br><span class="bold">Categoría:</span> ${esc(movimiento.categoria || '—')}</div>
+    <div class="datos"><span class="bold">${persona}:</span> ${esc(movimiento.beneficiario || '—')}<br><span class="bold">Documento:</span> ${esc(movimiento.documento || '—')}<br><span class="bold">Categoría:</span> ${esc(movimiento.tipo === 'GASTO' ? textoCategoriaGasto(movimiento) : (movimiento.categoria || '—'))}</div>
     ${movimiento.estado === 'ANULADO' ? `<div class="datos"><span class="bold">Motivo de anulación:</span> ${esc(movimiento.motivo_anulacion || '—')}<br><span class="bold">Anulado por:</span> ${esc(movimiento.anulado_por?.name || '—')}</div>` : ''}
     <hr class="dashed" style="margin-top:16px"><div class="pie">"CLÍNICA URME" Al servicio de Oruro, Atención de Emergencias<br>las 24 horas los 365 días del año.<br>Atención en todas las Especialidades</div>
   </div>`

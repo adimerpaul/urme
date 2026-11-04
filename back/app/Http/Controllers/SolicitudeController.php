@@ -15,6 +15,7 @@ use BaconQrCode\Renderer\ImageRenderer;
 use BaconQrCode\Renderer\RendererStyle\RendererStyle;
 use BaconQrCode\Writer;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use OwenIt\Auditing\Models\Audit;
@@ -34,6 +35,7 @@ class SolicitudeController extends Controller
         if ($q = trim((string) $request->input('q'))) {
             $query->where(function ($subquery) use ($q) {
                 $subquery->where('codigo_solicitud', 'like', "%{$q}%")
+                    ->orWhere('codigo_laboratorio', 'like', "%{$q}%")
                     ->orWhereHas('paciente', fn ($patientQuery) => $patientQuery
                         ->where('nombre_completo', 'like', "%{$q}%")
                         ->orWhere('ci', 'like', "%{$q}%"));
@@ -160,7 +162,7 @@ class SolicitudeController extends Controller
     {
         $this->authorizeAny($request, 'Editar Solicitudes Laboratorio');
         abort_unless($solicitude->estado === 'CREADO', 422, 'Solo se pueden modificar solicitudes en estado CREADO.');
-        [$validated, $productos, $valores] = $this->validatedPayload($request);
+        [$validated, $productos, $valores] = $this->validatedPayload($request, $solicitude);
 
         DB::transaction(function () use ($solicitude, $validated, $productos, $valores) {
             $solicitude->update([
@@ -187,8 +189,10 @@ class SolicitudeController extends Controller
     {
         $this->authorizeAny($request, ['Ver Solicitudes Laboratorio', 'Crear Solicitudes Laboratorio', 'Editar Solicitudes Laboratorio']);
         $solicitude->load([
-            'paciente',
-            'doctor.especialidades:id,nombre',
+            'paciente.seguro:id,nombre',
+            'doctor.especialidades' => fn ($query) => $query
+                ->select('especialidades.id', 'especialidades.nombre')
+                ->wherePivotNull('deleted_at'),
             'user',
             'laboratorioItems.producto.tipoProducto:id,nombre',
             'laboratorioItems.resultados',
@@ -202,8 +206,11 @@ class SolicitudeController extends Controller
 
         $paraNavegador = $html;
         $bloques = $this->bloquesInforme($solicitude);
+        $edadPaciente = $this->edadALaSolicitud($solicitude);
+        $especialidades = $solicitude->doctor?->especialidades->pluck('nombre')->implode(', ') ?: '—';
         $datos = compact(
-            'solicitude', 'impresoPor', 'urlVerificacion', 'qrDataUri', 'paraNavegador', 'bloques'
+            'solicitude', 'impresoPor', 'urlVerificacion', 'qrDataUri', 'paraNavegador', 'bloques',
+            'edadPaciente', 'especialidades'
         );
         if ($html) {
             return response()->view('reportes.solicitud-laboratorio', $datos);
@@ -297,6 +304,7 @@ class SolicitudeController extends Controller
 
         return response()->json([
             'codigo_solicitud' => $solicitude->codigo_solicitud,
+            'codigo_completo' => $solicitude->codigo_completo,
             'codigo_verificacion' => $solicitude->codigo_verificacion,
             'fecha_solicitud' => $solicitude->fecha_solicitud->format('Y-m-d'),
             'hora_solicitud' => substr($solicitude->hora_solicitud, 0, 5),
@@ -335,9 +343,21 @@ class SolicitudeController extends Controller
         return response()->json(['message' => 'Solicitud eliminada']);
     }
 
-    private function validatedPayload(Request $request): array
+    /**
+     * @param  Solicitude|null  $editando  Solicitud que se modifica (null al crear). El código
+     *                                     laboratorio es opcional solo si esa solicitud aún no lo tiene.
+     */
+    private function validatedPayload(Request $request, ?Solicitude $editando = null): array
     {
+        // Se normaliza antes de validar: sin espacios y en mayúsculas ('' queda como null).
+        if (is_string($request->input('codigo_laboratorio'))) {
+            $request->merge([
+                'codigo_laboratorio' => mb_strtoupper(preg_replace('/\s+/u', '', $request->input('codigo_laboratorio'))) ?: null,
+            ]);
+        }
+        $codigoObligatorio = ! $editando || filled($editando->codigo_laboratorio);
         $validated = $request->validate([
+            'codigo_laboratorio' => [$codigoObligatorio ? 'required' : 'nullable', 'string', 'max:20', 'regex:/^[A-Z0-9]+(-[A-Z0-9]+)*$/'],
             'paciente_id' => ['required', 'exists:pacientes,id'],
             'doctor_id' => ['nullable', 'exists:doctores,id'],
             'fecha_solicitud' => ['required', 'date'],
@@ -350,6 +370,11 @@ class SolicitudeController extends Controller
             'resultados.*.producto_laboratorio_dato_id' => ['required', 'integer'],
             'resultados.*.valor' => ['nullable', 'string', 'max:2000'],
             'resultados.*.visible' => ['nullable', 'boolean'],
+        ], [
+            'codigo_laboratorio.required' => 'El código laboratorio es obligatorio.',
+            'codigo_laboratorio.string' => 'El código laboratorio debe ser un texto.',
+            'codigo_laboratorio.max' => 'El código laboratorio admite como máximo 20 caracteres.',
+            'codigo_laboratorio.regex' => 'El código laboratorio solo admite letras, números y guiones, sin guion al inicio o al final ni dos guiones seguidos.',
         ]);
         $productos = Producto::query()
             ->whereIn('id', $validated['producto_ids'])
@@ -365,6 +390,34 @@ class SolicitudeController extends Controller
             $productos,
             collect($validated['resultados'] ?? [])->keyBy('producto_laboratorio_dato_id'),
         ];
+    }
+
+    /**
+     * Edad del paciente a la fecha de la solicitud (no a la de impresión, para que
+     * una reimpresión no la cambie): "49 AÑOS", "8 MESES" o "12 DÍAS". Devuelve "—"
+     * si la fecha de nacimiento falta, es inválida o es posterior a la solicitud.
+     */
+    private function edadALaSolicitud(Solicitude $solicitude): string
+    {
+        $nacimiento = $solicitude->paciente?->getAttributes()['fecha_nacimiento'] ?? null;
+        if (! is_string($nacimiento) || ! preg_match('/^(\d{4})-(\d{2})-(\d{2})/', $nacimiento, $partes)
+            || ! checkdate((int) $partes[2], (int) $partes[3], (int) $partes[1]) || ! $solicitude->fecha_solicitud) {
+            return '—';
+        }
+
+        $desde = Carbon::createFromDate((int) $partes[1], (int) $partes[2], (int) $partes[3])->startOfDay();
+        $hasta = $solicitude->fecha_solicitud->copy()->startOfDay();
+        if ($desde->gt($hasta)) {
+            return '—';
+        }
+
+        $diferencia = $desde->diff($hasta);
+
+        return match (true) {
+            $diferencia->y > 0 => $diferencia->y.($diferencia->y === 1 ? ' AÑO' : ' AÑOS'),
+            $diferencia->m > 0 => $diferencia->m.($diferencia->m === 1 ? ' MES' : ' MESES'),
+            default => $diferencia->d.($diferencia->d === 1 ? ' DÍA' : ' DÍAS'),
+        };
     }
 
     /**

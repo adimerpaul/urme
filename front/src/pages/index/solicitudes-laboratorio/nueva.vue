@@ -24,12 +24,12 @@
       </div>
     </div>
 
-    <q-form @submit.prevent="guardar" class="col column no-wrap">
+    <q-form ref="formRef" @submit.prevent="guardar" class="col column no-wrap">
 
-      <!-- Datos de la solicitud: una sola fila compacta -->
+      <!-- Datos de la solicitud: fila 1 paciente, doctor, fecha, hora y código; fila 2 diagnóstico y observaciones -->
       <q-card flat bordered class="q-pa-xs q-mb-xs">
         <div class="row q-col-gutter-xs">
-          <div class="col-12 col-md-3">
+          <div class="col-12 col-sm-6 col-md-4">
             <q-select v-model="form.paciente_id" :options="pacientesOpciones" option-value="id"
                       :option-label="pacienteLabel" emit-value map-options use-input input-debounce="200"
                       dense outlined label="Paciente *" :rules="[required]" hide-bottom-space
@@ -43,7 +43,7 @@
               </template>
             </q-select>
           </div>
-          <div class="col-12 col-md-3">
+          <div class="col-12 col-sm-6 col-md-3">
             <q-select v-model="form.doctor_id" :options="doctores" option-value="id" option-label="nombre"
                       emit-value map-options clearable dense outlined label="Doctor solicitante"
                       use-input input-debounce="200" hide-bottom-space @filter="filtrarDoctores">
@@ -61,19 +61,24 @@
               </template>
             </q-select>
           </div>
-          <div class="col-6 col-md-2">
+          <div class="col-12 col-sm-4 col-md-2">
             <q-input v-model="form.fecha_solicitud" type="date" dense outlined label="Fecha *"
                      :rules="[required]" hide-bottom-space />
           </div>
-          <div class="col-6 col-md-1">
+          <div class="col-12 col-sm-4 col-md-1">
             <q-input v-model="form.hora_solicitud" type="time" dense outlined label="Hora *"
                      :rules="[required]" hide-bottom-space />
           </div>
-          <div class="col-12 col-md-3">
+          <div class="col-12 col-sm-4 col-md-2">
+            <q-input :model-value="form.codigo_laboratorio" @update:model-value="normalizarCodigoLaboratorio"
+                     dense outlined :label="codigoObligatorio ? 'Código laboratorio *' : 'Código laboratorio'" maxlength="20"
+                     :rules="codigoObligatorio ? [required, codigoLaboratorioValido] : [codigoLaboratorioOpcional]" hide-bottom-space />
+          </div>
+          <div class="col-12 col-md-6">
             <q-input v-model="form.diagnostico_clinico" v-uppercase dense outlined
                      label="Diagnóstico clínico" hide-bottom-space />
           </div>
-          <div class="col-12">
+          <div class="col-12 col-md-6">
             <q-input v-model="form.observaciones" v-uppercase dense outlined
                      label="Observaciones" hide-bottom-space />
           </div>
@@ -457,9 +462,14 @@ const editId = ref(proxy.$route.query.id || null)
 const now = new Date()
 const hoyFecha = now.toISOString().slice(0, 10)
 const ventasFecha = ref(hoyFecha)
+const formRef = ref(null)
+// Código laboratorio guardado al abrir la edición: sin él (solicitud antigua) el campo es opcional
+const codigoLaboratorioGuardado = ref('')
+const codigoObligatorio = computed(() => !editId.value || !!codigoLaboratorioGuardado.value)
 const form = ref({
   paciente_id: null,
   doctor_id: null,
+  codigo_laboratorio: '',
   fecha_solicitud: now.toISOString().slice(0, 10),
   hora_solicitud: now.toTimeString().slice(0, 5),
   diagnostico_clinico: '',
@@ -565,6 +575,7 @@ function etiquetaCampoAuditoria (campo) {
     precio: 'Precio', estado: 'Estado', paciente_id: 'Paciente', doctor_id: 'Doctor',
     fecha_solicitud: 'Fecha', hora_solicitud: 'Hora', diagnostico_clinico: 'Diagnóstico clínico',
     observaciones: 'Observaciones', codigo_solicitud: 'Código de solicitud', total: 'Total',
+    codigo_laboratorio: 'Código laboratorio',
     nombre: 'Dato', unidad: 'Unidad', metodo: 'Método', muestra: 'Muestra', rango_referencia: 'Referencia',
   }
   return etiquetas[campo] || campo.replaceAll('_', ' ')
@@ -621,9 +632,11 @@ async function cargarDatos () {
 }
 async function cargarSolicitud () {
   const { data } = await proxy.$axios.get(`solicitudes-laboratorio/${editId.value}`)
+  codigoLaboratorioGuardado.value = data.codigo_laboratorio || ''
   form.value = {
     paciente_id: data.paciente_id,
     doctor_id: data.doctor_id,
+    codigo_laboratorio: data.codigo_laboratorio || '',
     fecha_solicitud: data.fecha_solicitud,
     hora_solicitud: String(data.hora_solicitud || '').slice(0, 5),
     diagnostico_clinico: data.diagnostico_clinico || '',
@@ -775,6 +788,11 @@ function precargarDefectos (productoId) {
   }
 }
 async function guardar () {
+  // El botón de la cabecera no es submit: se validan aquí las reglas de los campos obligatorios
+  if (!(await formRef.value.validate(true))) {
+    proxy.$alert.error('Revise los campos obligatorios marcados en rojo')
+    return
+  }
   if (!form.value.producto_ids.length) {
     proxy.$alert.error('Seleccione al menos una prueba de laboratorio')
     return
@@ -810,7 +828,7 @@ async function guardarConfirmado () {
     const { data } = editId.value
       ? await proxy.$axios.put(`solicitudes-laboratorio/${editId.value}`, payload)
       : await proxy.$axios.post('solicitudes-laboratorio', payload)
-    proxy.$alert.success(`Laboratorio ${data.codigo_solicitud} ${editId.value ? 'actualizado' : 'creado'}`)
+    proxy.$alert.success(`Laboratorio ${data.codigo_completo} ${editId.value ? 'actualizado' : 'creado'}`)
     try {
       await imprimirSolicitudLaboratorio(proxy.$axios, data.id)
     } catch {
@@ -833,6 +851,16 @@ async function imprimirRotulo () {
 }
 function required (value) {
   return value !== null && value !== undefined && value !== '' || 'Campo requerido'
+}
+/* Mientras se escribe: mayúsculas y sin espacios (el backend aplica la misma normalización). */
+function normalizarCodigoLaboratorio (value) {
+  form.value.codigo_laboratorio = String(value || '').toUpperCase().replace(/\s+/g, '').slice(0, 20)
+}
+function codigoLaboratorioValido (value) {
+  return /^[A-Z0-9]+(-[A-Z0-9]+)*$/.test(value || '') || 'Solo letras, números y guiones (sin guion al inicio o al final ni dos seguidos)'
+}
+function codigoLaboratorioOpcional (value) {
+  return !value || codigoLaboratorioValido(value)
 }
 function firstValidationError (error) {
   const errors = error.response?.data?.errors

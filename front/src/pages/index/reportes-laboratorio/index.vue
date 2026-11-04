@@ -76,7 +76,7 @@ const indicadores = computed(() => [
 ])
 const columns = [
   { name: 'fecha', label: 'Fecha de solicitud', field: row => row.solicitude?.fecha_solicitud, align: 'left' },
-  { name: 'codigo', label: 'Solicitud', field: row => row.solicitude?.codigo_solicitud, align: 'left' },
+  { name: 'codigo', label: 'Solicitud', field: row => row.solicitude?.codigo_completo, align: 'left' },
   { name: 'paciente', label: 'Paciente', field: row => row.solicitude?.paciente?.nombre_completo || '—', align: 'left' },
   { name: 'ci', label: 'CI', field: row => row.solicitude?.paciente?.ci || '—', align: 'left' },
   { name: 'laboratorio', label: 'Laboratorio / prueba', field: 'producto_nombre', align: 'left' },

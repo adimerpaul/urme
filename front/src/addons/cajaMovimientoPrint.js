@@ -1,4 +1,5 @@
 import { Printd } from 'printd'
+import { formatBoliviaDateTimeSeconds } from './dateTime'
 import { textoCategoriaGasto } from './categoriaGasto'
 
 const CSS = `
@@ -53,7 +54,8 @@ function buildHtml (movimiento, cajaLabel) {
   const ingreso = movimiento.tipo === 'INGRESO'
   const titulo = ingreso ? 'RECIBO DE INGRESO DE DINERO CAJA' : 'RECIBO DE SALIDA DE DINERO CAJA'
   const persona = ingreso ? 'Recibido de / origen' : 'Pagado a / beneficiario'
-  const fecha = String(movimiento.fecha_hora || '').replace('T', ' ').slice(0, 19) || '—'
+  // La API manda la fecha en UTC: se imprime en hora de Bolivia.
+  const fecha = formatBoliviaDateTimeSeconds(movimiento.fecha_hora)
   return `<div class="recibo">
     ${movimiento.estado === 'ANULADO' ? '<div class="anulado">ANULADO</div>' : ''}
     <table class="head"><tr><td style="width:30%" class="center"><img class="logo" src="${window.location.origin}/logo.png" onerror="this.style.display='none'"></td>

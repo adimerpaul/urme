@@ -72,6 +72,14 @@ export function formatBoliviaDateTime (value, empty = '—') {
   return `${p.year}-${p.month}-${p.day} ${p.hour}:${p.minute}`
 }
 
+/** "AAAA-MM-DD HH:mm:ss" en hora de Bolivia (comprobantes impresos). */
+export function formatBoliviaDateTimeSeconds (value, empty = '—') {
+  if (!value) return empty
+  const p = resolveParts(value)
+  if (!p) return String(value)
+  return `${p.year}-${p.month}-${p.day} ${p.hour}:${p.minute}:${p.second}`
+}
+
 export function formatBoliviaDate (value, empty = '') {
   if (!value) return empty
   const p = resolveParts(value)

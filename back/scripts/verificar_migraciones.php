@@ -132,6 +132,8 @@ const CLASIFICACION = [
     '2026_11_02_000100_add_codigo_laboratorio_to_solicitudes_table' => ['ESQUEMA', 'solicitudes + codigo_laboratorio (nullable, índice)'],
     '2026_11_04_000100_add_categoria_gasto_to_ventas_table' => ['ESQUEMA', 'ventas + tipo_producto_padre_id, tipo_producto_id (nullable, índices y claves foráneas)'],
     '2026_11_04_000200_add_categoria_gasto_to_caja_movimientos_table' => ['ESQUEMA', 'caja_movimientos + tipo_producto_padre_id, tipo_producto_id (nullable, índices y claves foráneas)'],
+    '2026_11_11_000100_add_es_perfil_to_productos_table' => ['ESQUEMA', 'productos + es_perfil (boolean default false, índice)'],
+    '2026_11_11_000200_create_producto_perfil_items_table' => ['ESQUEMA', 'crea producto_perfil_items (perfil_id, producto_id, orden; único y claves foráneas)'],
 ];
 
 $base = $raiz.'/database/migrations';

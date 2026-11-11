@@ -20,16 +20,141 @@
           <div class="text-subtitle1 text-weight-bold ellipsis">{{ producto.nombre || 'Cargando…' }}</div>
           <div class="lab-sub text-grey-6">
             {{ producto.codigo || 'S/C' }} · Bs {{ money(producto.precio) }} ·
-            {{ datos.length }} dato(s) · {{ conFormula }} con fórmula
+            <template v-if="modoPerfil">{{ examenesPerfil.length }} examen(es) en el perfil</template>
+            <template v-else>{{ datos.length }} dato(s) · {{ conFormula }} con fórmula</template>
           </div>
         </div>
         <q-space />
-        <q-btn v-if="canEditar" dense unelevated color="positive" icon="add" label="Nuevo dato"
+        <!-- Solo con los perfiles habilitados: el backend manda "perfil" únicamente en ese caso. -->
+        <div v-if="perfilesHabilitado" class="row items-center no-wrap q-mr-sm">
+          <span class="lab-sub text-grey-7 q-mr-xs">Tipo:</span>
+          <q-btn-toggle :model-value="tipo" dense no-caps unelevated size="11px" padding="2px 10px"
+                        toggle-color="primary" color="grey-3" text-color="grey-9" :disable="!canEditar"
+                        :options="[{ label: 'Examen', value: 'examen' }, { label: 'Perfil', value: 'perfil' }]"
+                        @update:model-value="cambiarTipo" />
+        </div>
+        <q-btn v-if="canEditar && !modoPerfil" dense unelevated color="positive" icon="add" label="Nuevo dato"
                no-caps padding="4px 12px" @click="nuevoDato" />
         <q-btn flat dense round icon="refresh" color="primary" class="q-ml-xs"
                :loading="adminLoading" @click="cargarConfiguracion">
           <q-tooltip>Actualizar</q-tooltip>
         </q-btn>
+      </div>
+
+      <!-- ══ EXÁMENES DEL PERFIL ═══════════════════════════════════ -->
+      <template v-if="modoPerfil">
+        <div class="row items-center no-wrap q-mb-xs">
+          <q-icon name="playlist_add_check" color="primary" size="18px" class="q-mr-xs" />
+          <div>
+            <div class="text-subtitle2 text-weight-bold">Exámenes del perfil</div>
+            <div class="lab-sub text-grey-6">
+              El perfil se vende con su propio precio y, al crear la solicitud, se reemplaza por estos exámenes.
+              Un perfil no tiene parámetros, fórmulas, mensajes de validación ni reactivos propios.
+            </div>
+          </div>
+        </div>
+
+        <q-banner v-if="datos.length || validaciones.length" dense rounded class="bg-orange-1 text-orange-10 q-mb-xs">
+          <template #avatar><q-icon name="warning" color="orange-9" /></template>
+          Este producto tiene {{ datos.length }} parámetro(s) y {{ validaciones.length }} mensaje(s) de validación:
+          no puede ser un perfil. Elimínelos primero o vuelva a «Examen».
+        </q-banner>
+        <q-banner v-else-if="perfil.es_perfil && !perfil.vendible" dense rounded class="bg-red-1 text-negative q-mb-xs">
+          <template #avatar><q-icon name="block" color="negative" /></template>
+          No se puede vender: tiene exámenes inactivos (dados de baja o fuera de un área de laboratorio).
+        </q-banner>
+
+        <q-card flat bordered>
+          <div v-if="canEditar" class="row items-center q-pa-xs q-gutter-xs bg-grey-1">
+            <q-select v-model="examenElegido" class="col" dense outlined use-input input-debounce="300" clearable
+                      label="Agregar examen (buscar por nombre o código)" :options="opcionesExamenes"
+                      option-label="nombre" :loading="buscandoExamenes" @filter="buscarExamenes"
+                      @update:model-value="agregarExamen">
+              <template #option="scope">
+                <q-item v-bind="scope.itemProps">
+                  <q-item-section>
+                    <q-item-label>{{ scope.opt.nombre }}</q-item-label>
+                    <q-item-label caption>{{ scope.opt.codigo || 'S/C' }} · {{ scope.opt.tipo_producto?.nombre }}</q-item-label>
+                  </q-item-section>
+                  <q-item-section side>Bs {{ money(scope.opt.precio) }}</q-item-section>
+                </q-item>
+              </template>
+              <template #no-option>
+                <q-item><q-item-section class="text-grey-6">Sin exámenes con ese nombre</q-item-section></q-item>
+              </template>
+            </q-select>
+          </div>
+          <q-markup-table dense flat separator="horizontal" class="full-width tabla-compacta">
+            <thead>
+              <tr class="bg-grey-1 text-grey-7 text-uppercase">
+                <th style="width:28px"></th>
+                <th class="text-left" style="width:32px">#</th>
+                <th class="text-left">Examen</th>
+                <th class="text-left">Área</th>
+                <th class="text-right">Precio suelto</th>
+                <th class="text-center" style="width:60px"></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-if="!examenesPerfil.length">
+                <td colspan="6" class="text-center text-grey-5 q-pa-md">
+                  Sin exámenes. Agregue al menos dos con el buscador.
+                </td>
+              </tr>
+              <tr v-for="(examen, indice) in examenesPerfil" :key="examen.id"
+                  :draggable="canEditar"
+                  :class="{ 'laboratorio-row--dragging': examenArrastrado === examen.id }"
+                  @dragstart="examenArrastrado = examen.id" @dragover.prevent
+                  @drop.prevent="soltarExamen(indice)" @dragend="examenArrastrado = null">
+                <td class="text-center">
+                  <q-icon v-if="canEditar" name="drag_indicator" color="grey-6" size="18px" class="cursor-grab">
+                    <q-tooltip>Arrastre para cambiar el orden</q-tooltip>
+                  </q-icon>
+                </td>
+                <td>{{ indice + 1 }}</td>
+                <td class="text-weight-medium">
+                  {{ examen.nombre }}
+                  <q-badge v-if="examen.activo === false" color="negative" class="q-ml-xs">INACTIVO</q-badge>
+                </td>
+                <td>{{ examen.area || '—' }}</td>
+                <td class="text-right">Bs {{ money(examen.precio) }}</td>
+                <td class="text-center">
+                  <q-btn v-if="canEditar" flat round dense size="10px" icon="close" color="negative"
+                         @click="quitarExamen(indice)">
+                    <q-tooltip>Quitar del perfil</q-tooltip>
+                  </q-btn>
+                </td>
+              </tr>
+            </tbody>
+          </q-markup-table>
+          <q-separator />
+          <div class="row items-center q-pa-sm q-gutter-md">
+            <div class="lab-sub text-grey-8">
+              Suma de los exámenes sueltos: <b>Bs {{ money(sumaExamenes) }}</b> ·
+              Precio del perfil: <b class="text-primary">Bs {{ money(producto.precio) }}</b>
+              <span v-if="examenesPerfil.length" :class="Number(producto.precio) <= sumaExamenes ? 'text-positive' : 'text-orange-9'">
+                · {{ Number(producto.precio) <= sumaExamenes ? 'Ahorro' : 'Recargo' }}
+                Bs {{ money(Math.abs(sumaExamenes - Number(producto.precio))) }}
+              </span>
+            </div>
+            <q-space />
+            <span v-if="perfilModificado" class="lab-sub text-orange-9">Cambios sin guardar</span>
+            <q-btn v-if="canEditar" dense unelevated color="primary" icon="save" no-caps padding="4px 14px"
+                   :label="perfil.es_perfil ? 'Guardar exámenes' : 'Guardar como perfil'"
+                   :disable="!perfilModificado" :loading="savingPerfil" @click="guardarPerfil" />
+          </div>
+        </q-card>
+        <div class="lab-sub text-grey-6 q-mt-xs q-px-xs">
+          El precio del perfil se cambia desde «Modificar» en el listado del catálogo. El orden de la lista es el
+          orden en que se agregarán los exámenes a la solicitud.
+        </div>
+      </template>
+
+      <template v-else>
+      <div v-if="perfil.perfiles?.length" class="lab-sub text-grey-7 q-mb-xs">
+        <q-icon name="playlist_add_check" size="14px" color="primary" />
+        Forma parte del perfil: <b>{{ perfil.perfiles.map(item => item.nombre).join(', ') }}</b>.
+        No se puede dar de baja mientras siga en él.
       </div>
 
       <q-card flat bordered>
@@ -216,6 +341,7 @@
           </tbody>
         </q-markup-table>
       </q-card>
+      </template>
     </template>
 
     <!-- DIALOG DATO -->
@@ -434,6 +560,16 @@ const validacionForm = ref({})
 const validacionError = ref('')
 const reporteForm = ref({ grupo_reporte: '', orden_reporte: null })
 const savingReporte = ref(false)
+// Perfil: "perfil" llega del backend solo con los perfiles habilitados.
+const perfil = ref({})
+const tipo = ref('examen')
+const examenesPerfil = ref([])
+const examenesGuardados = ref([])
+const examenElegido = ref(null)
+const opcionesExamenes = ref([])
+const buscandoExamenes = ref(false)
+const examenArrastrado = ref(null)
+const savingPerfil = ref(false)
 
 const operadores = [
   { label: 'Igual a (=)', value: '=' },
@@ -452,6 +588,11 @@ const variablesDisponibles = computed(() => datos.value
   .filter(item => item.id !== formulaDato.value?.id)
   .map(item => item.nombre_variable))
 const variablesDatos = computed(() => datos.value.map(item => item.nombre_variable))
+const perfilesHabilitado = computed(() => !!producto.value.perfil)
+const modoPerfil = computed(() => perfilesHabilitado.value && tipo.value === 'perfil')
+const sumaExamenes = computed(() => examenesPerfil.value.reduce((suma, item) => suma + Number(item.precio || 0), 0))
+const perfilModificado = computed(() => !perfil.value.es_perfil
+  || examenesPerfil.value.map(item => item.id).join(',') !== examenesGuardados.value.join(','))
 
 watch(() => proxy.$store.isLogged, logged => {
   if (logged && canVer.value) cargarConfiguracion()
@@ -508,10 +649,96 @@ async function cargarConfiguracion () {
     formulas.value = data.laboratorio_formulas || []
     validaciones.value = data.laboratorio_validaciones || []
     reporteForm.value = { grupo_reporte: data.grupo_reporte || '', orden_reporte: data.orden_reporte ?? null }
+    aplicarPerfil(data.perfil)
   } catch (error) {
     proxy.$alert.error(error.response?.data?.message || 'No se pudo cargar la configuración')
   } finally {
     adminLoading.value = false
+  }
+}
+
+// ── Perfil ──────────────────────────────────────────────────────
+function aplicarPerfil (datosPerfil) {
+  perfil.value = datosPerfil || {}
+  tipo.value = perfil.value.es_perfil ? 'perfil' : 'examen'
+  examenesPerfil.value = [...(perfil.value.examenes || [])]
+  examenesGuardados.value = examenesPerfil.value.map(item => item.id)
+}
+function cambiarTipo (nuevo) {
+  if (nuevo === tipo.value) return
+  // Pasar a perfil solo cambia la vista: se guarda con «Guardar como perfil».
+  if (nuevo === 'perfil' || !perfil.value.es_perfil) {
+    tipo.value = nuevo
+    if (nuevo === 'examen') examenesPerfil.value = []
+    return
+  }
+  proxy.$alert.dialog(`«${producto.value.nombre}» dejará de ser un perfil y se quitarán sus ${examenesGuardados.value.length} examen(es). ¿Continuar?`)
+    .onOk(async () => {
+      try {
+        const { data } = await proxy.$axios.put(`productos/${productoId}/laboratorio-perfil`, { es_perfil: false })
+        aplicarPerfil(data)
+        producto.value.perfil = data
+        proxy.$alert.success('Ahora es un examen')
+      } catch (error) {
+        proxy.$alert.error(firstValidationError(error) || error.response?.data?.message || 'No se pudo cambiar el tipo')
+      }
+    })
+}
+async function buscarExamenes (texto, actualizar, abortar) {
+  buscandoExamenes.value = true
+  try {
+    // El listado ya excluye los perfiles y los productos dados de baja.
+    const { data } = await proxy.$axios.get('productos', {
+      params: { laboratorio: 1, q: texto || undefined, per_page: 30 },
+    })
+    const elegidos = new Set(examenesPerfil.value.map(item => item.id))
+    actualizar(() => {
+      opcionesExamenes.value = (data.data || [])
+        .filter(item => item.id !== Number(productoId) && !elegidos.has(item.id))
+    })
+  } catch (error) {
+    abortar()
+    proxy.$alert.error(error.response?.data?.message || 'No se pudieron buscar los exámenes')
+  } finally {
+    buscandoExamenes.value = false
+  }
+}
+function agregarExamen (examen) {
+  if (!examen) return
+  if (!examenesPerfil.value.some(item => item.id === examen.id)) {
+    examenesPerfil.value.push({
+      id: examen.id, codigo: examen.codigo, nombre: examen.nombre, precio: examen.precio,
+      area: examen.tipo_producto?.nombre, activo: true,
+    })
+  }
+  examenElegido.value = null
+}
+function quitarExamen (indice) {
+  examenesPerfil.value.splice(indice, 1)
+}
+function soltarExamen (destino) {
+  const origen = examenesPerfil.value.findIndex(item => item.id === examenArrastrado.value)
+  if (origen < 0 || origen === destino) return
+  const [movido] = examenesPerfil.value.splice(origen, 1)
+  examenesPerfil.value.splice(destino, 0, movido)
+  examenArrastrado.value = null
+}
+async function guardarPerfil () {
+  savingPerfil.value = true
+  try {
+    const { data } = await proxy.$axios.put(`productos/${productoId}/laboratorio-perfil`, {
+      es_perfil: true,
+      producto_ids: examenesPerfil.value.map(item => item.id),
+    })
+    aplicarPerfil(data)
+    producto.value.perfil = data
+    proxy.$alert.success('Perfil guardado')
+  } catch (error) {
+    // Con varios exámenes inválidos se muestran todos los motivos juntos.
+    const errores = [...new Set(Object.values(error.response?.data?.errors || {}).flat())]
+    proxy.$alert.error(errores.length ? errores.join(' ') : (error.response?.data?.message || 'No se pudo guardar el perfil'))
+  } finally {
+    savingPerfil.value = false
   }
 }
 

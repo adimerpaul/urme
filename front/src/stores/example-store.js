@@ -5,6 +5,8 @@ export const useCounterStore = defineStore('counter', {
     isLogged: false,
     user: {},
     permissions: [],
+    // Interruptores del backend (GET /me → configuracion). Apagados hasta que responda.
+    configuracion: {},
   }),
 
   getters: {
@@ -12,6 +14,7 @@ export const useCounterStore = defineStore('counter', {
       if (Array.isArray(perm)) return perm.some(p => state.permissions.includes(p))
       return state.permissions.includes(perm)
     },
+    perfilesLaboratorio: (state) => state.configuracion.lab_perfiles_habilitado === true,
   },
 
   actions: {
@@ -19,6 +22,7 @@ export const useCounterStore = defineStore('counter', {
       this.isLogged = false
       this.user = {}
       this.permissions = []
+      this.configuracion = {}
     },
   },
 })

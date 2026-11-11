@@ -73,6 +73,7 @@ export default boot(({ app, router }) => {
       useCounterStore().user = response.data
       const perms = (response.data.permissions || []).map(p => p.name)
       useCounterStore().permissions = perms
+      useCounterStore().configuracion = response.data.configuracion || {}
       localStorage.setItem('user', JSON.stringify(response.data))
       localStorage.setItem('permissionsUrme', JSON.stringify(perms))
     }).catch(error => {

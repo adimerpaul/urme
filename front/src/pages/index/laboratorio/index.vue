@@ -13,6 +13,9 @@
           <div class="lab-sub text-grey-6">Exámenes por área y configuración de resultados</div>
         </div>
         <q-space />
+        <q-select v-if="perfilesHabilitado" v-model="claseFiltro" dense outlined emit-value map-options
+                  style="width:130px" label="Tipo" :options="opcionesClase"
+                  @update:model-value="buscar" />
         <q-select v-model="areaFiltro" dense outlined clearable emit-value map-options
                   style="width:190px" label="Área" :options="opcionesAreas"
                   @update:model-value="buscar" />
@@ -65,7 +68,7 @@
                     <q-item-section avatar><q-icon name="settings" color="teal" /></q-item-section>
                     <q-item-section>
                       <q-item-label>Administrar</q-item-label>
-                      <q-item-label caption>Datos, rangos y fórmulas</q-item-label>
+                      <q-item-label caption>{{ esPerfil(props.row) ? 'Exámenes del perfil' : 'Datos, rangos y fórmulas' }}</q-item-label>
                     </q-item-section>
                   </q-item>
                 </q-list>
@@ -77,7 +80,10 @@
           </template>
           <template #body-cell-nombre="props">
             <q-td :props="props">
-              <div class="text-weight-medium">{{ props.row.nombre }}</div>
+              <div class="text-weight-medium">
+                {{ props.row.nombre }}
+                <q-badge v-if="esPerfil(props.row)" color="deep-purple" class="q-ml-xs">PERFIL</q-badge>
+              </div>
               <div v-if="props.row.descripcion" class="lab-sub text-grey-6" v-html="props.row.descripcion_html" />
             </q-td>
           </template>
@@ -265,6 +271,22 @@ const canCrear = computed(() => proxy.$store.hasPermission('Crear Productos'))
 const canEditar = computed(() => proxy.$store.hasPermission('Editar Productos'))
 const canEliminar = computed(() => proxy.$store.hasPermission('Eliminar Productos'))
 
+// Perfiles de exámenes: solo con el interruptor del backend encendido.
+const perfilesHabilitado = computed(() => proxy.$store.perfilesLaboratorio)
+const claseFiltro = ref(null)
+const opcionesClase = [
+  { label: 'Todos', value: null },
+  { label: 'Exámenes', value: 'examen' },
+  { label: 'Perfiles', value: 'perfil' },
+]
+function esPerfil (producto) {
+  return perfilesHabilitado.value && producto.es_perfil === true
+}
+// La configuración llega con /me, quizá después del primer listado.
+watch(perfilesHabilitado, () => {
+  if (proxy.$store.isLogged && canVer.value) buscar()
+})
+
 const opcionesAreas = computed(() => areas.value.map(a => ({ label: a.nombre, value: a.id })))
 const totalAreas = computed(() => areas.value.reduce((suma, a) => suma + (a.productos_count || 0), 0))
 
@@ -302,6 +324,8 @@ async function cargar () {
     const { data } = await proxy.$axios.get('productos', {
       params: {
         laboratorio: 1,
+        incluir_perfiles: perfilesHabilitado.value ? 1 : undefined,
+        clase: perfilesHabilitado.value && claseFiltro.value ? claseFiltro.value : undefined,
         tipo_producto_id: areaFiltro.value || undefined,
         q: search.value || undefined,
         page: pagination.value.page,

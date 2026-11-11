@@ -33,7 +33,7 @@
                         :options="[{ label: 'Examen', value: 'examen' }, { label: 'Perfil', value: 'perfil' }]"
                         @update:model-value="cambiarTipo" />
         </div>
-        <q-btn v-if="canEditar && !modoPerfil" dense unelevated color="positive" icon="add" label="Nuevo dato"
+        <q-btn v-if="canEditar && !modoPerfil && !perfilApagado" dense unelevated color="positive" icon="add" label="Nuevo dato"
                no-caps padding="4px 12px" @click="nuevoDato" />
         <q-btn flat dense round icon="refresh" color="primary" class="q-ml-xs"
                :loading="adminLoading" @click="cargarConfiguracion">
@@ -149,6 +149,12 @@
           orden en que se agregarán los exámenes a la solicitud.
         </div>
       </template>
+
+      <!-- Perfil con los perfiles apagados (entrada por URL directa): no se configura nada -->
+      <q-banner v-else-if="perfilApagado" dense rounded class="bg-orange-1 text-orange-10">
+        <template #avatar><q-icon name="lock" color="orange-9" /></template>
+        Este producto es un perfil de exámenes y los perfiles están deshabilitados: no se puede configurar.
+      </q-banner>
 
       <template v-else>
       <div v-if="perfil.perfiles?.length" class="lab-sub text-grey-7 q-mb-xs">
@@ -590,6 +596,7 @@ const variablesDisponibles = computed(() => datos.value
 const variablesDatos = computed(() => datos.value.map(item => item.nombre_variable))
 const perfilesHabilitado = computed(() => !!producto.value.perfil)
 const modoPerfil = computed(() => perfilesHabilitado.value && tipo.value === 'perfil')
+const perfilApagado = computed(() => producto.value.es_perfil === true && !perfilesHabilitado.value)
 const sumaExamenes = computed(() => examenesPerfil.value.reduce((suma, item) => suma + Number(item.precio || 0), 0))
 const perfilModificado = computed(() => !perfil.value.es_perfil
   || examenesPerfil.value.map(item => item.id).join(',') !== examenesGuardados.value.join(','))

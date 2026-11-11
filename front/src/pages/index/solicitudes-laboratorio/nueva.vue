@@ -18,11 +18,17 @@
              label="Auditoría" class="q-mr-sm" @click="abrirAuditoria" />
       <q-btn dense no-caps color="positive" icon="save" class="q-mr-sm"
              :label="editId ? 'Guardar e imprimir' : 'Crear e imprimir'"
-             :loading="saving" :disable="!form.producto_ids.length" @click="guardar" />
+             :loading="saving" :disable="!form.producto_ids.length || soloLectura" @click="guardar" />
       <div class="text-caption text-grey-7">
         {{ seleccionados.length }} prueba(s) · <b class="text-primary">Bs {{ money(total) }}</b>
       </div>
     </div>
+
+    <q-banner v-if="soloLectura" dense rounded class="bg-orange-1 text-orange-10 q-mb-xs">
+      <template #avatar><q-icon name="lock" color="orange-9" /></template>
+      Esta solicitud incluye perfiles de exámenes y los perfiles están deshabilitados: se puede ver e imprimir,
+      pero no modificar.
+    </q-banner>
 
     <q-form ref="formRef" @submit.prevent="guardar" class="col column no-wrap">
 
@@ -108,15 +114,23 @@
               </div>
               <div v-for="laboratorio in laboratoriosFiltrados" :key="laboratorio.id"
                    class="row items-center no-wrap lab-item cursor-pointer"
-                   :class="{ 'bg-green-1': form.producto_ids.includes(laboratorio.id) }"
+                   :class="{ 'bg-green-1': form.producto_ids.includes(laboratorio.id) || !!perfilQueIncluye(laboratorio.id), 'text-grey-5': !!laboratorio.motivo_no_vendible }"
                    @click="toggleLaboratorio(laboratorio.id)">
-                <q-checkbox dense size="xs" :model-value="form.producto_ids.includes(laboratorio.id)"
+                <q-checkbox dense size="xs" :model-value="form.producto_ids.includes(laboratorio.id) || !!perfilQueIncluye(laboratorio.id)"
+                            :disable="!!perfilQueIncluye(laboratorio.id)"
                             @click.stop @update:model-value="toggleLaboratorio(laboratorio.id)" />
                 <div class="col q-ml-xs ellipsis">
-                  <div class="text-caption text-weight-medium ellipsis">{{ laboratorio.nombre }}</div>
-                  <div class="lab-sub text-grey-6 ellipsis">
-                    {{ laboratorio.codigo || 'S/C' }} · {{ laboratorio.laboratorio_datos?.length || 0 }} datos
+                  <div class="text-caption text-weight-medium ellipsis">
+                    {{ laboratorio.nombre }}
+                    <q-badge v-if="laboratorio.es_perfil" color="deep-purple" class="q-ml-xs">PERFIL</q-badge>
                   </div>
+                  <div class="lab-sub text-grey-6 ellipsis">
+                    {{ laboratorio.codigo || 'S/C' }} ·
+                    <template v-if="laboratorio.es_perfil">{{ laboratorio.examen_ids?.length || 0 }} exámenes</template>
+                    <template v-else>{{ laboratorio.laboratorio_datos?.length || 0 }} datos</template>
+                    <template v-if="perfilQueIncluye(laboratorio.id)"> · incluido en {{ perfilQueIncluye(laboratorio.id).nombre }}</template>
+                  </div>
+                  <div v-if="laboratorio.motivo_no_vendible" class="lab-sub text-negative ellipsis">{{ laboratorio.motivo_no_vendible }}</div>
                 </div>
                 <div class="lab-sub text-primary text-weight-bold q-ml-xs">{{ money(laboratorio.precio) }}</div>
               </div>
@@ -130,33 +144,62 @@
             <div class="row items-center q-pa-xs bg-grey-1">
               <div class="text-caption text-weight-bold text-grey-8">DATOS DE LAS PRUEBAS SELECCIONADAS</div>
               <q-space />
-              <q-btn v-if="seleccionados.length" flat dense no-caps size="sm" color="grey-7"
+              <q-btn v-if="renglones.length" flat dense no-caps size="sm" color="grey-7"
                      :icon="compacto ? 'unfold_more' : 'unfold_less'"
                      :label="compacto ? 'Expandir' : 'Compactar'" @click="compacto = !compacto" />
             </div>
             <q-separator />
             <div class="col lab-scroll q-pa-xs">
-              <div v-if="!seleccionados.length" class="text-center text-grey-5 q-pa-md text-caption">
+              <div v-if="!renglones.length" class="text-center text-grey-5 q-pa-md text-caption">
                 Seleccione pruebas del listado de la izquierda
               </div>
-              <div v-for="(laboratorio, indice) in seleccionados" :key="laboratorio.id"
-                   class="q-mb-xs prueba-ordenable"
-                   :class="{ 'prueba-ordenable--arrastrando': laboratorioArrastrado === laboratorio.id }"
-                   @dragover.prevent @drop="soltarLaboratorio(indice)">
-                <div class="row items-center bg-blue-grey-1 q-px-xs q-py-none rounded-borders prueba-ordenable__cabecera"
-                     draggable="true" @dragstart="iniciarArrastre(laboratorio.id, $event)" @dragend="finalizarArrastre">
+              <template v-for="renglon in renglones" :key="renglon.clave">
+              <!-- Cabecera de un perfil: se mueve y se quita entero; sus exámenes van debajo -->
+              <div v-if="renglon.tipo === 'perfil'"
+                   class="q-mb-none q-mt-xs prueba-ordenable"
+                   :class="{ 'prueba-ordenable--arrastrando': laboratorioArrastrado === renglon.perfil.id }"
+                   @dragover.prevent @drop="soltarLaboratorio(renglon.indice)">
+                <div class="row items-center bg-deep-purple-1 q-px-xs q-py-none rounded-borders prueba-ordenable__cabecera"
+                     draggable="true" @dragstart="iniciarArrastre(renglon.perfil.id, $event)" @dragend="finalizarArrastre">
+                  <q-icon name="drag_indicator" size="18px" color="grey-7" class="q-mr-xs cursor-grab">
+                    <q-tooltip>Arrastre para mover el perfil completo</q-tooltip>
+                  </q-icon>
+                  <q-icon name="playlist_add_check" size="14px" color="deep-purple" class="q-mr-xs" />
+                  <span class="text-caption text-weight-bold">{{ renglon.perfil.nombre }}</span>
+                  <q-badge color="deep-purple" class="q-ml-xs">PERFIL</q-badge>
+                  <span class="lab-sub text-grey-7 q-ml-xs">{{ renglon.cantidad }} examen(es)</span>
+                  <q-space />
+                  <span class="lab-sub text-grey-7">Bs {{ money(renglon.perfil.precio) }}</span>
+                  <q-btn flat dense round size="xs" icon="close" color="negative" class="q-ml-xs"
+                         @click="toggleLaboratorio(renglon.perfil.id)">
+                    <q-tooltip>Quitar el perfil completo</q-tooltip>
+                  </q-btn>
+                </div>
+              </div>
+              <div v-else class="q-mb-xs prueba-ordenable"
+                   :class="{ 'prueba-ordenable--arrastrando': laboratorioArrastrado === renglon.laboratorio.id, 'q-ml-md': renglon.perfil }"
+                   @dragover.prevent @drop="soltarLaboratorio(renglon.indice)">
+                <div v-if="renglon.perfil" class="row items-center bg-grey-2 q-px-xs q-py-none rounded-borders">
+                  <q-icon name="biotech" size="14px" color="deep-purple" class="q-mr-xs" />
+                  <span class="text-caption text-weight-bold">{{ renglon.laboratorio.nombre }}</span>
+                  <q-space />
+                  <span class="lab-sub text-deep-purple">Incluido en {{ renglon.perfil.nombre }}</span>
+                </div>
+                <div v-else class="row items-center bg-blue-grey-1 q-px-xs q-py-none rounded-borders prueba-ordenable__cabecera"
+                     draggable="true" @dragstart="iniciarArrastre(renglon.laboratorio.id, $event)" @dragend="finalizarArrastre">
                   <q-icon name="drag_indicator" size="18px" color="grey-7" class="q-mr-xs cursor-grab">
                     <q-tooltip>Arrastre para cambiar el orden de impresión</q-tooltip>
                   </q-icon>
                   <q-icon name="biotech" size="14px" color="primary" class="q-mr-xs" />
-                  <span class="text-caption text-weight-bold">{{ laboratorio.nombre }}</span>
+                  <span class="text-caption text-weight-bold">{{ renglon.laboratorio.nombre }}</span>
                   <q-space />
-                  <span class="lab-sub text-grey-7">Bs {{ money(laboratorio.precio) }}</span>
+                  <span class="lab-sub text-grey-7">Bs {{ money(renglon.laboratorio.precio) }}</span>
                   <q-btn flat dense round size="xs" icon="close" color="negative" class="q-ml-xs"
-                         @click="toggleLaboratorio(laboratorio.id)">
+                         @click="toggleLaboratorio(renglon.laboratorio.id)">
                     <q-tooltip>Quitar prueba</q-tooltip>
                   </q-btn>
                 </div>
+                <template v-for="laboratorio in [renglon.laboratorio]" :key="laboratorio.id">
                 <div v-if="laboratorio.descripcion_html" class="q-pa-xs text-caption" v-html="laboratorio.descripcion_html" />
                 <div class="row q-col-gutter-xs q-mt-none">
                   <div v-for="dato in laboratorio.laboratorio_datos" :key="dato.id"
@@ -191,7 +234,9 @@
                     </div>
                   </div>
                 </div>
+                </template>
               </div>
+              </template>
             </div>
           </q-card>
         </div>
@@ -210,7 +255,7 @@
                no-caps color="teal" @click="imprimirRotulo" />
         <q-btn type="submit" color="positive" icon="save" dense padding="4px 14px"
                :label="editId ? 'Guardar e imprimir' : 'Crear e imprimir'"
-               no-caps :loading="saving" :disable="!form.producto_ids.length" />
+               no-caps :loading="saving" :disable="!form.producto_ids.length || soloLectura" />
       </div>
     </q-form>
 
@@ -323,6 +368,33 @@
             </template>
           </q-table>
         </q-card-section>
+      </q-card>
+    </q-dialog>
+
+    <!-- DIALOG AVISOS DE PERFILES (cambios de composición, venta cargada) -->
+    <q-dialog v-model="avisos.abierto">
+      <q-card style="width:min(96vw,620px)">
+        <q-card-section class="row items-center bg-deep-purple text-white q-py-sm">
+          <q-icon name="playlist_add_check" size="20px" class="q-mr-sm" />
+          <span class="text-subtitle2 text-weight-bold">{{ avisos.titulo }}</span>
+          <q-space /><q-btn flat round dense icon="close" v-close-popup />
+        </q-card-section>
+        <q-card-section class="q-pa-sm" style="max-height:60vh;overflow-y:auto">
+          <q-list bordered separator dense>
+            <q-item v-for="(aviso, idx) in avisos.mensajes" :key="idx">
+              <q-item-section avatar><q-icon name="info" color="deep-purple" /></q-item-section>
+              <q-item-section><q-item-label>{{ aviso }}</q-item-label></q-item-section>
+            </q-item>
+          </q-list>
+        </q-card-section>
+        <q-card-actions align="right" class="q-pa-sm">
+          <template v-if="avisos.alConfirmar">
+            <q-btn flat dense color="grey-7" label="Revisar" no-caps v-close-popup />
+            <q-btn dense padding="4px 14px" color="deep-purple" no-caps label="Guardar con estos cambios"
+                   icon-right="save" @click="confirmarAvisos" />
+          </template>
+          <q-btn v-else dense padding="4px 14px" color="deep-purple" no-caps label="Entendido" v-close-popup />
+        </q-card-actions>
       </q-card>
     </q-dialog>
 
@@ -493,10 +565,101 @@ const laboratoriosFiltrados = computed(() => {
     ? laboratorios.value.filter(item => `${item.nombre} ${item.codigo || ''}`.toLowerCase().includes(search))
     : laboratorios.value
 })
-const seleccionados = computed(() => form.value.producto_ids
-  .map(id => laboratorios.value.find(item => item.id === id))
-  .filter(Boolean))
-const total = computed(() => seleccionados.value.reduce((sum, item) => sum + Number(item.precio || 0), 0))
+// ── Perfiles de exámenes ────────────────────────────────────────
+// form.producto_ids es lo elegido en el catálogo, en orden: exámenes sueltos y
+// perfiles. Cada perfil se reemplaza por sus exámenes; uno compartido por dos
+// perfiles queda solo en el primero (el backend aplica las mismas reglas).
+// Viene con form-data (no depende de que /me haya respondido).
+const perfilesHabilitado = ref(false)
+const porId = computed(() => new Map(laboratorios.value.map(item => [item.id, item])))
+const solicitudPerfiles = ref([]) // perfiles guardados en la solicitud (edición)
+const composicionGuardada = ref({}) // perfil_producto_id → ids de examen guardados
+const resultadosGuardados = ref(new Set()) // ids de examen con algún resultado cargado
+const soloLectura = computed(() => !!editId.value && !perfilesHabilitado.value && solicitudPerfiles.value.length > 0)
+const avisos = ref({ abierto: false, titulo: '', mensajes: [], alConfirmar: null })
+const totalGuardado = ref(0)
+let composicionConfirmada = false
+
+function esPerfil (id) {
+  return porId.value.get(id)?.es_perfil === true
+}
+function examenesDePerfil (id) {
+  return porId.value.get(id)?.examen_ids || []
+}
+/* Bloques en el orden elegido: cada perfil con sus exámenes, o un examen suelto. */
+const bloques = computed(() => {
+  const asignados = new Set()
+  return form.value.producto_ids.map((id, indice) => {
+    const item = porId.value.get(id)
+    if (!item) return null
+    if (!item.es_perfil) return { indice, perfil: null, examenes: [item] }
+    const examenes = item.examen_ids
+      .filter(examenId => !asignados.has(examenId))
+      .map(examenId => { asignados.add(examenId); return porId.value.get(examenId) })
+      .filter(Boolean)
+    return { indice, perfil: item, examenes }
+  }).filter(Boolean)
+})
+/* Exámenes que irán a la solicitud (sin repetir): sus datos se completan. */
+const seleccionados = computed(() => bloques.value.flatMap(bloque => bloque.examenes))
+/* Renglones del panel de la derecha: la cabecera de cada perfil y cada examen. */
+const renglones = computed(() => bloques.value.flatMap(bloque => [
+  ...(bloque.perfil ? [{ clave: `p${bloque.perfil.id}`, tipo: 'perfil', perfil: bloque.perfil, cantidad: bloque.examenes.length, indice: bloque.indice }] : []),
+  ...bloque.examenes.map(laboratorio => ({ clave: `e${laboratorio.id}`, tipo: 'examen', laboratorio, perfil: bloque.perfil, indice: bloque.indice })),
+]))
+/* Perfil elegido que ya incluye este examen (null si ninguno). */
+function perfilQueIncluye (examenId) {
+  if (!perfilesHabilitado.value || esPerfil(examenId)) return null
+  const perfilId = form.value.producto_ids.find(id => esPerfil(id) && examenesDePerfil(id).includes(examenId))
+  return perfilId ? porId.value.get(perfilId) : null
+}
+// Los exámenes de un perfil no suman: el perfil se cobra por su precio. En solo
+// lectura (perfiles apagados) se muestra el total guardado.
+const total = computed(() => soloLectura.value ? totalGuardado.value : bloques.value.reduce((sum, bloque) => sum + Number(
+  bloque.perfil ? bloque.perfil.precio : bloque.examenes[0].precio,
+) || 0, 0))
+
+/*
+ * Agrega un perfil o un examen a la selección aplicando las reglas de duplicados.
+ * Devuelve los avisos (texto) y si se agregó.
+ */
+function agregarSeleccion (id) {
+  const item = porId.value.get(id)
+  if (!item || form.value.producto_ids.includes(id)) return { agregado: false, avisos: [] }
+  const mensajes = []
+  if (item.es_perfil) {
+    if (item.motivo_no_vendible) return { agregado: false, avisos: [item.motivo_no_vendible] }
+    const incluidos = form.value.producto_ids.filter(otro => !esPerfil(otro) && item.examen_ids.includes(otro))
+    incluidos.forEach(otro => {
+      form.value.producto_ids.splice(form.value.producto_ids.indexOf(otro), 1)
+      mensajes.push(`${porId.value.get(otro).nombre} ya está en ${item.nombre}: se quitó el examen suelto.`)
+    })
+    item.examen_ids.forEach(examenId => {
+      const otroPerfil = perfilQueIncluye(examenId)
+      if (otroPerfil) mensajes.push(`${porId.value.get(examenId)?.nombre} ya está en ${otroPerfil.nombre}: aparecerá una sola vez, en ${otroPerfil.nombre}.`)
+    })
+  } else {
+    const perfil = perfilQueIncluye(id)
+    if (perfil) return { agregado: false, avisos: [`${item.nombre} está incluido en ${perfil.nombre}: no se agrega suelto.`] }
+  }
+  form.value.producto_ids.push(id)
+  precargarDefectos(id)
+  precargarVisibilidad(id)
+  return { agregado: true, avisos: mensajes }
+}
+function mostrarAvisos (titulo, mensajes, alConfirmar = null) {
+  avisos.value = { abierto: true, titulo, mensajes, alConfirmar }
+}
+function confirmarAvisos () {
+  const accion = avisos.value.alConfirmar
+  avisos.value.abierto = false
+  if (accion) accion()
+}
+/* Resultados cargados en los exámenes de un bloque de perfil (para confirmar antes de quitarlo). */
+function resultadosCargadosDe (examenes) {
+  return examenes.reduce((suma, examen) => suma + (examen.laboratorio_datos || [])
+    .filter(dato => !dato.formula && valores.value[dato.id] && valores.value[dato.id] !== dato.valor_defecto).length, 0)
+}
 
 // Mensajes de validación configurados en cada laboratorio que no se cumplen
 const alertas = computed(() => seleccionados.value.flatMap(laboratorio =>
@@ -588,6 +751,10 @@ function mostrarValorAuditoria (valor) {
 }
 
 function aplicarVentaLaboratorio (venta) {
+  if (perfilesHabilitado.value) {
+    aplicarVentaConPerfiles(venta)
+    return
+  }
   const idsDisponibles = new Set(laboratorios.value.map(item => item.id))
   const productoIds = [...new Set((venta.detalles || [])
     .map(detalle => detalle.producto_id)
@@ -618,12 +785,56 @@ function aplicarVentaLaboratorio (venta) {
   proxy.$alert.success(`Venta #${venta.id} cargada: ${productoIds.length} análisis marcado(s)`)
 }
 
+/*
+ * Con perfiles: cada línea de la venta (perfil o examen) entra con las mismas
+ * reglas que al elegirla a mano. Se avisa si una línea tenía cantidad mayor a 1
+ * (se carga una vez) o si no está disponible en el catálogo.
+ */
+function aplicarVentaConPerfiles (venta) {
+  const mensajes = []
+  const lineas = venta.detalles || []
+  const productoIds = [...new Set(lineas.map(detalle => detalle.producto_id).filter(Boolean))]
+  lineas.forEach(detalle => {
+    const nombre = detalle.producto?.nombre || detalle.nombre
+    if (Number(detalle.cantidad) > 1) {
+      mensajes.push(`La venta tiene ${Number(detalle.cantidad)} × ${nombre}: se carga una sola vez.`)
+    }
+    if (!porId.value.has(detalle.producto_id)) {
+      mensajes.push(`${nombre} no está disponible en el catálogo actual: no se cargó.`)
+    }
+  })
+
+  form.value.producto_ids = []
+  valores.value = {}
+  visibles.value = {}
+  productoIds.filter(id => porId.value.has(id)).forEach(id => mensajes.push(...agregarSeleccion(id).avisos))
+  if (!form.value.producto_ids.length) {
+    proxy.$alert.error('La venta no contiene análisis disponibles en el catálogo actual')
+    return
+  }
+
+  form.value.paciente_id = venta.paciente_id
+  form.value.doctor_id = venta.doctor_id || null
+  if (venta.paciente && !pacientesOpciones.value.some(item => item.id === venta.paciente.id)) {
+    pacientesOpciones.value.unshift(venta.paciente)
+  }
+  if (venta.doctor && !doctoresTodos.value.some(item => item.id === venta.doctor.id)) {
+    doctoresTodos.value.unshift(venta.doctor)
+    doctores.value = doctoresTodos.value
+  }
+
+  ventasDialog.value = false
+  proxy.$alert.success(`Venta #${venta.id} cargada: ${form.value.producto_ids.length} análisis o perfil(es) marcado(s)`)
+  if (mensajes.length) mostrarAvisos(`Venta #${venta.id}: revise antes de guardar`, mensajes)
+}
+
 async function cargarDatos () {
   try {
     const { data } = await proxy.$axios.get('solicitudes-laboratorio/form-data')
     doctoresTodos.value = data.doctores
     doctores.value = data.doctores
     laboratorios.value = data.laboratorios
+    perfilesHabilitado.value = data.perfiles_habilitado === true
     await buscarPacientes('', 1)
     if (editId.value) await cargarSolicitud()
   } catch (error) {
@@ -643,6 +854,8 @@ async function cargarSolicitud () {
     observaciones: data.observaciones || '',
     producto_ids: (data.laboratorio_items || []).map(item => item.producto_id).filter(Boolean),
   }
+  solicitudPerfiles.value = data.laboratorio_perfiles || []
+  if (perfilesHabilitado.value) reconstruirSeleccion(data)
   if (data.paciente && !pacientesOpciones.value.some(item => item.id === data.paciente.id)) {
     pacientesOpciones.value.unshift(data.paciente)
   }
@@ -654,6 +867,55 @@ async function cargarSolicitud () {
       }
     }
   }
+  totalGuardado.value = Number(data.total || 0)
+}
+
+/*
+ * Al editar con perfiles: la selección vuelve a ser perfiles + exámenes sueltos,
+ * en el orden guardado (el perfil tiene el orden de su primer examen). También
+ * se guarda la composición de cada perfil para avisar si cambió en el catálogo.
+ */
+function reconstruirSeleccion (data) {
+  const items = data.laboratorio_items || []
+  const perfilesPorFila = new Map(solicitudPerfiles.value.map(perfil => [perfil.id, perfil]))
+  const entradas = [
+    ...solicitudPerfiles.value.filter(perfil => perfil.perfil_producto_id)
+      .map(perfil => ({ orden: perfil.orden, prioridad: 0, id: perfil.perfil_producto_id })),
+    ...items.filter(item => !item.solicitud_laboratorio_perfil_id && item.producto_id)
+      .map(item => ({ orden: item.orden, prioridad: 1, id: item.producto_id })),
+  ].sort((a, b) => a.orden - b.orden || a.prioridad - b.prioridad)
+  form.value.producto_ids = [...new Set(entradas.map(entrada => entrada.id))]
+
+  const composicion = {}
+  items.filter(item => item.solicitud_laboratorio_perfil_id).forEach(item => {
+    const perfilId = perfilesPorFila.get(item.solicitud_laboratorio_perfil_id)?.perfil_producto_id
+    if (perfilId) (composicion[perfilId] ||= []).push(item.producto_id)
+  })
+  composicionGuardada.value = composicion
+  resultadosGuardados.value = new Set(items
+    .filter(item => (item.resultados || []).some(resultado => !resultado.formula && String(resultado.valor ?? '').trim() !== ''))
+    .map(item => item.producto_id))
+}
+
+/*
+ * Diferencias entre la composición guardada de cada perfil y la del catálogo:
+ * qué exámenes entran y cuáles salen (y si los que salen tienen resultados).
+ * Un examen que sale del perfil pero sigue en la solicitud no se pierde.
+ */
+function cambiosDeComposicion () {
+  const quedan = new Set(seleccionados.value.map(examen => examen.id))
+  const nombre = id => porId.value.get(id)?.nombre || `#${id}`
+  const mensajes = []
+  form.value.producto_ids.filter(id => esPerfil(id) && composicionGuardada.value[id]).forEach(perfilId => {
+    const antes = composicionGuardada.value[perfilId]
+    const ahora = examenesDePerfil(perfilId)
+    const perfil = porId.value.get(perfilId).nombre
+    ahora.filter(id => !antes.includes(id)).forEach(id => mensajes.push(`Entra a ${perfil}: ${nombre(id)}.`))
+    antes.filter(id => !ahora.includes(id) && !quedan.has(id)).forEach(id => mensajes.push(
+      `Sale de ${perfil}: ${nombre(id)}${resultadosGuardados.value.has(id) ? ' — tiene resultados cargados, que se quitarán' : ' (sin resultados cargados)'}.`,
+    ))
+  })
+  return mensajes
 }
 async function buscarPacientes (search, page, append = false) {
   pacientesLoading.value = true
@@ -742,12 +1004,31 @@ async function guardarDoctor () {
   }
 }
 function toggleLaboratorio (id) {
+  if (soloLectura.value) return
   const index = form.value.producto_ids.indexOf(id)
-  if (index >= 0) form.value.producto_ids.splice(index, 1)
-  else {
-    form.value.producto_ids.push(id)
-    precargarDefectos(id)
-    precargarVisibilidad(id)
+  if (!perfilesHabilitado.value) {
+    if (index >= 0) form.value.producto_ids.splice(index, 1)
+    else {
+      form.value.producto_ids.push(id)
+      precargarDefectos(id)
+      precargarVisibilidad(id)
+    }
+    return
+  }
+  if (index < 0) {
+    const { avisos: mensajes } = agregarSeleccion(id)
+    mensajes.forEach(mensaje => proxy.$alert.warning(mensaje))
+    return
+  }
+  // Quitar un perfil quita sus exámenes: si tienen resultados cargados, se confirma.
+  const bloque = bloques.value.find(item => item.perfil?.id === id)
+  const cargados = bloque ? resultadosCargadosDe(bloque.examenes) : 0
+  const quitar = () => form.value.producto_ids.splice(form.value.producto_ids.indexOf(id), 1)
+  if (cargados) {
+    proxy.$alert.dialog(`Se quitará el perfil ${bloque.perfil.nombre} con ${cargados} resultado(s) cargado(s) en sus exámenes. ¿Continuar?`)
+      .onOk(quitar)
+  } else {
+    quitar()
   }
 }
 
@@ -771,6 +1052,7 @@ function finalizarArrastre () {
 /* Recupera la selección inicial desde el campo visible configurado para el
    dato. Al editar prevalece el valor que ya fue guardado en la solicitud. */
 function precargarVisibilidad (productoId) {
+  if (esPerfil(productoId)) return examenesDePerfil(productoId).forEach(precargarVisibilidad)
   const laboratorio = laboratorios.value.find(item => item.id === productoId)
   for (const dato of laboratorio?.laboratorio_datos || []) {
     if (visibles.value[dato.id] === undefined) visibles.value[dato.id] = dato.visible !== false
@@ -781,6 +1063,7 @@ function precargarVisibilidad (productoId) {
    rellena lo que está vacío: nunca pisa un resultado ya escrito ni uno
    recuperado al editar la solicitud. */
 function precargarDefectos (productoId) {
+  if (esPerfil(productoId)) return examenesDePerfil(productoId).forEach(precargarDefectos)
   const laboratorio = laboratorios.value.find(item => item.id === productoId)
   for (const dato of laboratorio?.laboratorio_datos || []) {
     if (dato.formula || !dato.valor_defecto) continue
@@ -797,6 +1080,18 @@ async function guardar () {
     proxy.$alert.error('Seleccione al menos una prueba de laboratorio')
     return
   }
+  // Si la composición de un perfil cambió en el catálogo, se muestra qué entra y qué sale.
+  if (editId.value && perfilesHabilitado.value && !composicionConfirmada) {
+    const cambios = cambiosDeComposicion()
+    if (cambios.length) {
+      mostrarAvisos('La composición de un perfil cambió en el catálogo', cambios, () => {
+        composicionConfirmada = true
+        guardar()
+      })
+      return
+    }
+  }
+  composicionConfirmada = false
   // Si alguna regla configurada no se cumple, se avisa antes de guardar
   if (alertas.value.length) {
     confirmandoGuardado.value = true
@@ -829,6 +1124,7 @@ async function guardarConfirmado () {
       ? await proxy.$axios.put(`solicitudes-laboratorio/${editId.value}`, payload)
       : await proxy.$axios.post('solicitudes-laboratorio', payload)
     proxy.$alert.success(`Laboratorio ${data.codigo_completo} ${editId.value ? 'actualizado' : 'creado'}`)
+    ;(data.avisos || []).forEach(aviso => proxy.$alert.warning(aviso))
     try {
       await imprimirSolicitudLaboratorio(proxy.$axios, data.id)
     } catch {

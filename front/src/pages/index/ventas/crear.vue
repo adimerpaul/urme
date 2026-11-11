@@ -107,16 +107,18 @@
                 <tr v-for="p in productos" :key="p.id">
                   <td class="text-center">
                     <q-btn dense round unelevated size="sm" color="primary" icon="add"
-                           :disable="esProductoFarmacia(p) && cantidadDisponibleProducto(p) <= 0"
+                           :disable="(esProductoFarmacia(p) && cantidadDisponibleProducto(p) <= 0) || perfilNoVendible(p)"
                            @click="agregarProducto(p)">
                       <q-tooltip>
-                        {{ !esProductoFarmacia(p) || cantidadDisponibleProducto(p) > 0 ? 'Agregar a la venta' : 'Sin lote disponible' }}
+                        {{ perfilNoVendible(p) ? 'Perfil con exámenes inactivos: no se puede vender'
+                          : !esProductoFarmacia(p) || cantidadDisponibleProducto(p) > 0 ? 'Agregar a la venta' : 'Sin lote disponible' }}
                       </q-tooltip>
                     </q-btn>
                   </td>
                   <td>{{ p.codigo || '—' }}</td>
                   <td>
                     {{ p.nombre }}
+                    <q-badge v-if="p.es_perfil" color="deep-purple" class="q-ml-xs">PERFIL</q-badge>
                     <div v-if="p.nombre_comercial" class="text-caption text-grey-7">{{ p.nombre_comercial }}</div>
                   </td>
                   <td>
@@ -764,6 +766,13 @@ function cantidadDisponibleProducto (producto) {
   )
 }
 
+/* Un perfil se vende como una línea; no si alguno de sus exámenes está inactivo. */
+function perfilNoVendible (producto) {
+  return producto.es_perfil === true && Number(producto.perfil_vendible) !== 1
+}
+// La configuración llega con /me, quizá después del primer listado.
+watch(() => proxy.$store.perfilesLaboratorio, () => loadProductos())
+
 function esProductoFarmacia (producto) {
   return String(producto.tipo_producto?.nombre || '').toUpperCase() === 'FARMACIA'
 }
@@ -783,6 +792,8 @@ async function loadProductos () {
         tipo_producto_id: filtroTipo.value,
         // La venta de farmacia solo puede armarse con productos de ese tipo.
         tipo: props.soloFarmacia ? 'FARMACIA' : undefined,
+        // Perfiles de exámenes: solo con el interruptor del backend encendido.
+        incluir_perfiles: !props.soloFarmacia && proxy.$store.perfilesLaboratorio ? 1 : undefined,
         page: pageProductos.value,
         per_page: perProductos,
       },

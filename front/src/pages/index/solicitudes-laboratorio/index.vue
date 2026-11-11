@@ -40,15 +40,15 @@
       <template #body-cell-pruebas="props">
         <q-td :props="props" class="sol-pruebas">
           <!-- Se muestran dos y el resto se cuenta, para no estirar la fila -->
-          <q-badge v-for="item in props.row.laboratorio_items.slice(0, 2)" :key="item.id"
-                   color="grey-3" text-color="grey-9" class="q-mr-xs">
-            {{ item.producto_nombre }}
+          <q-badge v-for="item in pruebasDe(props.row).slice(0, 2)" :key="item.clave"
+                   :color="item.perfil ? 'deep-purple-1' : 'grey-3'" :text-color="item.perfil ? 'deep-purple' : 'grey-9'" class="q-mr-xs">
+            {{ item.nombre }}
           </q-badge>
-          <q-badge v-if="props.row.laboratorio_items.length > 2" color="grey-6">
-            +{{ props.row.laboratorio_items.length - 2 }}
+          <q-badge v-if="pruebasDe(props.row).length > 2" color="grey-6">
+            +{{ pruebasDe(props.row).length - 2 }}
             <q-tooltip>
-              <div v-for="item in props.row.laboratorio_items.slice(2)" :key="item.id">
-                {{ item.producto_nombre }}
+              <div v-for="item in pruebasDe(props.row).slice(2)" :key="item.clave">
+                {{ item.nombre }}
               </div>
             </q-tooltip>
           </q-badge>
@@ -114,10 +114,19 @@
             </div>
           </div>
           <q-list bordered separator dense>
+            <!-- Perfiles: se cobran por su precio; sus exámenes figuran como incluidos -->
+            <q-item v-for="perfil in detalle.laboratorio_perfiles || []" :key="'p' + perfil.id" dense class="bg-deep-purple-1">
+              <q-item-section avatar><q-icon name="playlist_add_check" color="deep-purple" /></q-item-section>
+              <q-item-section>
+                <q-item-label class="text-weight-bold">{{ perfil.nombre }} <q-badge color="deep-purple">PERFIL</q-badge></q-item-label>
+                <q-item-label caption>{{ examenesDePerfil(perfil).join(', ') }}</q-item-label>
+              </q-item-section>
+              <q-item-section side class="text-weight-bold">Bs {{ money(perfil.precio) }}</q-item-section>
+            </q-item>
             <q-expansion-item v-for="item in detalle.laboratorio_items" :key="item.id"
                               dense dense-toggle
                               icon="biotech" :label="item.producto_nombre"
-                              :caption="`${item.resultados?.length || 0} datos · Bs ${money(item.precio)}`">
+                              :caption="`${item.resultados?.length || 0} datos · ${item.solicitud_laboratorio_perfil_id ? 'Incluido en ' + nombrePerfil(item.solicitud_laboratorio_perfil_id) : 'Bs ' + money(item.precio)}`">
               <q-markup-table dense flat class="tabla-compacta">
                 <tbody>
                   <tr v-for="resultado in item.resultados" :key="resultado.id">
@@ -276,6 +285,21 @@ function eliminar (row) {
       proxy.$alert.error(error.response?.data?.message || 'No se pudo eliminar')
     }
   })
+}
+/* Chips del listado: primero los perfiles, después los exámenes sueltos. */
+function pruebasDe (row) {
+  return [
+    ...(row.laboratorio_perfiles || []).map(perfil => ({ clave: 'p' + perfil.id, nombre: perfil.nombre, perfil: true })),
+    ...(row.laboratorio_items || []).filter(item => !item.solicitud_laboratorio_perfil_id)
+      .map(item => ({ clave: 'e' + item.id, nombre: item.producto_nombre, perfil: false })),
+  ]
+}
+function nombrePerfil (perfilId) {
+  return (detalle.value?.laboratorio_perfiles || []).find(perfil => perfil.id === perfilId)?.nombre || 'un perfil'
+}
+function examenesDePerfil (perfil) {
+  return (detalle.value?.laboratorio_items || []).filter(item => item.solicitud_laboratorio_perfil_id === perfil.id)
+    .map(item => item.producto_nombre)
 }
 function money (value) {
   return Number(value || 0).toFixed(2)

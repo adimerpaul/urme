@@ -8,6 +8,7 @@ revisan y, si corresponde, se corrigen desde la pantalla.
 
 | Pendiente | Gravedad | Decide |
 |---|---|---|
+| [Venta pagada sin vínculo con la solicitud de laboratorio](#venta-pagada-sin-vínculo-con-la-solicitud-de-laboratorio) | Alta | Desarrollo y laboratorio |
 | [Movimientos de caja con la hora corrida](#movimientos-de-caja-con-la-hora-corrida-en-producción) | Alta | Administración, caso por caso |
 | [Categoría para gastos generales](#categoría-para-gastos-generales) | Media | Administración |
 | [Comprobantes impresos](#comprobantes-impresos-frontsrcaddonsprintjs) | Baja | Desarrollo |
@@ -15,10 +16,31 @@ revisan y, si corresponde, se corrigen desde la pantalla.
 | [Gasometría 778](#gasometría-778-su-nombre-promete-parámetros-que-no-tiene) | Media | Bioquímico |
 | [Fecha por defecto en UTC en "Crear laboratorio"](#fecha-por-defecto-en-utc-en-crear-laboratorio) | Media | Decidido: se mantiene por ahora |
 | [Unidad escrita a mano en reactivos](#unidad-escrita-a-mano-en-reactivos-que-no-se-aplica) | Baja | Desarrollo y laboratorio |
-| [R-001 vinculado a un producto dado de baja](#reactivo-r-001-vinculado-al-producto-286-dado-de-baja) | Baja | Responsable de reactivos, desde la pantalla |
+| [Reactivos vinculados a productos dados de baja](#reactivos-vinculados-a-productos-dados-de-baja-r-001-r-006-y-r-009) | Baja | Responsable de reactivos, desde la pantalla |
 | [Vínculos de reactivos que se recrean al editar](#vínculos-de-reactivos-que-se-borran-y-recrean-al-editar) | Baja | Desarrollo |
 | [Tests que fallan por causas previas](#tests-que-fallan-por-causas-previas) | Media | Desarrollo |
 | [Datos de prueba en `urme_prueba`](#limpieza-de-los-datos-de-prueba-de-urme_prueba) | Baja | Desarrollo |
+
+### Venta pagada sin vínculo con la solicitud de laboratorio
+
+- **Origen:** diagnóstico de perfiles de exámenes (2026-11-10), en
+  [`ANALISIS_PERFILES_FASE0.md`](ANALISIS_PERFILES_FASE0.md), §2 y §9. Queda
+  **fuera** del proyecto de perfiles y se trata como un proyecto propio.
+- **Gravedad:** alta. En la base, la venta y la solicitud no están relacionadas:
+  `solicitudes` no tiene `venta_id` ni existe ninguna otra relación entre ambas.
+  "Cargar venta pagada" (`nueva.vue`, `aplicarVentaLaboratorio`) solo rellena el
+  formulario con el paciente, el doctor y los exámenes. Por eso:
+  1. **La misma venta pagada se puede cargar varias veces** y generar varias
+     solicitudes: nada la marca como usada.
+  2. **Anular la venta no afecta a la solicitud:** sigue vigente, se imprime y
+     cuenta en el kardex de reactivos. Eliminar la solicitud tampoco afecta a la
+     venta.
+  3. **El precio se toma del catálogo, no del cobrado:** la solicitud guarda
+     `productos.precio` vigente, y lo recopia en cada edición, aunque el cajero
+     haya cobrado otro precio en la venta.
+- **Decide:** desarrollo, con el laboratorio. Las opciones van desde
+  `solicitudes.venta_id` (o una tabla de enlace) con aviso si la venta ya se usó,
+  hasta qué hacer con la solicitud al anular la venta.
 
 ### Movimientos de caja con la hora corrida en producción
 
@@ -109,16 +131,21 @@ fechas de la API recortadas como texto en UTC.** Una sola observación, menor:
 - **Decide:** desarrollo, junto con el laboratorio: si debe admitir unidades
   libres, o quitar la escritura y dejar solo la lista.
 
-### Reactivo R-001 vinculado al producto 286, dado de baja
+### Reactivos vinculados a productos dados de baja (R-001, R-006 y R-009)
 
-- **Origen:** tarea de unidades de reactivos (2026-11-03).
-- **Gravedad:** baja (es un dato). R-001 «REACTIVO DE GLUCOSA» está vinculado al
-  servicio 286 «GLUCOSA 20% 500 ML», que está dado de baja (2026-10-21, en la
-  copia local). En el listado de reactivos, el chip del servicio sale sin nombre.
-  Hay que confirmar si en producción está igual.
+- **Origen:** R-001, en la tarea de unidades de reactivos (2026-11-03); R-006 y
+  R-009, en el diagnóstico de perfiles (2026-11-10).
+- **Gravedad:** baja (es un dato). En la copia local, tres reactivos están
+  vinculados a productos dados de baja el 2026-10-21. En el listado de
+  reactivos, el chip del servicio sale sin nombre.
+  - R-001 «REACTIVO DE GLUCOSA» → 286 «GLUCOSA 20% 500 ML».
+  - R-006 → 157 «CORTYPIREN GOTAS».
+  - R-009 → 74 «BOLSA DE ORINA NIPRO».
+- **Confirmar en producción** con la consulta 11 (solo lectura) de
+  [`back/scripts/consulta_perfiles_fase0.sql`](../back/scripts/consulta_perfiles_fase0.sql).
 - **Decide:** el responsable de reactivos, **desde la pantalla de Reactivos**:
-  vincularlo al servicio de laboratorio correcto o quitar el vínculo. No se
-  corrige por código ni por migración.
+  vincular cada uno al servicio de laboratorio correcto o quitar el vínculo. No
+  se corrige por código ni por migración.
 
 ### Vínculos de reactivos que se borran y recrean al editar
 

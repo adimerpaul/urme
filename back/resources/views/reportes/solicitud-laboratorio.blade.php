@@ -8,22 +8,22 @@
         .description p { margin: 3px 0; }
         body { font-family: DejaVu Sans, sans-serif; color: #1f2937; font-size: 9.5px; }
         .header, .patient, .results { width: 100%; border-collapse: collapse; }
-        .header { margin-bottom: 3px; border-bottom: 2px solid #1a73e8; }
+        .header { margin-bottom: 3px; border-bottom: 2px solid #1D69EE; }
         .header td { vertical-align: middle; padding-bottom: 5px; }
         .laboratory-logo { width: 205px; height: auto; display: block; }
         /* CODELAB y código de la solicitud: un solo bloque, mismo estilo. */
-        .document-code, .codelab { color: #0b5ed7; font-size: 15px; font-weight: bold; }
+        .document-code, .codelab { color: #0E4BB6; font-size: 15px; font-weight: bold; }
         .meta { color: #4b5563; font-size: 10px; line-height: 1.45; }
         /* El JPG del logo trae ~25px de blanco abajo: se sube el bloque para que quede justo bajo el dibujo. */
         .lab-direccion { width: 205px; margin-top: -22px; text-align: center; }
-        .title { color: #0b5ed7; font-size: 13px; font-weight: bold; text-align: center; margin: 5px 0 6px; letter-spacing: .3px; }
+        .title { color: #0B3D91; font-size: 13px; font-weight: bold; text-align: center; margin: 5px 0 6px; letter-spacing: .3px; }
         .patient { margin-bottom: 7px; }
         .patient { table-layout: fixed; }
         .patient td { border: 1px solid #aeb9c5; padding: 3px 5px; vertical-align: top; }
         .label { font-weight: bold; color: #374151; }
         .service-title { color: #1f2937; font-size: 10.5px; font-weight: bold; text-align: center; margin: 7px 0 2px; }
         .results { margin-bottom: 4px; }
-        .results th { border-top: 1.5px solid #1a73e8; border-bottom: 1.5px solid #1a73e8; color: #0b5ed7; padding: 4px; text-align: left; font-size: 8.5px; }
+        .results th { border-top: 1.5px solid #0F54CC; border-bottom: 1.5px solid #0F54CC; color: #0B3D91; padding: 4px; text-align: left; font-size: 8.5px; }
         .results td { border-bottom: 1px solid #e5e7eb; padding: 3.5px 4px; vertical-align: top; }
         .results tr { page-break-inside: avoid; }
         .bloque-grupo { page-break-inside: avoid; break-inside: avoid; }
@@ -35,11 +35,11 @@
         .bloque-firma { page-break-inside: avoid; break-inside: avoid; }
         .espacio-firma { height: 70px; }
         .signature { width: 300px; border-top: 1px solid #374151; text-align: center; padding-top: 3px; font-size: 9px; }
-        .signature-name { margin-top: 2px; font-weight: bold; color: #0b5ed7; font-size: 9.5px; }
+        .signature-name { margin-top: 2px; font-weight: bold; color: #0B3D91; font-size: 9.5px; }
         .page-footer { position: fixed; left: 0; right: 0; bottom: -78px; height: 70px; border-top: 1px solid #c2cad3; color: #374151; }
         .page-footer table { width: 100%; height: 66px; border-collapse: collapse; }
         .page-footer td { padding: 3px 5px; vertical-align: middle; }
-        .footer-message { width: 62%; color: #1a73e8; font-size: 10.5px; font-style: italic; font-weight: bold; letter-spacing: .1px; white-space: nowrap; }
+        .footer-message { width: 62%; color: #0E4BB6; font-size: 10.5px; font-style: italic; font-weight: bold; letter-spacing: .1px; white-space: nowrap; }
         .footer-patient { width: 25%; text-align: right; font-size: 8px; text-transform: uppercase; }
         .footer-qr { width: 13%; text-align: right; }
         .footer-qr img { width: 56px; height: 56px; }
@@ -60,7 +60,7 @@
         /* Perfiles de exámenes: el título va en el thead para repetirse si la tabla se parte;
            thead y filas de área no quedan solas al pie de la página. Mismo azul de los títulos. */
         .perfil-tabla thead tr { page-break-after: avoid; }
-        .results .perfil-titulo th { border-top: 0; border-bottom: 0; color: #0b5ed7; font-size: 10.5px; text-align: center; letter-spacing: .3px; padding: 7px 0 2px; }
+        .results .perfil-titulo th { border-top: 0; border-bottom: 0; color: #0B3D91; font-size: 10.5px; text-align: center; letter-spacing: .3px; padding: 7px 0 2px; }
         .perfil-area { page-break-after: avoid; }
         .perfil-examen td { font-weight: bold; padding-top: 5px; }
     </style>

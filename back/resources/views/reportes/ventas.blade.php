@@ -46,6 +46,7 @@
                     <th width="4%">N°</th>
                     <th width="9%">Fecha</th>
                     <th width="5%">Tipo</th>
+                    <th width="9%">Tipo padre</th>
                     <th>Cliente / Paciente</th>
                     <th width="12%">Doctor</th>
                     <th width="10%">Seguro</th>
@@ -63,6 +64,7 @@
                         <td>{{ $venta->id }}</td>
                         <td>{{ optional($venta->fecha_hora)->format('d/m/Y H:i') }}</td>
                         <td class="{{ $venta->esEgreso() ? 'gasto' : '' }}">{{ $venta->esEgreso() ? 'GASTO' : 'VENTA' }}</td>
+                        <td>{{ $venta->tiposPadreTexto() ?: '—' }}</td>
                         <td>
                             {{ VentasExport::cliente($venta) }}
                             @if ($venta->esEgreso())
@@ -85,7 +87,7 @@
             @if ($verMontos)
                 <tfoot>
                     <tr>
-                        <td colspan="9" class="num">Neto en caja (ventas cobradas menos gastos; sin anuladas ni pendientes)</td>
+                        <td colspan="10" class="num">Neto en caja (ventas cobradas menos gastos; sin anuladas ni pendientes)</td>
                         <td class="num">{{ number_format(VentasExport::neto($ventas), 2) }} Bs</td>
                     </tr>
                 </tfoot>

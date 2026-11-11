@@ -6,6 +6,7 @@ use App\Models\Producto;
 use App\Models\Reactivo;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class ReactivoController extends Controller
 {
@@ -25,6 +26,7 @@ class ReactivoController extends Controller
         $this->authorizeAny($request, ['Ver Reactivos', 'Crear Reactivos', 'Editar Reactivos']);
 
         return response()->json(['servicios' => Producto::whereHas('tipoProducto', fn ($q) => $q->where('es_laboratorio', true))
+            ->where('es_perfil', false)
             ->orderBy('nombre')->get(['id', 'codigo', 'nombre'])]);
     }
 
@@ -83,6 +85,16 @@ class ReactivoController extends Controller
             'servicios.*.producto_id' => ['required', 'integer', 'distinct', 'exists:productos,id'],
             'servicios.*.cantidad' => ['required', 'numeric', 'gt:0'],
         ]);
+
+        // El consumo se configura en los exámenes: un perfil no tiene reactivos propios.
+        $perfiles = Producto::whereIn('id', collect($data['servicios'] ?? [])->pluck('producto_id'))
+            ->where('es_perfil', true)->pluck('nombre');
+        if ($perfiles->isNotEmpty()) {
+            throw ValidationException::withMessages([
+                'servicios' => 'Un perfil no tiene reactivos propios: '.$perfiles->implode(', ')
+                    .'. Configure el reactivo en sus exámenes.',
+            ]);
+        }
 
         return [collect($data)->except('servicios')->all(), $data['servicios'] ?? []];
     }

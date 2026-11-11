@@ -35,7 +35,16 @@ class UserController extends Controller
             'token' => $token,
             'user' => $user,
             'must_change_password' => password_verify('123456', $user->password),
+            'configuracion' => $this->configuracion(),
         ]);
+    }
+
+    /** Interruptores que el frontend necesita para mostrar u ocultar funciones. */
+    private function configuracion(): array
+    {
+        return [
+            'lab_perfiles_habilitado' => (bool) config('laboratorio.perfiles_habilitado'),
+        ];
     }
 
     public function logout(Request $request)
@@ -51,7 +60,7 @@ class UserController extends Controller
             ->with('permissions:id,name')
             ->first();
 
-        return response()->json($user);
+        return response()->json([...$user->toArray(), 'configuracion' => $this->configuracion()]);
     }
 
     public function changePassword(Request $request)

@@ -119,6 +119,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/productos/{id}/lotes-disponibles', [ProductoController::class, 'lotesDisponibles']);
     Route::get('/productos/{producto}/laboratorio-configuracion', [ProductoLaboratorioController::class, 'show']);
     Route::put('/productos/{producto}/laboratorio-reporte', [ProductoLaboratorioController::class, 'updateReporte']);
+    Route::put('/productos/{producto}/laboratorio-perfil', [ProductoLaboratorioController::class, 'updatePerfil']);
     Route::post('/productos/{producto}/laboratorio-datos', [ProductoLaboratorioController::class, 'storeDato']);
     Route::put('/productos/{producto}/laboratorio-datos/orden', [ProductoLaboratorioController::class, 'reorderDatos']);
     Route::put('/producto-laboratorio-datos/{dato}', [ProductoLaboratorioController::class, 'updateDato']);
@@ -228,6 +229,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/ventas', [VentaController::class, 'index']);
     Route::get('/ventas/export-excel', [VentaController::class, 'exportExcel']);
     Route::get('/ventas/export-pdf', [VentaController::class, 'exportPdf']);
+    Route::get('/ventas/export-facturadas', [VentaController::class, 'exportFacturadas']);
+    Route::get('/ventas/servicios', [VentaController::class, 'servicios']);
     Route::get('/ventas/{id}', [VentaController::class, 'show']);
     // Antes de POST /ventas: un gasto de caja se registra por su propia ruta.
     Route::post('/ventas/gasto', [VentaController::class, 'gasto']);

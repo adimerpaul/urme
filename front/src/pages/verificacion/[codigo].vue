@@ -43,7 +43,32 @@
               </q-card-section>
             </q-card>
 
-            <q-card v-for="laboratorio in informe.laboratorios" :key="laboratorio.nombre"
+            <!-- Perfil de exámenes: una tarjeta con el título del perfil y sus exámenes, como en el informe -->
+            <template v-for="bloque in bloques" :key="bloque.clave">
+            <q-card v-if="bloque.perfil" flat bordered class="q-mt-md">
+              <q-card-section class="bg-blue-grey-1 text-weight-bold text-primary text-uppercase">
+                {{ bloque.perfil }}
+              </q-card-section>
+              <q-markup-table flat dense separator="horizontal">
+                <thead><tr>
+                  <th class="text-left">Análisis</th><th class="text-left">Resultado</th>
+                  <th class="text-left">Referencia</th><th class="text-left">Método</th><th class="text-left">Muestra</th>
+                </tr></thead>
+                <tbody>
+                  <template v-for="laboratorio in bloque.laboratorios" :key="laboratorio.nombre">
+                    <tr v-if="laboratorio.resultados.length > 1"><td colspan="5" class="text-weight-bold">{{ laboratorio.nombre }}</td></tr>
+                    <tr v-for="resultado in laboratorio.resultados" :key="resultado.nombre">
+                      <td>{{ laboratorio.resultados.length === 1 ? laboratorio.nombre : resultado.nombre }}</td>
+                      <td class="text-weight-bold">{{ resultado.valor || '-' }} {{ resultado.unidad || '' }}</td>
+                      <td><div v-if="resultado.rango_referencia" class="html-rango" v-html="resultado.rango_referencia_html" /><template v-else>-</template></td>
+                      <td>{{ resultado.metodo || '-' }}</td>
+                      <td>{{ resultado.muestra || '-' }}</td>
+                    </tr>
+                  </template>
+                </tbody>
+              </q-markup-table>
+            </q-card>
+            <q-card v-else v-for="laboratorio in bloque.laboratorios" :key="laboratorio.nombre"
                     flat bordered class="q-mt-md">
               <q-card-section class="bg-blue-grey-1 text-weight-bold text-primary">
                 {{ laboratorio.nombre }}
@@ -62,6 +87,7 @@
                 </tr></tbody>
               </q-markup-table>
             </q-card>
+            </template>
 
             <div v-if="informe.observaciones" class="q-mt-md text-body2">
               <b>Observaciones:</b> {{ informe.observaciones }}
@@ -77,12 +103,19 @@
 </template>
 
 <script setup>
-import { getCurrentInstance, onMounted, ref } from 'vue'
+import { computed, getCurrentInstance, onMounted, ref } from 'vue'
 
 const { proxy } = getCurrentInstance()
 const loading = ref(true)
 const error = ref(false)
 const informe = ref(null)
+// Exámenes seguidos del mismo perfil van juntos bajo su título; los sueltos, uno por tarjeta.
+const bloques = computed(() => (informe.value?.laboratorios || []).reduce((lista, laboratorio, indice) => {
+  const ultimo = lista[lista.length - 1]
+  if (laboratorio.perfil && ultimo?.perfil === laboratorio.perfil) ultimo.laboratorios.push(laboratorio)
+  else lista.push({ clave: indice, perfil: laboratorio.perfil || null, laboratorios: [laboratorio] })
+  return lista
+}, []))
 
 function fecha (value) {
   if (!value) return '-'

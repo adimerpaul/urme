@@ -130,9 +130,10 @@ function login () {
   loading.value = true
   proxy.$axios.post('/login', { username: username.value, password: password.value })
     .then(res => {
-      const { user, token, must_change_password } = res.data
+      const { user, token, must_change_password, configuracion } = res.data
       proxy.$axios.defaults.headers.common.Authorization = `Bearer ${token}`
       proxy.$store.user = user
+      proxy.$store.configuracion = configuracion || {}
 
       if (must_change_password) {
         tempToken = token

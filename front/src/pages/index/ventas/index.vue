@@ -50,6 +50,20 @@
             <div class="text-subtitle1 text-weight-bold">{{ money(resumen.total_ventas) }} <span class="text-caption text-teal-2">Bs</span></div>
           </q-card>
         </div>
+        <!-- Lo cobrado separado por medio de pago (en MIXTO se reparte) -->
+        <div class="col-6 col-md">
+          <q-card flat bordered class="q-pa-sm rounded-borders full-height">
+            <div class="text-caption text-grey-6 text-uppercase text-weight-bold">Efectivo</div>
+            <div class="text-subtitle1 text-weight-bold text-green-8">{{ money(resumen.total_efectivo) }} <span class="text-caption text-grey-6">Bs</span></div>
+            <div class="text-caption text-grey-7">En caja (− gastos): <b>{{ money((Number(resumen.total_efectivo) || 0) - (Number(resumen.total_egresos) || 0)) }}</b> Bs</div>
+          </q-card>
+        </div>
+        <div class="col-6 col-md">
+          <q-card flat bordered class="q-pa-sm rounded-borders full-height">
+            <div class="text-caption text-grey-6 text-uppercase text-weight-bold">QR</div>
+            <div class="text-subtitle1 text-weight-bold text-indigo-8">{{ money(resumen.total_qr) }} <span class="text-caption text-grey-6">Bs</span></div>
+          </q-card>
+        </div>
         <!-- Gastos: dinero que salio de caja, no una venta -->
         <div class="col-6 col-md">
           <q-card flat bordered class="q-pa-sm rounded-borders full-height">
@@ -158,6 +172,22 @@
             <template v-slot:prepend><q-icon name="swap_vert" size="16px" color="grey-6" /></template>
           </q-select>
 
+          <q-select v-model="filtro.tipo_producto_padre_id" dense outlined clearable hide-bottom-space
+                    :options="padres" option-value="id" option-label="nombre" emit-value map-options
+                    :display-value="padreDisplay"
+                    :class="['filtros__campo', { 'filtros__campo--vacio': !filtro.tipo_producto_padre_id }]"
+                    style="width:160px" @update:model-value="onFiltroChange">
+            <template v-slot:prepend><q-icon name="category" size="16px" color="grey-6" /></template>
+          </q-select>
+
+          <q-select v-model="filtro.tipo_paciente" dense outlined clearable hide-bottom-space
+                    :options="opcionesTipoPaciente" option-value="value" option-label="label" emit-value map-options
+                    :display-value="tipoPacienteDisplay"
+                    :class="['filtros__campo', { 'filtros__campo--vacio': !filtro.tipo_paciente }]"
+                    style="width:150px" @update:model-value="onFiltroChange">
+            <template v-slot:prepend><q-icon name="local_hospital" size="16px" color="grey-6" /></template>
+          </q-select>
+
           <q-space />
           <span class="filtros__rango">{{ rangoFiltro }}</span>
 
@@ -170,6 +200,10 @@
           <q-btn dense unelevated no-caps size="sm" color="green-8" icon="table_view" label="Excel"
                  :loading="exportingExcel" :disable="exportingExcel" @click="exportExcel">
             <q-tooltip>Exportar el listado con los filtros actuales a Excel</q-tooltip>
+          </q-btn>
+          <q-btn dense unelevated no-caps size="sm" color="teal-8" icon="receipt" label="Facturados"
+                 :loading="exportingFacturadas" :disable="exportingFacturadas" @click="exportFacturadas">
+            <q-tooltip>Excel de las ventas con factura (N° de factura), con los filtros actuales</q-tooltip>
           </q-btn>
           <q-btn dense unelevated no-caps size="sm" color="red-7" icon="picture_as_pdf" label="PDF"
                  :loading="exportingPdf" :disable="exportingPdf" @click="exportPdf">
@@ -186,6 +220,7 @@
               <th class="text-left" style="width:44px">ID</th>
               <th class="text-left" style="width:118px">Fecha</th>
               <th class="text-center" style="width:82px">Tipo</th>
+              <th class="text-left" style="width:120px">Tipo padre</th>
               <th class="text-left">Cliente / Paciente</th>
               <th class="text-left" style="width:110px">Doctor</th>
               <th class="text-left" style="width:120px">Seguro</th>
@@ -197,7 +232,7 @@
           </thead>
           <tbody>
             <tr v-if="!ventas.length && !loadingVentas">
-              <td :colspan="canMontos ? 11 : 10" class="text-center text-grey-5 q-pa-md">Sin datos</td>
+              <td :colspan="canMontos ? 12 : 11" class="text-center text-grey-5 q-pa-md">Sin datos</td>
             </tr>
             <tr v-for="row in ventas" :key="row.id">
               <td class="q-pa-xs">
@@ -233,6 +268,15 @@
                          :color="esEgreso(row) ? 'deep-orange-1' : 'blue-1'"
                          :text-color="esEgreso(row) ? 'deep-orange-9' : 'blue-9'"
                          class="text-weight-bold">{{ esEgreso(row) ? 'GASTO' : 'VENTA' }}</q-badge>
+                <div v-if="row.tipo_paciente" class="text-grey-7" style="font-size:10px">{{ row.tipo_paciente }}</div>
+                <div v-if="row.servicio" class="text-teal-8" style="font-size:10px">{{ row.servicio }}</div>
+              </td>
+              <td :title="textoTiposPadre(row)">
+                <template v-if="row.tipos_padre?.length">
+                  <q-badge v-for="tp in row.tipos_padre" :key="tp.id" rounded class="q-mr-xs text-weight-bold"
+                           :color="tp.color || 'blue-grey'" text-color="white">{{ tp.nombre }}</q-badge>
+                </template>
+                <span v-else class="text-grey-5">—</span>
               </td>
               <!-- title: al recortarse con puntos suspensivos, el texto completo se ve al pasar el mouse -->
               <td :title="clienteRow(row)">
@@ -316,6 +360,7 @@
             <div class="text-right">
               <div><b>Total:</b> {{ money(detalleVenta?.total) }} Bs</div>
               <div><b>Tipo de pago:</b> {{ detalleVenta?.tipo_pago || '—' }}</div>
+              <div v-if="detalleVenta?.con_factura"><b>N° factura:</b> {{ detalleVenta?.numero_factura || '—' }}</div>
               <template v-if="detalleVenta?.tipo_pago === 'MIXTO'">
                 <div><b>Efectivo:</b> {{ money(detalleVenta?.monto_efectivo) }} Bs</div>
                 <div><b>QR:</b> {{ money(detalleVenta?.monto_qr) }} Bs</div>
@@ -378,13 +423,22 @@ const canDetalle  = computed(() => proxy.$store.hasPermission('Ver Detalle Venta
 // Montos acumulados de caja (tarjetas de totales): permiso aparte.
 const canMontos   = computed(() => proxy.$store.hasPermission('Ver Montos Caja'))
 
-const resumen = ref({ total_ventas: 0, total_egresos: 0, total_pendientes: 0, total_anuladas: 0, cantidad: 0 })
+const resumen = ref({ total_ventas: 0, total_efectivo: 0, total_qr: 0, total_egresos: 0, total_pendientes: 0, total_anuladas: 0, cantidad: 0 })
 
 // Un movimiento puede ser una venta (INGRESO) o un gasto de caja (EGRESO).
 const opcionesTipo = [
   { value: 'INGRESO', label: 'Ventas' },
   { value: 'EGRESO', label: 'Gastos' },
 ]
+
+// Tipo de paciente de la venta (los gastos y las ventas antiguas no lo tienen).
+const opcionesTipoPaciente = [
+  { value: 'EXTERNO', label: 'Externo' },
+  { value: 'INTERNO', label: 'Interno' },
+  { value: 'AMBULATORIO', label: 'Ambulatorio' },
+]
+const tipoPacienteDisplay = computed(() =>
+  opcionesTipoPaciente.find(o => o.value === filtro.value.tipo_paciente)?.label || 'Tipo paciente')
 
 function esEgreso (row) { return row?.tipo_movimiento === 'EGRESO' }
 
@@ -442,7 +496,15 @@ const filtro = ref({
   user_id: null,
   estado: null,
   tipo_movimiento: null,
+  tipo_producto_padre_id: null,
+  tipo_paciente: null,
 })
+
+// Tipos padre (LABORATORIO, FARMACIA, ...): llegan con cada carga del historial.
+const padres = ref([])
+const padreDisplay = computed(() =>
+  padres.value.find(p => p.id === filtro.value.tipo_producto_padre_id)?.nombre || 'Tipo padre')
+function textoTiposPadre (row) { return (row?.tipos_padre || []).map(t => t.nombre).join(', ') }
 
 /* Vendedores del rango: la lista llega con cada carga del historial y no se
    recorta al filtrar por usuario, así se puede saltar de uno a otro. El
@@ -512,6 +574,8 @@ function filtroParams () {
     user_id: filtro.value.user_id,
     estado: filtro.value.estado,
     tipo_movimiento: filtro.value.tipo_movimiento,
+    tipo_producto_padre_id: filtro.value.tipo_producto_padre_id,
+    tipo_paciente: filtro.value.tipo_paciente,
     solo_farmacia: props.soloFarmacia ? 1 : undefined,
   }
 }
@@ -523,8 +587,9 @@ async function loadVentas () {
       params: { page: pageVentas.value, per_page: perVentas, ...filtroParams() },
     })
     const data = res.data || {}
-    resumen.value = data.resumen || { total_ventas: 0, total_egresos: 0, total_anuladas: 0, cantidad: 0 }
+    resumen.value = data.resumen || { total_ventas: 0, total_efectivo: 0, total_qr: 0, total_egresos: 0, total_anuladas: 0, cantidad: 0 }
     usuarios.value = data.usuarios || []
+    padres.value = data.padres || []
     ventas.value = data.ventas?.data || []
     totalVentas.value = data.ventas?.total || 0
   } catch (e) {
@@ -557,6 +622,7 @@ async function imprimir (row) {
 
 // ── Exportar / imprimir el listado ─────────────────────────────
 const exportingExcel = ref(false)
+const exportingFacturadas = ref(false)
 const exportingPdf = ref(false)
 const imprimiendoLista = ref(false)
 
@@ -597,6 +663,25 @@ async function imprimirLista () {
     proxy.$alert.error('Error al imprimir')
   } finally {
     imprimiendoLista.value = false
+  }
+}
+
+async function exportFacturadas () {
+  exportingFacturadas.value = true
+  try {
+    const res = await proxy.$axios.get('ventas/export-facturadas', { params: filtroParams(), responseType: 'blob' })
+    const url = window.URL.createObjectURL(new Blob([res.data], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    }))
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'ventas_facturadas_' + hoyBolivia() + '.xlsx'
+    a.click()
+    window.URL.revokeObjectURL(url)
+  } catch (e) {
+    proxy.$alert.error('Error al generar el reporte de facturados')
+  } finally {
+    exportingFacturadas.value = false
   }
 }
 

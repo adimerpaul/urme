@@ -25,7 +25,7 @@ class PacienteController extends Controller
         $altaHasta = $request->input('alta_hasta', '');
         $perPage = (int) $request->input('per_page', 10);
 
-        $query = Paciente::with(['latestInternacion', 'seguro'])->orderBy('nombre_completo');
+        $query = Paciente::with(['latestInternacion', 'seguro', 'creadoPor:id,name'])->orderBy('nombre_completo');
 
         if ($q) {
             $query->where(function ($sq) use ($q) {
@@ -53,7 +53,11 @@ class PacienteController extends Controller
             $query->whereHas('latestInternacion', fn ($sq) => $sq->whereDate('fecha_alta', '<=', $altaHasta));
         }
 
-        return response()->json($query->paginate($perPage));
+        $pacientes = $query->paginate($perPage);
+        // Fecha y hora de registro: created_at está oculto en el modelo.
+        $pacientes->getCollection()->each->makeVisible('created_at');
+
+        return response()->json($pacientes);
     }
 
     /**
@@ -312,7 +316,10 @@ class PacienteController extends Controller
             'sexo' => 'nullable|in:M,F',
             'seguro_id' => 'nullable|exists:seguros,id',
         ]);
-        $paciente = Paciente::create($request->only(['seguro_id', 'nombre_completo', 'sexo', 'fecha_nacimiento', 'ci', 'estado', 'direccion', 'telefono']));
+        $paciente = Paciente::create([
+            ...$request->only(['seguro_id', 'nombre_completo', 'sexo', 'fecha_nacimiento', 'ci', 'estado', 'direccion', 'telefono']),
+            'user_id' => $request->user()->id,
+        ]);
 
         return response()->json($paciente, 201);
     }

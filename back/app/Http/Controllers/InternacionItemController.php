@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Internacion;
 use App\Models\InternacionItem;
+use App\Models\Producto;
 use Illuminate\Http\Request;
 
 class InternacionItemController extends Controller
@@ -17,6 +18,11 @@ class InternacionItemController extends Controller
             'cantidad' => 'required|numeric|min:0.01',
             'precio' => 'required|numeric|min:0',
         ]);
+
+        // Los perfiles de exámenes no se cargan a una internación (docs/PENDIENTES.md).
+        if ($request->producto_id && Producto::whereKey($request->producto_id)->where('es_perfil', true)->exists()) {
+            abort(422, 'Los perfiles de exámenes no se pueden cargar a una internación: agregue sus exámenes por separado.');
+        }
 
         $internacion = Internacion::findOrFail($internacionId);
         InternacionController::bloqueadaSiPagada($internacion);

@@ -27,6 +27,7 @@ class VentasExport implements FromCollection, ShouldAutoSize, WithHeadings, With
                 $venta->id,
                 optional($venta->fecha_hora)->format('d/m/Y H:i'),
                 $venta->esEgreso() ? 'GASTO' : 'VENTA',
+                $venta->tiposPadreTexto(),
                 self::cliente($venta),
                 $venta->paciente?->ci ?: '',
                 $venta->doctor?->nombre ?: '',
@@ -48,7 +49,7 @@ class VentasExport implements FromCollection, ShouldAutoSize, WithHeadings, With
         });
 
         if ($this->verMontos) {
-            $filas->push(array_merge(array_fill(0, 12, ''), ['NETO EN CAJA (ventas cobradas menos gastos)', self::neto($this->ventas)]));
+            $filas->push(array_merge(array_fill(0, 13, ''), ['NETO EN CAJA (ventas cobradas menos gastos)', self::neto($this->ventas)]));
         }
 
         return $filas;
@@ -56,7 +57,7 @@ class VentasExport implements FromCollection, ShouldAutoSize, WithHeadings, With
 
     public function headings(): array
     {
-        $cols = ['N°', 'Fecha y hora', 'Tipo', 'Cliente / Paciente', 'CI', 'Doctor', 'Seguro', 'Usuario', 'Estado', 'Pago', 'Detalle', 'Categoría', 'Subcategoría'];
+        $cols = ['N°', 'Fecha y hora', 'Tipo', 'Tipo padre', 'Cliente / Paciente', 'CI', 'Doctor', 'Seguro', 'Usuario', 'Estado', 'Pago', 'Detalle', 'Categoría', 'Subcategoría'];
         if ($this->verMontos) {
             $cols[] = 'Total (Bs)';
         }

@@ -7,6 +7,7 @@ use App\Models\Paciente;
 use App\Models\Producto;
 use App\Models\Solicitude;
 use App\Models\SolicitudLaboratorioItem;
+use App\Models\SolicitudLaboratorioPerfil;
 use App\Models\SolicitudLaboratorioResultado;
 use App\Models\User;
 use App\Models\Venta;
@@ -22,6 +23,9 @@ use OwenIt\Auditing\Models\Audit;
 
 class SolicitudeController extends Controller
 {
+    /** Hasta cuántas filas un perfil va entero en una página (ver docs/ANALISIS_PERFILES_FASE0.md, F4.4). */
+    private const FILAS_PERFIL_SIN_PARTIR = 12;
+
     public function index(Request $request)
     {
         $this->authorizeAny($request, 'Ver Solicitudes Laboratorio');
@@ -29,7 +33,8 @@ class SolicitudeController extends Controller
             'paciente:id,nombre_completo,ci,telefono',
             'doctor:id,nombre',
             'user:id,name',
-            'laboratorioItems:id,solicitude_id,producto_nombre,precio',
+            'laboratorioItems:id,solicitude_id,solicitud_laboratorio_perfil_id,producto_nombre,precio',
+            'laboratorioPerfiles:id,solicitude_id,nombre,precio,orden',
         ])->latest('fecha_solicitud')->latest('id');
 
         if ($q = trim((string) $request->input('q'))) {
@@ -58,13 +63,31 @@ class SolicitudeController extends Controller
     {
         $this->authorizeAny($request, ['Crear Solicitudes Laboratorio', 'Editar Solicitudes Laboratorio']);
 
+        $perfiles = config('laboratorio.perfiles_habilitado');
+        $laboratorios = Producto::query()
+            ->whereHas('tipoProducto', fn ($query) => $query->where('es_laboratorio', true))
+            ->when(! $perfiles, fn ($query) => $query->where('es_perfil', false))
+            ->with(['laboratorioDatos.formula', 'laboratorioDatos.opciones', 'laboratorioValidaciones' => fn ($query) => $query->where('activo', true)])
+            ->orderBy('nombre')
+            ->get(['id', 'codigo', 'nombre', 'precio', 'descripcion', 'es_perfil', 'tipo_producto_id']);
+
+        // Cada perfil lleva sus exámenes (en orden) y, si no se puede usar, el motivo.
+        // Se cargan de una vez para todos los perfiles: no hay una consulta por perfil.
+        $perfilesCargados = $laboratorios->where('es_perfil', true)->values();
+        $perfilesCargados->load([
+            'tipoProducto:id,es_laboratorio',
+            'perfilItems.producto' => fn ($query) => $query->withTrashed()->with('tipoProducto:id,es_laboratorio'),
+        ]);
+        $perfilesCargados->each(function (Producto $perfil) {
+            $perfil->setAttribute('examen_ids', $perfil->perfilItems->pluck('producto_id'));
+            $perfil->setAttribute('motivo_no_vendible', $perfil->motivoPerfilNoVendible());
+            $perfil->unsetRelation('perfilItems')->unsetRelation('tipoProducto');
+        });
+
         return response()->json([
             'doctores' => Doctor::where('estado', 'ACTIVO')->orderBy('nombre')->get(['id', 'nombre', 'registro']),
-            'laboratorios' => Producto::query()
-                ->whereHas('tipoProducto', fn ($query) => $query->where('es_laboratorio', true))
-                ->with(['laboratorioDatos.formula', 'laboratorioDatos.opciones', 'laboratorioValidaciones' => fn ($query) => $query->where('activo', true)])
-                ->orderBy('nombre')
-                ->get(['id', 'codigo', 'nombre', 'precio', 'descripcion']),
+            'laboratorios' => $laboratorios->values(),
+            'perfiles_habilitado' => (bool) $perfiles,
         ]);
     }
 
@@ -131,48 +154,60 @@ class SolicitudeController extends Controller
     public function store(Request $request)
     {
         $this->authorizeAny($request, 'Crear Solicitudes Laboratorio');
-        [$validated, $productos, $valores] = $this->validatedPayload($request);
+        [$validated, $plan, $valores] = $this->validatedPayload($request);
 
-        $solicitud = DB::transaction(function () use ($validated, $productos, $request, $valores) {
+        $solicitud = DB::transaction(function () use ($validated, $plan, $request, $valores) {
             $solicitud = Solicitude::create([
                 ...collect($validated)->except(['producto_ids', 'resultados'])->all(),
                 'user_id' => $request->user()->id,
                 'estado' => 'CREADO',
-                'total' => $productos->sum('precio'),
+                'total' => $plan['total'],
             ]);
             $solicitud->update([
                 'codigo_solicitud' => 'LAB-'.$solicitud->fecha_solicitud->format('Ymd').'-'.str_pad((string) $solicitud->id, 5, '0', STR_PAD_LEFT),
             ]);
-            $this->syncLaboratorios($solicitud, $productos, $valores);
+            $this->syncLaboratorios($solicitud, $plan, $valores);
 
             return $solicitud;
         });
 
-        return response()->json($solicitud->load(['paciente', 'doctor', 'laboratorioItems.resultados']), 201);
+        return response()->json($this->conAvisos($solicitud->load(['paciente', 'doctor', 'laboratorioPerfiles', 'laboratorioItems.resultados']), $plan), 201);
     }
 
     public function show(Request $request, Solicitude $solicitude)
     {
         $this->authorizeAny($request, 'Ver Solicitudes Laboratorio');
 
-        return response()->json($solicitude->load(['paciente.seguro', 'doctor', 'user', 'laboratorioItems.resultados']));
+        return response()->json($solicitude->load(['paciente.seguro', 'doctor', 'user', 'laboratorioPerfiles', 'laboratorioItems.resultados']));
     }
 
     public function update(Request $request, Solicitude $solicitude)
     {
         $this->authorizeAny($request, 'Editar Solicitudes Laboratorio');
         abort_unless($solicitude->estado === 'CREADO', 422, 'Solo se pueden modificar solicitudes en estado CREADO.');
-        [$validated, $productos, $valores] = $this->validatedPayload($request, $solicitude);
+        // Con los perfiles apagados, la pantalla no los conoce: guardarla perdería sus perfiles.
+        abort_if(
+            ! config('laboratorio.perfiles_habilitado') && $solicitude->laboratorioPerfiles()->exists(),
+            422,
+            'Esta solicitud incluye perfiles de exámenes y los perfiles están deshabilitados: no se puede modificar.'
+        );
+        [$validated, $plan, $valores] = $this->validatedPayload($request, $solicitude);
 
-        DB::transaction(function () use ($solicitude, $validated, $productos, $valores) {
+        DB::transaction(function () use ($solicitude, $validated, $plan, $valores) {
             $solicitude->update([
                 ...collect($validated)->except(['producto_ids', 'resultados'])->all(),
-                'total' => $productos->sum('precio'),
+                'total' => $plan['total'],
             ]);
-            $this->syncLaboratorios($solicitude, $productos, $valores);
+            $this->syncLaboratorios($solicitude, $plan, $valores);
         });
 
-        return response()->json($solicitude->load(['paciente', 'doctor', 'laboratorioItems.resultados']));
+        return response()->json($this->conAvisos($solicitude->load(['paciente', 'doctor', 'laboratorioPerfiles', 'laboratorioItems.resultados']), $plan));
+    }
+
+    /** Agrega los avisos de la expansión (exámenes compartidos) a la respuesta, si los hay. */
+    private function conAvisos(Solicitude $solicitud, array $plan): Solicitude
+    {
+        return $plan['avisos'] ? $solicitud->setAttribute('avisos', $plan['avisos']) : $solicitud;
     }
 
     public function pdf(Request $request, Solicitude $solicitude)
@@ -196,6 +231,7 @@ class SolicitudeController extends Controller
             'user',
             'laboratorioItems.producto.tipoProducto:id,nombre',
             'laboratorioItems.resultados',
+            'laboratorioItems.perfil',
         ]);
 
         $impresoPor = $request->user();
@@ -254,7 +290,16 @@ class SolicitudeController extends Controller
                 })
                 ->get();
 
+        $auditoriasPerfiles = Audit::query()
+            ->where('auditable_type', SolicitudLaboratorioPerfil::class)
+            ->where(function ($query) use ($solicitude) {
+                $query->where('new_values->solicitude_id', $solicitude->id)
+                    ->orWhere('old_values->solicitude_id', $solicitude->id);
+            })
+            ->get();
+
         $auditorias = $auditoriasSolicitud
+            ->concat($auditoriasPerfiles)
             ->concat($auditoriasItems)
             ->concat($auditoriasResultados)
             ->sortByDesc(fn ($audit) => sprintf('%s-%010d', $audit->created_at, $audit->id))
@@ -266,7 +311,8 @@ class SolicitudeController extends Controller
             $anteriores = $audit->old_values ?? [];
             $nuevos = $audit->new_values ?? [];
             $valores = array_merge($anteriores, $nuevos);
-            $camposIgnorados = ['id', 'solicitude_id', 'solicitud_laboratorio_item_id', 'producto_id', 'producto_laboratorio_dato_id'];
+            $camposIgnorados = ['id', 'solicitude_id', 'solicitud_laboratorio_item_id', 'producto_id', 'producto_laboratorio_dato_id',
+                'perfil_producto_id', 'solicitud_laboratorio_perfil_id'];
             $campos = collect(array_unique(array_merge(array_keys($anteriores), array_keys($nuevos))))
                 ->reject(fn ($campo) => in_array($campo, $camposIgnorados, true))
                 ->map(fn ($campo) => [
@@ -278,6 +324,7 @@ class SolicitudeController extends Controller
             $entidad = match ($audit->auditable_type) {
                 SolicitudLaboratorioResultado::class => 'Resultado: '.($valores['nombre'] ?? '#'.$audit->auditable_id),
                 SolicitudLaboratorioItem::class => 'Prueba: '.($valores['producto_nombre'] ?? '#'.$audit->auditable_id),
+                SolicitudLaboratorioPerfil::class => 'Perfil: '.($valores['nombre'] ?? '#'.$audit->auditable_id),
                 default => 'Solicitud '.($valores['codigo_solicitud'] ?? '#'.$audit->auditable_id),
             };
             $usuario = $usuarios->get($audit->user_id);
@@ -299,7 +346,7 @@ class SolicitudeController extends Controller
 
         $solicitude = Solicitude::query()
             ->where('codigo_verificacion', $codigo)
-            ->with(['paciente', 'doctor', 'laboratorioItems.resultados'])
+            ->with(['paciente', 'doctor', 'laboratorioItems.resultados', 'laboratorioItems.perfil'])
             ->firstOrFail();
 
         return response()->json([
@@ -321,6 +368,8 @@ class SolicitudeController extends Controller
                 ->filter(fn ($item) => $item->resultados->where('visible', true)->isNotEmpty())
                 ->map(fn ($item) => [
                     'nombre' => $item->producto_nombre,
+                    // Nombre del perfil guardado en la solicitud (null: examen suelto).
+                    'perfil' => $item->perfil?->nombre,
                     'resultados' => $item->resultados->where('visible', true)->values()->map(fn ($resultado) => [
                         'nombre' => $resultado->nombre,
                         'valor' => $resultado->valor,
@@ -379,17 +428,80 @@ class SolicitudeController extends Controller
         $productos = Producto::query()
             ->whereIn('id', $validated['producto_ids'])
             ->whereHas('tipoProducto', fn ($query) => $query->where('es_laboratorio', true))
+            // Con los perfiles apagados, un perfil no cuenta como prueba de laboratorio.
+            ->when(! config('laboratorio.perfiles_habilitado'), fn ($query) => $query->where('es_perfil', false))
             ->with(['laboratorioDatos.formula', 'laboratorioDatos.opciones'])
             ->get()
-            ->sortBy(fn ($producto) => array_search($producto->id, $validated['producto_ids'], true))
+            ->sortBy(fn ($producto) => array_search($producto->id, array_map('intval', $validated['producto_ids']), true))
             ->values();
         abort_unless($productos->count() === count($validated['producto_ids']), 422, 'Seleccione únicamente productos de laboratorio.');
 
         return [
             $validated,
-            $productos,
+            $this->planLaboratorios($productos),
             collect($validated['resultados'] ?? [])->keyBy('producto_laboratorio_dato_id'),
         ];
+    }
+
+    /**
+     * Expande los perfiles en sus exámenes, en el orden elegido. Devuelve las filas
+     * (un perfil con sus exámenes, o un examen suelto), el total y los avisos.
+     * Un examen suelto que ya incluye un perfil se rechaza; un examen compartido
+     * por dos perfiles queda solo en el primero.
+     */
+    private function planLaboratorios($seleccion): array
+    {
+        $perfiles = $seleccion->where('es_perfil', true)->values();
+        foreach ($perfiles as $perfil) {
+            if ($motivo = $perfil->motivoPerfilNoVendible()) {
+                abort(422, $motivo);
+            }
+        }
+
+        $composicion = $perfiles->mapWithKeys(fn ($perfil) => [
+            $perfil->id => $perfil->perfilItems()->pluck('producto_id')->map(fn ($id) => (int) $id)->all(),
+        ]);
+        $examenes = Producto::query()
+            ->whereIn('id', $composicion->flatten()->unique()->all())
+            ->with(['laboratorioDatos.formula', 'laboratorioDatos.opciones'])
+            ->get()
+            ->keyBy('id');
+
+        foreach ($seleccion->where('es_perfil', false) as $suelto) {
+            $perfil = $perfiles->first(fn ($perfil) => in_array($suelto->id, $composicion[$perfil->id], true));
+            if ($perfil) {
+                abort(422, "{$suelto->nombre} está incluido en el perfil {$perfil->nombre}: quítelo de los exámenes sueltos.");
+            }
+        }
+
+        $filas = [];
+        $asignados = [];
+        $avisos = [];
+        foreach ($seleccion as $producto) {
+            if (! $producto->es_perfil) {
+                $filas[] = ['perfil' => null, 'examenes' => [$producto]];
+
+                continue;
+            }
+            $fila = ['perfil' => $producto, 'examenes' => []];
+            foreach ($composicion[$producto->id] as $id) {
+                if (isset($asignados[$id])) {
+                    $avisos[] = "{$examenes[$id]->nombre} está en {$producto->nombre} y en {$asignados[$id]}: aparece una sola vez, en {$asignados[$id]}.";
+
+                    continue;
+                }
+                $asignados[$id] = $producto->nombre;
+                $fila['examenes'][] = $examenes[$id];
+            }
+            $filas[] = $fila;
+        }
+
+        // Los exámenes de un perfil van en 0: el perfil se cobra por su precio.
+        $total = collect($filas)->sum(fn ($fila) => $fila['perfil']
+            ? (float) $fila['perfil']->precio
+            : (float) $fila['examenes'][0]->precio);
+
+        return ['filas' => $filas, 'total' => round($total, 2), 'avisos' => $avisos];
     }
 
     /**
@@ -434,7 +546,22 @@ class SolicitudeController extends Controller
 
         $bloques = [];
         $indiceGrupo = [];
+        $indicePerfil = [];
         foreach ($items as $posicion => $item) {
+            // Examen de un perfil: va al bloque de su perfil, en la posición del
+            // primero. Dentro del perfil no se aplica grupo_reporte.
+            if ($item->solicitud_laboratorio_perfil_id && $item->perfil) {
+                $clave = $item->solicitud_laboratorio_perfil_id;
+                if (! isset($indicePerfil[$clave])) {
+                    $indicePerfil[$clave] = count($bloques);
+                    // Nombre guardado en la solicitud: vale aunque el perfil ya no exista en el catálogo.
+                    $bloques[] = ['tipo' => 'perfil', 'titulo' => $item->perfil->nombre, 'items' => []];
+                }
+                $bloques[$indicePerfil[$clave]]['items'][] = $item;
+
+                continue;
+            }
+
             $grupo = trim((string) $item->producto?->grupo_reporte);
             if ($grupo === '') {
                 $bloques[] = ['tipo' => 'producto', 'item' => $item];
@@ -476,55 +603,137 @@ class SolicitudeController extends Controller
             unset($bloques[$indice]['items']);
         }
 
-        return $bloques;
-    }
-
-    private function syncLaboratorios(Solicitude $solicitud, $productos, $valores): void
-    {
-        $itemsAnteriores = $solicitud->laboratorioItems()->with('resultados')->get()->keyBy('producto_id');
-
-        foreach ($productos as $indice => $producto) {
-            $datosItem = [
-                'producto_id' => $producto->id,
-                'producto_nombre' => $producto->nombre,
-                'precio' => $producto->precio,
-                'orden' => ($indice + 1) * 10,
-            ];
-            $item = $itemsAnteriores->pull($producto->id);
-            if ($item) {
-                $item->update($datosItem);
-            } else {
-                $item = $solicitud->laboratorioItems()->create($datosItem);
-            }
-            $resultadosAnteriores = $item->resultados->keyBy('producto_laboratorio_dato_id');
-
-            foreach ($producto->laboratorioDatos as $dato) {
-                $valorConfigurado = $valores->get($dato->id, []);
-                $datosResultado = [
-                    'producto_laboratorio_dato_id' => $dato->id,
-                    'nombre' => $dato->nombre,
-                    'nombre_variable' => $dato->nombre_variable,
-                    'unidad' => $dato->unidad,
-                    'metodo' => $dato->metodo,
-                    'muestra' => $dato->muestra,
-                    'rango_referencia' => $dato->rango_referencia,
-                    'formula' => $dato->formula?->formula,
-                    'valor' => $valorConfigurado['valor'] ?? null,
-                    'orden' => $dato->orden,
-                    'visible' => array_key_exists('visible', $valorConfigurado)
-                        ? (bool) $valorConfigurado['visible']
-                        : $dato->visible,
-                ];
-                $resultado = $resultadosAnteriores->pull($dato->id);
-                $resultado ? $resultado->update($datosResultado) : $item->resultados()->create($datosResultado);
-            }
-            $resultadosAnteriores->each->delete();
+        foreach ($indicePerfil as $indice) {
+            $bloques[$indice] = $this->bloquePerfil($bloques[$indice]);
         }
 
+        // Un perfil sin ningún resultado visible no se imprime (ni su título solo).
+        return array_values(array_filter($bloques, fn ($bloque) => $bloque['tipo'] !== 'perfil' || $bloque['tiene_resultados']));
+    }
+
+    /**
+     * Filas del bloque de un perfil, en el orden guardado: una fila «ÁREA DE …»
+     * cada vez que cambia el área; un examen de un solo resultado es una fila
+     * con su nombre; uno de varios lleva un subtítulo y debajo sus resultados.
+     * Las descripciones de los exámenes van al pie, sin repetir.
+     */
+    private function bloquePerfil(array $bloque): array
+    {
+        $filas = [];
+        $descripciones = [];
+        $areaAnterior = null;
+        foreach ($bloque['items'] as $item) {
+            if (filled($item->producto?->descripcion)) {
+                $descripciones[(string) $item->producto->descripcion] = $item->producto->descripcion_html;
+            }
+            $visibles = $item->resultados->where('visible', true)->values();
+            if ($visibles->isEmpty()) {
+                continue;
+            }
+            $area = $item->producto?->tipoProducto?->nombre ?: 'LABORATORIO';
+            if ($area !== $areaAnterior) {
+                $filas[] = ['tipo' => 'area', 'nombre' => $area];
+                $areaAnterior = $area;
+            }
+            if ($item->resultados->count() === 1) {
+                $filas[] = ['tipo' => 'resultado', 'nombre' => $item->producto_nombre, 'resultado' => $visibles->first()];
+
+                continue;
+            }
+            $filas[] = ['tipo' => 'examen', 'nombre' => $item->producto_nombre];
+            foreach ($visibles as $resultado) {
+                $filas[] = ['tipo' => 'resultado', 'nombre' => $resultado->nombre, 'resultado' => $resultado];
+            }
+        }
+
+        return [
+            'tipo' => 'perfil',
+            'titulo' => $bloque['titulo'],
+            'filas' => $filas,
+            'descripciones' => array_values($descripciones),
+            'tiene_resultados' => collect($filas)->contains('tipo', 'resultado'),
+            // Corto: cabe en una página y se imprime sin partir; largo: repite el título en cada página.
+            'corto' => count($filas) <= self::FILAS_PERFIL_SIN_PARTIR,
+        ];
+    }
+
+    /**
+     * Guarda el plan de planLaboratorios(). Las filas de perfil y los ítems que ya
+     * existían se reutilizan (por perfil y por examen), así un examen conserva sus
+     * resultados aunque pase de suelto a un perfil o al revés. Lo que sobra se
+     * quita con soft delete.
+     */
+    private function syncLaboratorios(Solicitude $solicitud, array $plan, $valores): void
+    {
+        $itemsAnteriores = $solicitud->laboratorioItems()->with('resultados')->get()->keyBy('producto_id');
+        $perfilesAnteriores = $solicitud->laboratorioPerfiles()->get()->keyBy('perfil_producto_id');
+        $posicion = 0;
+
+        foreach ($plan['filas'] as $fila) {
+            $perfilSolicitud = null;
+            if ($fila['perfil']) {
+                // El orden del perfil es el de su primer examen: así se mezcla con los sueltos.
+                $datosPerfil = [
+                    'perfil_producto_id' => $fila['perfil']->id,
+                    'nombre' => $fila['perfil']->nombre,
+                    'precio' => $fila['perfil']->precio,
+                    'orden' => ($posicion + 1) * 10,
+                ];
+                $perfilSolicitud = $perfilesAnteriores->pull($fila['perfil']->id);
+                $perfilSolicitud
+                    ? $perfilSolicitud->update($datosPerfil)
+                    : $perfilSolicitud = $solicitud->laboratorioPerfiles()->create($datosPerfil);
+            }
+            foreach ($fila['examenes'] as $producto) {
+                $this->guardarExamen($solicitud, $producto, $perfilSolicitud, ++$posicion * 10, $itemsAnteriores, $valores);
+            }
+        }
+
+        $perfilesAnteriores->each->delete();
         $itemsAnteriores->each(function ($item) {
             $item->resultados->each->delete();
             $item->delete();
         });
+    }
+
+    private function guardarExamen(Solicitude $solicitud, Producto $producto, $perfilSolicitud, int $orden, $itemsAnteriores, $valores): void
+    {
+        $datosItem = [
+            'producto_id' => $producto->id,
+            'solicitud_laboratorio_perfil_id' => $perfilSolicitud?->id,
+            'producto_nombre' => $producto->nombre,
+            'precio' => $perfilSolicitud ? 0 : $producto->precio,
+            'orden' => $orden,
+        ];
+        $item = $itemsAnteriores->pull($producto->id);
+        if ($item) {
+            $item->update($datosItem);
+        } else {
+            $item = $solicitud->laboratorioItems()->create($datosItem);
+        }
+        $resultadosAnteriores = $item->resultados->keyBy('producto_laboratorio_dato_id');
+
+        foreach ($producto->laboratorioDatos as $dato) {
+            $valorConfigurado = $valores->get($dato->id, []);
+            $datosResultado = [
+                'producto_laboratorio_dato_id' => $dato->id,
+                'nombre' => $dato->nombre,
+                'nombre_variable' => $dato->nombre_variable,
+                'unidad' => $dato->unidad,
+                'metodo' => $dato->metodo,
+                'muestra' => $dato->muestra,
+                'rango_referencia' => $dato->rango_referencia,
+                'formula' => $dato->formula?->formula,
+                'valor' => $valorConfigurado['valor'] ?? null,
+                'orden' => $dato->orden,
+                'visible' => array_key_exists('visible', $valorConfigurado)
+                    ? (bool) $valorConfigurado['visible']
+                    : $dato->visible,
+            ];
+            $resultado = $resultadosAnteriores->pull($dato->id);
+            $resultado ? $resultado->update($datosResultado) : $item->resultados()->create($datosResultado);
+        }
+        $resultadosAnteriores->each->delete();
     }
 
     private function authorizeAny(Request $request, string|array $permissions): void

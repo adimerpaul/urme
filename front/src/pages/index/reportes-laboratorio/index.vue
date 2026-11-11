@@ -38,7 +38,7 @@
     </q-card>
 
     <div class="row q-col-gutter-sm q-mb-md">
-      <div v-for="stat in indicadores" :key="stat.label" class="col-12 col-sm-4">
+      <div v-for="stat in indicadores" :key="stat.label" class="col-12" :class="indicadores.length > 3 ? 'col-sm-3' : 'col-sm-4'">
         <q-card flat bordered class="q-pa-md">
           <div class="text-caption text-grey-7">{{ stat.label }}</div>
           <div class="text-h5 text-primary">{{ stat.value }}</div>
@@ -49,7 +49,7 @@
       Período aplicado: {{ aplicado.desde }} al {{ aplicado.hasta }} · {{ aplicado.nombre || 'Todos los laboratorios' }}.
       Las exportaciones incluyen todas las páginas de este filtro.
     </div>
-    <q-table ref="tableRef" flat bordered :rows="rows" :columns="columns" row-key="id" :loading="loading"
+    <q-table ref="tableRef" flat bordered :rows="rows" :columns="columns" :row-key="row => (row.clase || 'examen') + row.id" :loading="loading"
              v-model:pagination="pagination" :rows-per-page-options="[15, 25, 50, 100]" @request="onRequest"
              no-data-label="No hay laboratorios para los filtros seleccionados." />
   </q-page>
@@ -72,6 +72,8 @@ const money = value => Number(value || 0).toFixed(2)
 const indicadores = computed(() => [
   { label: 'Solicitudes', value: resumen.value.solicitudes },
   { label: 'Pruebas de laboratorio', value: resumen.value.pruebas },
+  // Los perfiles se cobran por su precio; sus exámenes figuran como "Incluido en …".
+  ...(resumen.value.perfiles ? [{ label: 'Perfiles', value: resumen.value.perfiles }] : []),
   { label: 'Importe de pruebas (Bs)', value: money(resumen.value.importe) },
 ])
 const columns = [
@@ -79,9 +81,9 @@ const columns = [
   { name: 'codigo', label: 'Solicitud', field: row => row.solicitude?.codigo_completo, align: 'left' },
   { name: 'paciente', label: 'Paciente', field: row => row.solicitude?.paciente?.nombre_completo || '—', align: 'left' },
   { name: 'ci', label: 'CI', field: row => row.solicitude?.paciente?.ci || '—', align: 'left' },
-  { name: 'laboratorio', label: 'Laboratorio / prueba', field: 'producto_nombre', align: 'left' },
+  { name: 'laboratorio', label: 'Laboratorio / prueba', field: row => row.clase === 'perfil' ? `${row.producto_nombre} (PERFIL)` : row.producto_nombre, align: 'left' },
   { name: 'estado', label: 'Estado', field: row => row.solicitude?.estado, align: 'left' },
-  { name: 'precio', label: 'Importe (Bs)', field: 'precio', format: money, align: 'right' },
+  { name: 'precio', label: 'Importe (Bs)', field: row => row.perfil_nombre ? `Incluido en ${row.perfil_nombre}` : money(row.precio), align: 'right' },
 ]
 function cambiarMes () {
   if (!/^\d{4}-\d{2}$/.test(mes.value)) return

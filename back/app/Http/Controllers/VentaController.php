@@ -3,8 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Exports\VentasExport;
+use App\Exports\VentasFacturadasExport;
 use App\Models\CompraDetalle;
 use App\Models\Producto;
+use App\Models\TipoProductoPadre;
 use App\Models\Venta;
 use App\Models\VentaDetalle;
 use App\Services\StockLote;
@@ -70,16 +72,39 @@ class VentaController extends Controller
             $this->soloFarmacia($usuariosQuery);
         }
 
+        // Tipo padre (LABORATORIO, FARMACIA, ...): afecta listado, resumen y vendedores.
+        if ($padreId = $request->input('tipo_producto_padre_id')) {
+            $query->deTipoPadre($padreId);
+            $resumenQuery->deTipoPadre($padreId);
+            $usuariosQuery->deTipoPadre($padreId);
+        }
+
+        // Tipo de paciente (INTERNO, EXTERNO, AMBULATORIO): afecta listado, resumen y vendedores.
+        if ($tipoPaciente = $this->tipoPacienteFiltro($request)) {
+            $query->where('tipo_paciente', $tipoPaciente);
+            $resumenQuery->where('tipo_paciente', $tipoPaciente);
+            $usuariosQuery->where('tipo_paciente', $tipoPaciente);
+        }
+
+        $ventas = $query->paginate($perPage);
+        Venta::cargarTiposPadre($ventas->getCollection());
+
         // Los montos acumulados de caja solo se envían a quien tiene el permiso.
         $verMontos = $request->user()->can('Ver Montos Caja');
+
+        // Ventas cobradas: activas o pendientes que ya se cobraron.
+        $cobradas = fn () => (clone $resumenQuery)->where('tipo_movimiento', 'INGRESO')->where(function ($query) {
+            $query->where('estado', 'ACTIVO')
+                ->orWhere(fn ($pendiente) => $pendiente->where('estado', 'PENDIENTE')->whereNotNull('fecha_hora_cobro'));
+        });
 
         return response()->json([
             'ver_montos' => $verMontos,
             'resumen' => $verMontos ? [
-                'total_ventas' => (clone $resumenQuery)->where('tipo_movimiento', 'INGRESO')->where(function ($query) {
-                    $query->where('estado', 'ACTIVO')
-                        ->orWhere(fn ($pendiente) => $pendiente->where('estado', 'PENDIENTE')->whereNotNull('fecha_hora_cobro'));
-                })->sum('total'),
+                'total_ventas' => $cobradas()->sum('total'),
+                // Cuánto de lo cobrado entró en efectivo y cuánto por QR (monto_efectivo + monto_qr = total).
+                'total_efectivo' => $cobradas()->sum('monto_efectivo'),
+                'total_qr' => $cobradas()->sum('monto_qr'),
                 'total_egresos' => (clone $resumenQuery)->where('tipo_movimiento', 'EGRESO')->where('estado', 'ACTIVO')->sum('total'),
                 'total_pendientes' => (clone $resumenQuery)->where('estado', 'PENDIENTE')->whereNull('fecha_hora_cobro')->sum('total'),
                 'total_anuladas' => (clone $resumenQuery)->where('estado', 'ANULADO')->sum('total'),
@@ -88,7 +113,8 @@ class VentaController extends Controller
                 'cantidad_pendientes' => (clone $resumenQuery)->where('estado', 'PENDIENTE')->whereNull('fecha_hora_cobro')->count(),
             ] : null,
             'usuarios' => $this->usuariosVendedores($usuariosQuery),
-            'ventas' => $query->paginate($perPage),
+            'padres' => TipoProductoPadre::orderBy('orden')->orderBy('nombre')->get(['id', 'nombre', 'color']),
+            'ventas' => $ventas,
         ]);
     }
 
@@ -119,8 +145,26 @@ class VentaController extends Controller
         return $pdf->stream('ventas_'.now()->format('Ymd_His').'.pdf');
     }
 
+    /**
+     * Excel de las ventas facturadas (marcadas "Con factura") con los filtros
+     * de la pantalla. Los gastos nunca llevan factura, así que no entran.
+     */
+    public function exportFacturadas(Request $request)
+    {
+        $this->req($request, 'Ver Ventas');
+
+        return Excel::download(
+            new VentasFacturadasExport(
+                $this->ventasExport($request, true),
+                $request->user()->can('Ver Montos Caja'),
+                $this->rangoTexto($request)
+            ),
+            'ventas_facturadas_'.now()->format('Ymd_His').'.xlsx'
+        );
+    }
+
     /** Todas las ventas que cumplen los filtros del historial, en orden cronológico. */
-    private function ventasExport(Request $request)
+    private function ventasExport(Request $request, bool $soloFacturadas = false)
     {
         $query = Venta::with([
             'paciente:id,nombre_completo,ci',
@@ -129,7 +173,7 @@ class VentaController extends Controller
             'user:id,name',
             'categoriaGasto:id,nombre',
             'subcategoriaGasto:id,nombre',
-            'detalles:id,venta_id,nombre',
+            'detalles:id,venta_id,nombre,cantidad',
         ])->orderBy('fecha_hora');
 
         $this->applyFiltros(
@@ -147,8 +191,21 @@ class VentaController extends Controller
         if ($request->boolean('solo_farmacia')) {
             $this->soloFarmacia($query);
         }
+        if ($padreId = $request->input('tipo_producto_padre_id')) {
+            $query->deTipoPadre($padreId);
+        }
+        if ($tipoPaciente = $this->tipoPacienteFiltro($request)) {
+            $query->where('tipo_paciente', $tipoPaciente);
+        }
 
-        return $query->get();
+        if ($soloFacturadas) {
+            $query->where('tipo_movimiento', 'INGRESO')->where('con_factura', true);
+        }
+
+        $ventas = $query->get();
+        Venta::cargarTiposPadre($ventas);
+
+        return $ventas;
     }
 
     private function rangoTexto(Request $request): string
@@ -160,7 +217,15 @@ class VentaController extends Controller
             ? $request->input('fecha_fin').' '.($request->input('hora_fin') ?: '23:59')
             : 'la última venta';
 
-        return "Desde {$desde} hasta {$hasta}";
+        $texto = "Desde {$desde} hasta {$hasta}";
+        if ($padreId = $request->input('tipo_producto_padre_id')) {
+            $texto .= ' · Tipo: '.(TipoProductoPadre::withTrashed()->find($padreId)?->nombre ?? '—');
+        }
+        if ($tipoPaciente = $this->tipoPacienteFiltro($request)) {
+            $texto .= ' · Paciente: '.$tipoPaciente;
+        }
+
+        return $texto;
     }
 
     /**
@@ -203,12 +268,16 @@ class VentaController extends Controller
         }
 
         $request->validate([
+            'tipo_paciente' => 'required|in:INTERNO,EXTERNO,AMBULATORIO',
+            'servicio' => 'nullable|string|max:100',
             'paciente_id' => 'nullable|exists:pacientes,id',
             'doctor_id' => 'nullable|exists:doctores,id',
             'seguro_id' => 'nullable|exists:seguros,id',
             'cliente' => 'nullable|string|max:255',
             'tipo_pago' => 'nullable|in:EFECTIVO,QR,MIXTO',
             'comentario' => 'nullable|string|max:500',
+            'con_factura' => 'nullable|boolean',
+            'numero_factura' => 'required_if_accepted:con_factura|nullable|string|max:50',
             'pago' => 'nullable|numeric|min:0',
             'monto_efectivo' => 'nullable|numeric|min:0',
             'monto_qr' => 'nullable|numeric|min:0',
@@ -228,6 +297,8 @@ class VentaController extends Controller
             $venta = Venta::create([
                 'user_id' => $request->user()->id,
                 'tipo_movimiento' => 'INGRESO',
+                'tipo_paciente' => $request->tipo_paciente,
+                'servicio' => ($servicio = trim((string) $request->servicio)) !== '' ? mb_strtoupper($servicio) : null,
                 'paciente_id' => $request->paciente_id ?: null,
                 'doctor_id' => $request->doctor_id ?: null,
                 'seguro_id' => $request->seguro_id ?: null,
@@ -236,6 +307,8 @@ class VentaController extends Controller
                 'fecha_hora' => now(),
                 'tipo_pago' => $request->tipo_pago ? mb_strtoupper($request->tipo_pago) : 'EFECTIVO',
                 'comentario' => $request->comentario ?: null,
+                'con_factura' => $request->boolean('con_factura'),
+                'numero_factura' => $request->boolean('con_factura') ? trim((string) $request->numero_factura) : null,
                 'estado' => $estado,
                 'total' => 0,
                 'pago' => 0,
@@ -248,6 +321,16 @@ class VentaController extends Controller
                 $producto = ! empty($item['producto_id'])
                     ? Producto::with('tipoProducto:id,nombre')->find($item['producto_id'])
                     : null;
+                // Perfil de exámenes: una sola línea con su precio, sin lote ni stock.
+                // Solo con los perfiles habilitados y si todos sus exámenes están activos.
+                if ($producto?->es_perfil) {
+                    if (! config('laboratorio.perfiles_habilitado')) {
+                        abort(422, "{$producto->nombre} es un perfil de exámenes: todavía no se puede vender");
+                    }
+                    if ($motivo = $producto->motivoPerfilNoVendible()) {
+                        abort(422, $motivo);
+                    }
+                }
                 $precio = (float) $item['precio'];
                 $cantidad = (float) $item['cantidad'];
 
@@ -493,6 +576,28 @@ class VentaController extends Controller
             'monto_efectivo' => $total,
             'monto_qr' => 0,
         ];
+    }
+
+    /** Servicios ya usados en ventas (CURACIÓN, PEDIATRÍA, ...): sugerencias del formulario. */
+    public function servicios(Request $request)
+    {
+        $this->req($request, ['Crear Ventas', 'Ver Ventas']);
+
+        return response()->json(
+            Venta::whereNotNull('servicio')
+                ->where('servicio', '<>', '')
+                ->distinct()
+                ->orderBy('servicio')
+                ->pluck('servicio')
+        );
+    }
+
+    /** Filtro de tipo de paciente: solo acepta los tres valores válidos. */
+    private function tipoPacienteFiltro(Request $request): ?string
+    {
+        $tipo = mb_strtoupper((string) $request->input('tipo_paciente', ''));
+
+        return in_array($tipo, ['INTERNO', 'EXTERNO', 'AMBULATORIO'], true) ? $tipo : null;
     }
 
     private function applyFiltros($query, $fechaInicio, $fechaFin, $pacienteId, $userId, $estado, $horaInicio = '', $horaFin = '', $tipoMovimiento = ''): void

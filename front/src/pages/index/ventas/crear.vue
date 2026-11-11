@@ -107,16 +107,18 @@
                 <tr v-for="p in productos" :key="p.id">
                   <td class="text-center">
                     <q-btn dense round unelevated size="sm" color="primary" icon="add"
-                           :disable="esProductoFarmacia(p) && cantidadDisponibleProducto(p) <= 0"
+                           :disable="(esProductoFarmacia(p) && cantidadDisponibleProducto(p) <= 0) || perfilNoVendible(p)"
                            @click="agregarProducto(p)">
                       <q-tooltip>
-                        {{ !esProductoFarmacia(p) || cantidadDisponibleProducto(p) > 0 ? 'Agregar a la venta' : 'Sin lote disponible' }}
+                        {{ perfilNoVendible(p) ? 'Perfil con exámenes inactivos: no se puede vender'
+                          : !esProductoFarmacia(p) || cantidadDisponibleProducto(p) > 0 ? 'Agregar a la venta' : 'Sin lote disponible' }}
                       </q-tooltip>
                     </q-btn>
                   </td>
                   <td>{{ p.codigo || '—' }}</td>
                   <td>
                     {{ p.nombre }}
+                    <q-badge v-if="p.es_perfil" color="deep-purple" class="q-ml-xs">PERFIL</q-badge>
                     <div v-if="p.nombre_comercial" class="text-caption text-grey-7">{{ p.nombre_comercial }}</div>
                   </td>
                   <td>
@@ -256,6 +258,24 @@
           <q-form @submit.prevent="confirmarVenta">
             <div class="row q-col-gutter-sm q-mb-sm">
               <div class="col-12">
+                <div class="text-caption text-grey-8">Tipo de paciente *</div>
+                <q-btn-toggle v-model="nueva.tipo_paciente" spread no-caps dense unelevated
+                              toggle-color="primary" color="grey-3" text-color="grey-9"
+                              :options="opcionesTipoPaciente" />
+              </div>
+              <div class="col-12">
+                <q-select v-model="nueva.servicio" label="Servicio (Curación, Ginecología, Pediatría...)"
+                          dense outlined clearable use-input fill-input hide-selected
+                          input-debounce="0" :options="opcionesServicio"
+                          new-value-mode="add-unique"
+                          hint="Elija uno o escriba uno nuevo"
+                          @filter="filtrarServicios" @input-value="v => nueva.servicio = v">
+                  <template v-slot:no-option>
+                    <q-item><q-item-section class="text-grey">Escriba el servicio</q-item-section></q-item>
+                  </template>
+                </q-select>
+              </div>
+              <div class="col-12">
                 <q-select v-model="nueva.paciente_id" label="Paciente" dense outlined clearable use-input
                           input-debounce="350" :options="opcionesPaciente"
                           option-value="id" option-label="nombre_completo" emit-value map-options
@@ -392,6 +412,13 @@
               </div>
               <div class="col-12" v-if="!cobrarLuego">
                 <PagoVenta v-model="nueva.pago" :total="totalNueva" />
+              </div>
+              <div class="col-12">
+                <q-checkbox v-model="nueva.con_factura" label="Con factura" dense />
+              </div>
+              <div class="col-12" v-if="nueva.con_factura">
+                <q-input v-model="nueva.numero_factura" label="N° de factura *" dense outlined autofocus
+                         :rules="[v => !!(v && String(v).trim()) || 'Ingrese el número de factura']" hide-bottom-space />
               </div>
               <div class="col-12">
                 <q-input v-model="nueva.comentario" label="Comentario" dense outlined type="textarea" rows="1" />
@@ -764,6 +791,13 @@ function cantidadDisponibleProducto (producto) {
   )
 }
 
+/* Un perfil se vende como una línea; no si alguno de sus exámenes está inactivo. */
+function perfilNoVendible (producto) {
+  return producto.es_perfil === true && Number(producto.perfil_vendible) !== 1
+}
+// La configuración llega con /me, quizá después del primer listado.
+watch(() => proxy.$store.perfilesLaboratorio, () => loadProductos())
+
 function esProductoFarmacia (producto) {
   return String(producto.tipo_producto?.nombre || '').toUpperCase() === 'FARMACIA'
 }
@@ -783,6 +817,8 @@ async function loadProductos () {
         tipo_producto_id: filtroTipo.value,
         // La venta de farmacia solo puede armarse con productos de ese tipo.
         tipo: props.soloFarmacia ? 'FARMACIA' : undefined,
+        // Perfiles de exámenes: solo con el interruptor del backend encendido.
+        incluir_perfiles: !props.soloFarmacia && proxy.$store.perfilesLaboratorio ? 1 : undefined,
         page: pageProductos.value,
         per_page: perProductos,
       },
@@ -825,13 +861,39 @@ const productoParaLote = ref(null)
 const lotesDisponibles = ref([])
 let lineaUid = 0
 
+const opcionesTipoPaciente = [
+  { label: 'Externo', value: 'EXTERNO' },
+  { label: 'Interno', value: 'INTERNO' },
+  { label: 'Ambulatorio', value: 'AMBULATORIO' },
+]
+
+// Servicios ya usados en ventas: se sugieren, pero se puede escribir uno nuevo.
+const allServicios = ref([])
+const opcionesServicio = ref([])
+async function loadServicios () {
+  try {
+    const res = await proxy.$axios.get('ventas/servicios')
+    allServicios.value = res.data || []
+  } catch { allServicios.value = [] }
+}
+function filtrarServicios (val, update) {
+  update(() => {
+    const q = (val || '').toLowerCase()
+    opcionesServicio.value = allServicios.value.filter(s => s.toLowerCase().includes(q))
+  })
+}
+
 function nuevaVentaVacia () {
   return {
+    tipo_paciente: 'EXTERNO',
+    servicio: '',
     paciente_id: null,
     doctor_id: null,
     seguro_id: null,
     cliente: '',
     comentario: '',
+    con_factura: false,
+    numero_factura: '',
     pago: pagoVacio(),
     detalles: [],
   }
@@ -1027,14 +1089,26 @@ async function registrarVenta (estado = 'ACTIVO') {
     proxy.$alert.error(errorPago)
     return
   }
+  if (!nueva.value.tipo_paciente) {
+    proxy.$alert.error('Seleccione el tipo de paciente')
+    return
+  }
+  if (nueva.value.con_factura && !String(nueva.value.numero_factura || '').trim()) {
+    proxy.$alert.error('Ingrese el número de factura')
+    return
+  }
   registrando.value = true
   try {
     const payload = {
+      tipo_paciente: nueva.value.tipo_paciente,
+      servicio: (nueva.value.servicio || '').trim() || null,
       paciente_id: nueva.value.paciente_id,
       doctor_id: nueva.value.doctor_id,
       seguro_id: nueva.value.seguro_id,
       cliente: nueva.value.paciente_id ? null : nueva.value.cliente,
       comentario: nueva.value.comentario,
+      con_factura: nueva.value.con_factura,
+      numero_factura: nueva.value.con_factura ? String(nueva.value.numero_factura || '').trim() : null,
       // Pendiente: el tipo de pago se elige al cobrarla.
       ...(estado === 'PENDIENTE' ? {} : payloadPago(nueva.value.pago, totalNueva.value)),
       estado,
@@ -1057,6 +1131,7 @@ async function registrarVenta (estado = 'ACTIVO') {
     dialogDatos.value = false
     cobrarLuego.value = false
     nueva.value = nuevaVentaVacia()
+    loadServicios()
     await nextTick()
     imprimirUltimaVenta()
     // Se queda en la pantalla para seguir vendiendo: solo se refrescan los
@@ -1157,6 +1232,7 @@ function init () {
   loadProductos()
   loadTiposProducto()
   loadSeguros()
+  loadServicios()
   loadEspecialidades()
 }
 

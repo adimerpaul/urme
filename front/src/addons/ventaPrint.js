@@ -160,6 +160,7 @@ function buildHtml (venta) {
             ${egreso ? `<span class="bold">Categoría:</span> ${esc(textoCategoriaGasto(venta))}<br>` : ''}
             ${doctor ? `<span class="bold">Doctor:</span> ${esc(doctor)}<br>` : ''}
             <span class="bold">Pago:</span> ${esc(venta.tipo_pago || '—')}
+            ${venta.con_factura ? `<br><span class="bold">N° factura:</span> ${esc(venta.numero_factura || '—')}` : ''}
           </td>
           <td style="width:35%">
             <span class="bold">CI/NIT:</span> ${esc(venta.paciente?.ci || '0')}<br>

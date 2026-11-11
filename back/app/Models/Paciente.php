@@ -11,7 +11,7 @@ class Paciente extends Model implements AuditableContract
 {
     use AuditableTrait, SoftDeletes;
 
-    protected $fillable = ['seguro_id', 'nombre_completo', 'sexo', 'fecha_nacimiento', 'ci', 'estado', 'direccion', 'telefono'];
+    protected $fillable = ['user_id', 'seguro_id', 'nombre_completo', 'sexo', 'fecha_nacimiento', 'ci', 'estado', 'direccion', 'telefono'];
 
     protected $hidden = ['created_at', 'updated_at', 'deleted_at'];
 
@@ -43,6 +43,12 @@ class Paciente extends Model implements AuditableContract
     public function internaciones()
     {
         return $this->hasMany(Internacion::class)->orderBy('fecha_ingreso');
+    }
+
+    /** Usuario que registró al paciente. */
+    public function creadoPor()
+    {
+        return $this->belongsTo(User::class, 'user_id');
     }
 
     public function seguro()

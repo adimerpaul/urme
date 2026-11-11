@@ -243,6 +243,7 @@
 
 <script setup>
 import { ref, computed, watch, getCurrentInstance } from 'vue'
+import { formatBoliviaDateTime } from '../../../addons/dateTime'
 
 const { proxy } = getCurrentInstance()
 
@@ -282,6 +283,8 @@ const columns = [
   { name: 'sexo',               label: 'Sexo',              align: 'left', field: 'sexo' },
   { name: 'telefono',           label: 'Teléfono',          align: 'left', field: 'telefono' },
   { name: 'fecha_alta',         label: 'Fecha alta',        align: 'left' },
+  { name: 'creado_por',         label: 'Registrado por',    align: 'left', field: row => row.creado_por?.name || '—' },
+  { name: 'created_at',         label: 'Fecha registro',    align: 'left', field: row => formatBoliviaDateTime(row.created_at) },
 ]
 
 const columnsVentas = [

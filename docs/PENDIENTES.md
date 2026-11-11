@@ -10,6 +10,7 @@ revisan y, si corresponde, se corrigen desde la pantalla.
 |---|---|---|
 | [Venta pagada sin vínculo con la solicitud de laboratorio](#venta-pagada-sin-vínculo-con-la-solicitud-de-laboratorio) | Alta | Desarrollo y laboratorio |
 | [Perfiles de exámenes como cargo de internación](#perfiles-de-exámenes-como-cargo-de-internación) | Baja | Laboratorio y administración |
+| [Ajustes visuales del informe guardados en un stash](#ajustes-visuales-del-informe-guardados-en-un-stash) | Baja | Equipo |
 | [Movimientos de caja con la hora corrida](#movimientos-de-caja-con-la-hora-corrida-en-producción) | Alta | Administración, caso por caso |
 | [Categoría para gastos generales](#categoría-para-gastos-generales) | Media | Administración |
 | [Comprobantes impresos](#comprobantes-impresos-frontsrcaddonsprintjs) | Baja | Desarrollo |
@@ -42,6 +43,23 @@ revisan y, si corresponde, se corrigen desde la pantalla.
 - **Decide:** desarrollo, con el laboratorio. Las opciones van desde
   `solicitudes.venta_id` (o una tabla de enlace) con aviso si la venta ya se usó,
   hasta qué hacer con la solicitud al anular la venta.
+
+### Ajustes visuales del informe guardados en un stash
+
+- **Origen:** Fase 4 de perfiles (2026-11-11), al elegir el color del título del perfil.
+- **Gravedad:** baja. Hay un ajuste visual del informe de laboratorio que **nunca
+  se aplicó** a ninguna rama. Está solo en `stash@{0}` («On master:
+  !!GitHub_Desktop<master>», 22-10-2026), en la copia local:
+  - azules más oscuros (`#0B3D91` en títulos, encabezados de tabla y firma;
+    `#0E4BB6` en el código y el lema; `#0F54CC` en los bordes);
+  - tamaños de letra distintos.
+
+  El stash también toca `.env.example`, `SolicitudeController`, `TipoProducto` y
+  `config/laboratorio.php`, que ya cambiaron mucho desde entonces. En `master`,
+  el informe usa `#0b5ed7`, y el título de los perfiles se hizo con ese mismo azul.
+- **Decide:** el equipo: si esos ajustes se quieren, rehacerlos como un cambio
+  nuevo sobre `master` (sin aplicar el stash entero) y comparar los PDF antes y
+  después; si no, descartar el stash.
 
 ### Perfiles de exámenes como cargo de internación
 

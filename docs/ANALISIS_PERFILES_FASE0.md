@@ -76,7 +76,7 @@ Tomadas tras revisar esta fase. Prevalecen sobre las sugerencias de §10 donde d
 | 1 | Modelo y catálogo de perfiles | Implementada en `master` (2026-11-11), con el interruptor apagado |
 | 2 | Venta y solicitud (expansión), reporte general | Implementada en `master` (2026-11-11), con el interruptor apagado |
 | 3 | Kardex de reactivos | **Cubierta sin cambios**: el kardex cuenta los exámenes expandidos, un examen compartido por dos perfiles cuenta una vez y el perfil no tiene reactivos propios (D7; test en `PerfilSolicitudTest`) |
-| 4 | Informe agrupado por perfil | **Siguiente.** Hasta terminarla, `LAB_PERFILES_HABILITADO` sigue en `false` en producción |
+| 4 | Informe agrupado por perfil | Implementada (2026-11-11); **pendiente de revisión y commit**. Con ella, los perfiles quedan listos para encenderse (`DESPLIEGUE_PRODUCCION.md`, «Encender los perfiles en producción») |
 
 ### Fase 1: modelo y catálogo
 
@@ -321,6 +321,142 @@ Agregados:
 - **P3. Cantidad > 1 en "Nueva venta".** Recomiendo no avisar al vender (vender 2 perfiles puede ser legítimo, para dos pacientes) y avisar solo al cargar la venta pagada (D6).
 - **P4. Un perfil que deja de ser vendible con una solicitud en `CREADO`.** Recomiendo **bloquear el guardado** hasta quitar el perfil o corregir el catálogo, coherente con "sin congelamiento". La alternativa es conservar la composición guardada solo en ese caso.
 - **P5. Reporte general con filas unidas** (perfil con su precio y sus exámenes «incluido»). ¿Se aprueba este formato, también para el Excel y el PDF?
+
+---
+
+## Diseño Fase 4: informe agrupado por perfil
+
+Aplica las decisiones 10 y 11 (preguntas 7 y 8). Solo cambian `SolicitudeController::bloquesInforme()` y `solicitud-laboratorio.blade.php`. No hay migraciones ni cambios de datos.
+
+**Cómo es hoy el informe** (`bloquesInforme`, §5): no está dividido por áreas.
+- Es una lista de bloques en el **orden de la solicitud** (`items.orden`).
+- Cada examen suelto es su propio bloque: título centrado (`.service-title`, negro, 10.5px), su tabla con encabezado ANÁLISIS / RESULTADO / … y una fila «ÁREA DE …».
+- Los exámenes con el mismo `grupo_reporte` y la misma área se juntan en un bloque `grupo`, en la posición del primero y envuelto en `page-break-inside: avoid`.
+- La fila de área va **dentro de cada bloque**, no como sección del informe.
+
+**Interruptor.** El informe no lo consulta: imprime lo que la solicitud tiene guardado. Una solicitud sin perfiles produce exactamente los mismos bloques y el mismo HTML que hoy, con el interruptor encendido o apagado. Una solicitud con perfiles, creada con el interruptor encendido, se imprime agrupada aunque después se apague, igual que hoy se puede ver e imprimir (D4).
+
+### F4.1 Ubicación del bloque del perfil
+
+Opciones:
+- **(a) Al principio del informe:** cambia el orden que eligió el operador.
+- **(b) Al final:** igual que (a).
+- **(c) Dentro del área del producto perfil:** no aplica, porque el informe no tiene secciones por área.
+- **(d) En la posición del perfil dentro de la solicitud**: el perfil guarda `orden` = el orden de su primer examen (D2), igual que hoy un bloque `grupo` va en la posición de su primer miembro.
+
+**Recomiendo (d).** Respeta el orden que el operador arma en "Crear laboratorio" arrastrando bloques, y es la misma regla que ya usa `grupo_reporte`. Ejemplo, con la solicitud ordenada así: GLUCOSA, IONOGRAMA (Sodio, Potasio, Cloro), HEMOGRAMA.
+
+```
+GLUCOSA                          ← bloque suelto, como hoy
+  ÁREA DE BIOQUIMICA CLINICA
+  GLUCOSA ........ 95 mg/dL
+
+IONOGRAMA                        ← título del perfil (F4.3)
+  ÁREA DE IONOGRAMA / ELECTROLITOS
+  SODIO .......... 140 mmol/L
+  POTASIO ........ 4.1 mmol/L
+  CLORO .......... 101 mmol/L
+
+HEMOGRAMA (…)                    ← bloque suelto, como hoy
+```
+
+### F4.2 Orden dentro del bloque y fila de área
+
+- **Orden de los exámenes:** el `orden` guardado en la solicitud, que es el de la composición del perfil al guardarla (D2). El `grupo_reporte` y el `orden_reporte` de los exámenes **se ignoran** dentro del perfil (decisión 11).
+- **Fila «ÁREA DE …»:** antes del primer examen y otra vez cada vez que el área del examen siguiente es distinta de la anterior. Ejemplo de un perfil mixto: «ÁREA DE BIOQUIMICA CLINICA»; glucosa y colesterol; «ÁREA DE HEMATOLOGIA»; hemograma.
+- **Filas de cada examen**, con la misma regla que los grupos de hoy:
+  - si tiene **un solo** resultado visible, la fila lleva el nombre del examen (SODIO), no «RESULTADO»;
+  - si tiene **varios**, va una fila subtítulo con el nombre del examen (negrita, sin subrayar) y debajo sus resultados con su propio nombre (HEMOGLOBINA, HEMATOCRITO…).
+- **Qué entra:** se omiten los exámenes sin resultados visibles ni descripción, como hoy. Si a un perfil no le queda ningún examen, no se imprime.
+- **Descripciones:** las de los exámenes van al pie del bloque, sin repetir las iguales. Se escriben en el orden de los exámenes.
+
+### F4.3 Estilo del título del perfil
+
+- Hoy, el título de un examen o grupo es negro, de 10.5px, en negrita y centrado.
+- Para el perfil propongo el mismo tamaño y posición, en el **azul de la marca** (`#0b5ed7`, el del código del documento y los encabezados de tabla), en mayúsculas, con `letter-spacing: .3px` como el título «INFORME DE LABORATORIO CLÍNICO».
+- Sin prefijo «PERFIL»: muchos ya se llaman así (PERFIL LIPÍDICO).
+- Se distingue del título negro sin agregar recuadros ni fondos. Nada más del informe cambia de estilo.
+
+### F4.4 Saltos de página (probado con el dompdf del proyecto)
+
+Probé tablas de 12 y 45 filas que empiezan cada vez más cerca del pie de la página:
+
+| Variante | Resultado |
+|---|---|
+| Título dentro del `thead`, sin más | El `thead` se repite en cada página. **Pero** si al pie solo cabe el título, dompdf lo deja **solo** y, desde ahí, **deja de repetirlo** en las páginas siguientes. No es fiable |
+| Bloque corto envuelto en `page-break-inside: avoid` (como `.bloque-grupo`) | Pasa entero a la página siguiente; el título nunca queda solo |
+| Título en el `thead` con `page-break-after: avoid` en las filas del `thead` y en la fila de área | Ya no queda solo al pie. Si la tabla se parte, el título se repite en cada página |
+
+Propuesta:
+1. **Perfil corto** (hasta ~25 filas, una página): todo el bloque en un `div` con `page-break-inside: avoid`, como los grupos de hoy. No se parte.
+2. **Perfil largo:** el título va como primera fila del `thead`, con `page-break-after: avoid` en el `thead` y en la fila de área. Se parte entre páginas y **repite el título** arriba de cada página.
+3. **«(continuación)»:** dompdf repite el `thead` con el mismo texto en todas las páginas, y no tiene forma fiable de saber en qué página está. **No se puede agregar «(continuación)» de forma fiable.** Propongo repetir el título tal cual. La alternativa, calcular la paginación a mano, no es confiable con alturas variables (rangos de referencia en HTML).
+
+El límite de ~25 filas se ajusta en la implementación probando con el informe real.
+
+### Decisiones del diseño de la Fase 4 (2026-11-11)
+
+- F4.1 a F4.5 aprobados.
+- **Color del título del perfil:** `#0b5ed7`, el azul que en `master` usan hoy los títulos del informe (`.title`), los encabezados de tabla y el nombre de la firma. No se introduce ningún color nuevo.
+  - Los azules más oscuros de un ajuste visual anterior (`#0B3D91` para títulos y `#0E4BB6` para el código) **solo existen en `stash@{0}` de GitHub Desktop (22-10-2026)**, nunca aplicado. Queda anotado en `PENDIENTES.md`.
+- **Saltos de página:** el perfil corto va en un bloque que no se parte. El largo repite el título tal cual en cada página, sin «(continuación)».
+
+### F4.6 Precio
+
+El informe clínico **no muestra precios**: ni del perfil ni de sus exámenes. Hoy tampoco los muestra para los exámenes sueltos.
+
+### F4.7 Otros lugares que listan los exámenes de la solicitud
+
+| Lugar | Hoy | Con perfiles |
+|---|---|---|
+| Impresión HTML (`/impresion`) | Misma plantilla que el PDF | Igual que el PDF: la misma plantilla agrupa |
+| Mensaje de WhatsApp (`solicitudes-laboratorio/index.vue`) | Paciente, código y aviso del PDF adjunto; **no lista exámenes** | Se agrega una línea «Perfiles: IONOGRAMA, …» solo si la solicitud tiene perfiles. Como hoy no lista exámenes, no se agregan. Sin perfiles, el mensaje queda idéntico |
+| Página pública de verificación (`verificacion/[codigo].vue`) | Una tarjeta por examen con sus resultados visibles, sin precios | La API agrega a cada examen el nombre de su perfil (`perfil`, o `null` si es suelto). La página junta los exámenes de un perfil en **una tarjeta con el título del perfil**: cada examen de un solo resultado es una fila con su nombre; uno con varios resultados lleva un subtítulo. Sin precios. Sin perfiles se ve igual que hoy |
+| Rótulo (`solicitudLaboratorioRotuloPrint.js`) | No lista exámenes | Sin cambios |
+
+### F4.8 Casos borde
+
+- **Dos perfiles que comparten un examen:** la solicitud ya guarda un solo ítem, en el primer perfil (D2), así que el examen aparece una vez, en el bloque de ese perfil.
+- **Examen del perfil sin resultados visibles:** se aplica el mismo filtro que hoy a los sueltos: se omite si no tiene resultados visibles ni descripción.
+  - Dentro del perfil, un examen que solo tiene descripción no agrega filas; su descripción va al pie del bloque.
+  - Si a un perfil **no le queda ninguna fila de resultado**, el bloque **no se imprime**: ni el título solo ni solo descripciones.
+- **Perfil dado de baja en el catálogo después de la venta:** el título usa el nombre **guardado en la solicitud** (`solicitud_laboratorio_perfiles.nombre`), no el del producto.
+
+### Estado de la Fase 4 (2026-11-11)
+
+Implementada según F4.1 a F4.8:
+- `SolicitudeController::bloquesInforme()` / `bloquePerfil()`;
+- `solicitud-laboratorio.blade.php`: estilos de perfil solo si el informe tiene perfiles, para que el HTML sin perfiles quede idéntico byte a byte;
+- la API de verificación con `perfil`;
+- `verificacion/[codigo].vue`;
+- el mensaje de WhatsApp.
+
+El límite de un perfil «corto» quedó en **12 filas** (`FILAS_PERFIL_SIN_PARTIR`). Se probó primero con 25 y se bajó a 12 (decisión del 2026-11-11), para que un perfil mediano empiece en la página donde le toca en lugar de dejar un hueco.
+
+Verificación en `urme_prueba`:
+- **Sin perfiles:** los 25 informes de `back` y `urme_prueba` (7 + 18), con el interruptor apagado y encendido, son **idénticos** a los de antes del cambio. El HTML coincide byte a byte y el PDF página por página, rasterizado, con la fecha fija.
+- **Casos con perfiles:** solo IONOGRAMA; IONOGRAMA con sueltos de varias áreas; dos perfiles que comparten un examen; un perfil de tres áreas; un perfil corto en el corte de página (pasa entero a la página siguiente); un perfil largo (se parte y repite el título).
+  - En todos se revisaron encabezado, CODELAB, código, firma, «Página X de Y», pie y QR.
+  - La impresión HTML, la verificación pública y el mensaje de WhatsApp se revisaron en los casos 1 y 2.
+- **Tests:** 4 nuevos en `PerfilSolicitudTest`, sobre posición, áreas, `grupo_reporte` dentro del perfil, examen compartido, perfil oculto y nombre guardado.
+
+Efecto conocido: un perfil corto (hasta 12 filas) que no cabe en lo que queda de la página pasa entero a la siguiente y deja ese espacio en blanco, como hoy los bloques de `grupo_reporte`.
+- Con 25 filas, el perfil de tres áreas de la prueba (19 filas) dejaba casi vacía la página 1.
+- Con 12, empieza en la página 1 y la página 2 repite el título.
+
+### F4.5 Verificación prevista
+
+1. Antes del cambio, generar los PDF y el HTML de impresión de varias solicitudes sin perfiles (en `back` y en `urme_prueba`, con el interruptor encendido y apagado), con la fecha y la hora fijas (`Carbon::setTestNow`) para que «Fecha de impresión» no cambie.
+2. Después del cambio, generarlos otra vez y comparar: el HTML byte a byte y el PDF página a página, rasterizado. Deben ser idénticos.
+3. Con perfiles:
+   - el perfil en distintas posiciones;
+   - un perfil mixto con dos áreas;
+   - un examen de varios resultados dentro de un perfil;
+   - un perfil corto que cae al pie de la página (debe pasar entero);
+   - uno largo que se parte (el título se repite).
+
+   Además, comprobar que se conservan el encabezado, CODELAB, el código compuesto, la dirección, las 3 columnas, la firma sin partirse, el pie de página y el QR.
+4. Tests de `bloquesInforme` en SQLite: posición, orden, filas de área y que `grupo_reporte` se ignore dentro del perfil.
 
 ---
 

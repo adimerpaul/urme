@@ -67,7 +67,7 @@ donde esos productos ya existen.
 | Parte | Cambio |
 |---|---|
 | Base de datos | `2026_10_22_000100_add_grupo_reporte_to_productos_table` (si está pendiente), `2026_11_02_000100_add_codigo_laboratorio_to_solicitudes_table`, `2026_11_04_000100_add_categoria_gasto_to_ventas_table`, `2026_11_04_000200_add_categoria_gasto_to_caja_movimientos_table`, `2026_11_11_000100_add_es_perfil_to_productos_table`, `2026_11_11_000200_create_producto_perfil_items_table`, `2026_11_12_000100_create_solicitud_laboratorio_perfiles_table` y `2026_11_12_000200_add_perfil_to_solicitud_laboratorio_items_table`. Todas son de esquema y aditivas: columnas nullable o con valor por defecto, y una tabla nueva vacía. |
-| Backend | Informe de laboratorio (firma, dirección, CODELAB, datos del paciente en 3 columnas), campo código laboratorio obligatorio en solicitudes nuevas, código compuesto `LAB-AAAAMMDD-00000-<código>` en informes y pantallas. Categoría (obligatoria) y subcategoría de los gastos de Ventas y de las dos cajas, con `GET /categorias-gasto`. Perfiles de exámenes, Fases 1 y 2 (catálogo, venta y expansión en la solicitud, reporte general), **apagados** con `LAB_PERFILES_HABILITADO=false`: el sistema funciona como antes. Ya rigen siempre: no se puede dar de baja un examen que forma parte de un perfil, los perfiles no se cargan a una internación y no aparecen en Farmacia → productos (no hay perfiles hasta que se encienda). |
+| Backend | Informe de laboratorio (firma, dirección, CODELAB, datos del paciente en 3 columnas), campo código laboratorio obligatorio en solicitudes nuevas, código compuesto `LAB-AAAAMMDD-00000-<código>` en informes y pantallas. Categoría (obligatoria) y subcategoría de los gastos de Ventas y de las dos cajas, con `GET /categorias-gasto`. Perfiles de exámenes, Fases 1, 2 y 4 (catálogo, venta y expansión en la solicitud, reporte general, informe agrupado por perfil), **apagados** con `LAB_PERFILES_HABILITADO=false`: el sistema funciona como antes. Ya rigen siempre: no se puede dar de baja un examen que forma parte de un perfil, los perfiles no se cargan a una internación y no aparecen en Farmacia → productos (no hay perfiles hasta que se encienda). |
 | `.env` del backend | 6 variables nuevas (paso 8). |
 | Frontend | Campo "Código laboratorio" en Crear laboratorio, código compuesto en listado, WhatsApp, verificación y reporte general. Categoría y subcategoría en "Nuevo gasto" de Ventas y en los gastos de las cajas. Corrección de la hora al editar movimientos de caja (antes se corría +4 h). **Se publica en el mismo despliegue** (paso 10). |
 | Reactivos | Unidades µL, DETERMINACIÓN y TACO en «Nuevo reactivo»; el signo micro se guarda siempre como U+00B5 y no pasa a mayúsculas (rama `reactivos-unidades`, integrada en `master` en `1484a76`). Sin migraciones ni cambios de datos. Según el equipo ya está en producción: se incluye para que el despliegue de `master` no lo revierta. |
@@ -435,10 +435,9 @@ LAB_PERFILES_HABILITADO=false
 ```
 
 Las cinco primeras se leen desde `config/laboratorio.php` y se imprimen en el
-encabezado del informe. `LAB_PERFILES_HABILITADO` debe quedar en **`false`**
-en producción **hasta terminar la Fase 4** de los perfiles (informe agrupado por
-perfil, ver `ANALISIS_PERFILES_FASE0.md`): hasta entonces el informe del paciente
-no muestra el perfil. Con `false` no se ve nada de
+encabezado del informe. `LAB_PERFILES_HABILITADO` se despliega en **`false`**:
+los perfiles se encienden después, en un paso aparte y cuando el laboratorio lo
+decida (ver «Encender los perfiles en producción», más abajo). Con `false` no se ve nada de
 perfiles, no se pueden vender ni pedir, y sus endpoints responden 404; si faltara
 la variable, también vale `false`. Después limpiar la caché:
 
@@ -450,6 +449,42 @@ php artisan config:cache
 ```
 
 Sin este paso el informe no muestra la dirección ni el CODELAB nuevos.
+
+### Encender los perfiles en producción
+
+**Cuándo:** con la Fase 4 (informe agrupado por perfil) ya desplegada —es decir,
+con este código en producción y los pasos 7.5 a 7.8 aplicados—, cuando el
+laboratorio decida empezar a vender perfiles. No hace falta mantenimiento ni
+migraciones.
+
+**Antes de encender:**
+
+1. Que estén en producción las migraciones de perfiles: `php artisan migrate:status`
+   muestra como `Ran` las cuatro de `2026_11_11_*` y `2026_11_12_*`.
+2. Que el personal sepa crear un perfil (Laboratorio → Catálogo de pruebas →
+   Administrar → Tipo: Perfil) y que los perfiles **no se cargan a una internación**.
+3. Un respaldo de la base (como el paso 1).
+
+**Pasos:**
+
+1. En el `back/.env` de producción: `LAB_PERFILES_HABILITADO=true`.
+2. `php artisan config:clear` (y `php artisan config:cache` si producción usa
+   caché de configuración).
+3. Los usuarios recargan la página (o cierran y abren sesión): la configuración
+   llega con `/me` y `/login`.
+
+**Comprobaciones inmediatas** (con un usuario administrador):
+
+1. Laboratorio → Catálogo de pruebas: aparecen el filtro «Tipo» y, en cada prueba,
+   el selector «Tipo: Examen / Perfil».
+2. Crear un perfil de prueba con dos exámenes (p. ej. SODIO y POTASIO, precio
+   simbólico) y comprobar que **no se puede dar de baja** uno de sus exámenes.
+3. «Nueva venta»: el perfil aparece con el chip PERFIL. «Crear laboratorio»: el
+   perfil se ve como un bloque con sus exámenes. **No guardar ventas de prueba
+   en producción**: basta ver que aparecen. El perfil de prueba se puede quitar
+   (desmarcar «Perfil») o dar de baja después.
+4. Abrir el PDF de una solicitud **anterior** (sin perfiles): debe verse igual que
+   antes de encender.
 
 ### Interruptor de perfiles: una vez encendido, no volver a `false`
 

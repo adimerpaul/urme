@@ -68,6 +68,53 @@ Tomadas tras revisar esta fase. Prevalecen sobre las sugerencias de §10 donde d
 
 ---
 
+## Estado del proyecto
+
+| Fase | Alcance | Estado |
+|---|---|---|
+| 0 | Diagnóstico y decisiones (este documento) | Hecha (2026-11-10) |
+| 1 | Modelo y catálogo de perfiles | Implementada en `master` (2026-11-11), con el interruptor apagado |
+| 2 y siguientes | Venta, solicitud (expansión), kardex, informe y reportes | Pendientes |
+
+### Fase 1: modelo y catálogo
+
+**Interruptor.**
+- `LAB_PERFILES_HABILITADO` (en `back/.env`, por defecto `false`) se lee en `config('laboratorio.perfiles_habilitado')`.
+- Llega al frontend en `GET /me` y `POST /login`, como `configuracion.lab_perfiles_habilitado`, y se guarda en el store (`perfilesLaboratorio`).
+- Con `false`:
+  - el catálogo se ve como antes;
+  - `PUT /productos/{id}/laboratorio-perfil` responde 404;
+  - `laboratorio-configuracion` no trae el bloque `perfil`;
+  - los perfiles no se listan ni se cuentan en las áreas.
+
+**Base de datos.** Dos migraciones de esquema, aditivas:
+- `2026_11_11_000100_add_es_perfil_to_productos_table`;
+- `2026_11_11_000200_create_producto_perfil_items_table`, con borrado físico de filas y el modelo `ProductoPerfilItem` auditable.
+
+**Reglas,** en `ProductoLaboratorioController::updatePerfil` y en el modelo `Producto`:
+- el perfil debe ser de laboratorio y tener al menos 2 exámenes;
+- los exámenes deben estar activos (decisión 14), ser de laboratorio, sin repetir y no ser perfiles;
+- un perfil no admite parámetros, fórmulas, validaciones ni reactivos propios;
+- no se marca como perfil un producto que ya los tiene, ni uno que forma parte de un perfil;
+- un perfil no puede cambiarse a un área que no sea de laboratorio;
+- **no se puede dar de baja un examen que forma parte de un perfil vigente**, aunque el interruptor esté en `false`. Es un hook `deleting` del modelo, así que rige por cualquier camino de baja;
+- dar de baja el perfil no toca sus exámenes.
+
+**Vendible.** `Producto::esPerfilVendible()` se cumple si el perfil está vigente, en un área de laboratorio, y tiene ≥ 2 exámenes, todos activos. Lo usará la Fase 2.
+
+**Fuera de la venta hasta la Fase 2,** aun con el interruptor en `true`:
+- `GET /productos` excluye los perfiles, salvo el catálogo de laboratorio con `incluir_perfiles=1`;
+- también los excluyen `solicitudes-laboratorio/form-data` y `reactivos/form-data`;
+- `POST /ventas` y `POST/PUT /solicitudes-laboratorio` rechazan un perfil con 422.
+
+**Pantalla.**
+- En `laboratorio/[id].vue`: selector "Tipo: Examen / Perfil" y sección "Exámenes del perfil", con buscador, lista ordenable y botón para quitar, más la suma de precios sueltos frente al precio del perfil.
+- En `laboratorio/index.vue`: chip "PERFIL" y filtro "Tipo".
+
+**Tests.** `tests/Feature/PerfilLaboratorioTest.php` tiene 16 casos sobre un esquema propio en SQLite, sin depender de las migraciones que fallan.
+
+---
+
 ## 1. Diagrama del flujo actual
 
 ```mermaid

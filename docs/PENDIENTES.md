@@ -9,6 +9,8 @@ revisan y, si corresponde, se corrigen desde la pantalla.
 | Pendiente | Gravedad | Decide |
 |---|---|---|
 | [Venta pagada sin vínculo con la solicitud de laboratorio](#venta-pagada-sin-vínculo-con-la-solicitud-de-laboratorio) | Alta | Desarrollo y laboratorio |
+| [Perfiles: acceso por URL directa con el interruptor apagado](#perfiles-acceso-por-url-directa-con-el-interruptor-apagado) | Baja | Desarrollo (Fase 2) |
+| [Perfiles: Farmacia → productos no los filtra](#perfiles-farmacia--productos-no-los-filtra) | Baja | Desarrollo (Fase 2) |
 | [Movimientos de caja con la hora corrida](#movimientos-de-caja-con-la-hora-corrida-en-producción) | Alta | Administración, caso por caso |
 | [Categoría para gastos generales](#categoría-para-gastos-generales) | Media | Administración |
 | [Comprobantes impresos](#comprobantes-impresos-frontsrcaddonsprintjs) | Baja | Desarrollo |
@@ -41,6 +43,29 @@ revisan y, si corresponde, se corrigen desde la pantalla.
 - **Decide:** desarrollo, con el laboratorio. Las opciones van desde
   `solicitudes.venta_id` (o una tabla de enlace) con aviso si la venta ya se usó,
   hasta qué hacer con la solicitud al anular la venta.
+
+### Perfiles: acceso por URL directa con el interruptor apagado
+
+- **Origen:** Fase 1 de perfiles de exámenes (2026-11-11), en
+  [`ANALISIS_PERFILES_FASE0.md`](ANALISIS_PERFILES_FASE0.md), «Estado del proyecto».
+- **Gravedad:** baja. Solo pasa si se crearon perfiles con
+  `LAB_PERFILES_HABILITADO=true` y después se apagó el interruptor.
+  - El catálogo ya no los lista, pero entrando a mano a `/laboratorio/{id}` de un
+    perfil se ve la pantalla de un examen común, con «Nuevo dato».
+  - El backend igual rechaza agregarle parámetros, fórmulas o validaciones (422).
+- **Decide:** desarrollo, en la Fase 2: mostrar un aviso, o volver al catálogo,
+  cuando el producto es un perfil y el interruptor está apagado.
+
+### Perfiles: Farmacia → productos no los filtra
+
+- **Origen:** Fase 1 de perfiles de exámenes (2026-11-11).
+- **Gravedad:** baja. La pantalla general de productos (`GET /farmacia/datos`)
+  lista todos los productos, también los perfiles, con o sin interruptor. Solo se
+  nota si existen perfiles. Desde ahí se puede editar un perfil:
+  - el backend no deja cambiarlo a un área que no sea de laboratorio;
+  - sí deja darlo de baja, lo que no afecta a sus exámenes.
+- **Decide:** desarrollo, en la Fase 2: excluir los perfiles de esa pantalla o
+  marcarlos con un chip «PERFIL».
 
 ### Movimientos de caja con la hora corrida en producción
 

@@ -66,8 +66,8 @@ donde esos productos ya existen.
 
 | Parte | Cambio |
 |---|---|
-| Base de datos | `2026_10_22_000100_add_grupo_reporte_to_productos_table` (si está pendiente), `2026_11_02_000100_add_codigo_laboratorio_to_solicitudes_table`, `2026_11_04_000100_add_categoria_gasto_to_ventas_table`, `2026_11_04_000200_add_categoria_gasto_to_caja_movimientos_table`, `2026_11_11_000100_add_es_perfil_to_productos_table` y `2026_11_11_000200_create_producto_perfil_items_table`. Todas son de esquema y aditivas: columnas nullable o con valor por defecto, y una tabla nueva vacía. |
-| Backend | Informe de laboratorio (firma, dirección, CODELAB, datos del paciente en 3 columnas), campo código laboratorio obligatorio en solicitudes nuevas, código compuesto `LAB-AAAAMMDD-00000-<código>` en informes y pantallas. Categoría (obligatoria) y subcategoría de los gastos de Ventas y de las dos cajas, con `GET /categorias-gasto`. Perfiles de exámenes, Fase 1 (modelo y catálogo), **apagados** con `LAB_PERFILES_HABILITADO=false`: el sistema funciona como antes; solo rige ya la regla que impide dar de baja un examen que forma parte de un perfil (no hay perfiles hasta que se encienda). |
+| Base de datos | `2026_10_22_000100_add_grupo_reporte_to_productos_table` (si está pendiente), `2026_11_02_000100_add_codigo_laboratorio_to_solicitudes_table`, `2026_11_04_000100_add_categoria_gasto_to_ventas_table`, `2026_11_04_000200_add_categoria_gasto_to_caja_movimientos_table`, `2026_11_11_000100_add_es_perfil_to_productos_table`, `2026_11_11_000200_create_producto_perfil_items_table`, `2026_11_12_000100_create_solicitud_laboratorio_perfiles_table` y `2026_11_12_000200_add_perfil_to_solicitud_laboratorio_items_table`. Todas son de esquema y aditivas: columnas nullable o con valor por defecto, y una tabla nueva vacía. |
+| Backend | Informe de laboratorio (firma, dirección, CODELAB, datos del paciente en 3 columnas), campo código laboratorio obligatorio en solicitudes nuevas, código compuesto `LAB-AAAAMMDD-00000-<código>` en informes y pantallas. Categoría (obligatoria) y subcategoría de los gastos de Ventas y de las dos cajas, con `GET /categorias-gasto`. Perfiles de exámenes, Fases 1 y 2 (catálogo, venta y expansión en la solicitud, reporte general), **apagados** con `LAB_PERFILES_HABILITADO=false`: el sistema funciona como antes. Ya rigen siempre: no se puede dar de baja un examen que forma parte de un perfil, los perfiles no se cargan a una internación y no aparecen en Farmacia → productos (no hay perfiles hasta que se encienda). |
 | `.env` del backend | 6 variables nuevas (paso 8). |
 | Frontend | Campo "Código laboratorio" en Crear laboratorio, código compuesto en listado, WhatsApp, verificación y reporte general. Categoría y subcategoría en "Nuevo gasto" de Ventas y en los gastos de las cajas. Corrección de la hora al editar movimientos de caja (antes se corría +4 h). **Se publica en el mismo despliegue** (paso 10). |
 | Reactivos | Unidades µL, DETERMINACIÓN y TACO en «Nuevo reactivo»; el signo micro se guarda siempre como U+00B5 y no pasa a mayúsculas (rama `reactivos-unidades`, integrada en `master` en `1484a76`). Sin migraciones ni cambios de datos. Según el equipo ya está en producción: se incluye para que el despliegue de `master` no lo revierta. |
@@ -365,7 +365,54 @@ php artisan migrate --path=database/migrations/2026_11_11_000200_create_producto
 La tabla queda vacía: los perfiles se crean desde la pantalla, nunca por
 migración.
 
-**7.7 Migraciones neutralizadas:** pueden quedar pendientes sin riesgo. Si se
+**7.7 Perfiles en la solicitud (obligatoria).** Aunque los perfiles queden
+apagados, el código nuevo carga los perfiles de cada solicitud (listado, detalle,
+reporte general): **sin esta migración y la siguiente esas pantallas fallan**.
+
+```bash
+php artisan migrate --pretend --path=database/migrations/2026_11_12_000100_create_solicitud_laboratorio_perfiles_table.php
+```
+
+Debe mostrar solo:
+
+```
+create table `solicitud_laboratorio_perfiles` (`id` bigint unsigned not null auto_increment primary key, `solicitude_id` bigint unsigned not null, `perfil_producto_id` bigint unsigned null, `nombre` varchar(255) not null, `precio` decimal(10, 2) not null default '0', `orden` int unsigned not null default '0', `created_at` timestamp null, `updated_at` timestamp null, `deleted_at` timestamp null) default character set utf8mb4 collate 'utf8mb4_unicode_ci'
+alter table `solicitud_laboratorio_perfiles` add index `slp_solicitude_id_index`(`solicitude_id`)
+alter table `solicitud_laboratorio_perfiles` add index `slp_perfil_producto_id_index`(`perfil_producto_id`)
+alter table `solicitud_laboratorio_perfiles` add constraint `slp_solicitude_id_foreign` foreign key (`solicitude_id`) references `solicitudes` (`id`) on delete cascade
+alter table `solicitud_laboratorio_perfiles` add constraint `slp_perfil_producto_id_foreign` foreign key (`perfil_producto_id`) references `productos` (`id`) on delete set null
+```
+
+Si coincide:
+
+```bash
+php artisan migrate --path=database/migrations/2026_11_12_000100_create_solicitud_laboratorio_perfiles_table.php
+```
+
+**7.8 Perfil de cada examen de la solicitud (obligatoria):**
+
+```bash
+php artisan migrate --pretend --path=database/migrations/2026_11_12_000200_add_perfil_to_solicitud_laboratorio_items_table.php
+```
+
+Debe mostrar solo:
+
+```
+alter table `solicitud_laboratorio_items` add `solicitud_laboratorio_perfil_id` bigint unsigned null after `producto_id`
+alter table `solicitud_laboratorio_items` add index `sli_perfil_id_index`(`solicitud_laboratorio_perfil_id`)
+alter table `solicitud_laboratorio_items` add constraint `sli_perfil_id_foreign` foreign key (`solicitud_laboratorio_perfil_id`) references `solicitud_laboratorio_perfiles` (`id`) on delete set null
+```
+
+Si coincide:
+
+```bash
+php artisan migrate --path=database/migrations/2026_11_12_000200_add_perfil_to_solicitud_laboratorio_items_table.php
+```
+
+Todos los exámenes existentes quedan con `solicitud_laboratorio_perfil_id = NULL`
+(exámenes sueltos): no cambia ningún precio ni total.
+
+**7.9 Migraciones neutralizadas:** pueden quedar pendientes sin riesgo. Si se
 quiere limpiar `migrate:status`, se registran igual con `--path`, solo después
 de que su `--pretend` no muestre **ninguna** consulta.
 
@@ -388,10 +435,12 @@ LAB_PERFILES_HABILITADO=false
 ```
 
 Las cinco primeras se leen desde `config/laboratorio.php` y se imprimen en el
-encabezado del informe. `LAB_PERFILES_HABILITADO` debe quedar en **`false`**:
-los perfiles de exámenes están a medio construir (solo la Fase 1). Con `false`
-no se ve nada de perfiles y sus endpoints responden 404; si faltara la variable,
-también vale `false`. Después limpiar la caché:
+encabezado del informe. `LAB_PERFILES_HABILITADO` debe quedar en **`false`**
+en producción **hasta terminar la Fase 4** de los perfiles (informe agrupado por
+perfil, ver `ANALISIS_PERFILES_FASE0.md`): hasta entonces el informe del paciente
+no muestra el perfil. Con `false` no se ve nada de
+perfiles, no se pueden vender ni pedir, y sus endpoints responden 404; si faltara
+la variable, también vale `false`. Después limpiar la caché:
 
 ```bash
 php artisan config:clear
@@ -401,6 +450,24 @@ php artisan config:cache
 ```
 
 Sin este paso el informe no muestra la dirección ni el CODELAB nuevos.
+
+### Interruptor de perfiles: una vez encendido, no volver a `false`
+
+Cuando se pase `LAB_PERFILES_HABILITADO` a `true` y se **vendan perfiles en
+producción** (o se creen solicitudes con perfiles), el interruptor **no debe
+volver a `false`**. Con el interruptor apagado:
+
+- las solicitudes que ya tienen perfiles **no se pueden modificar** (la API
+  responde 422): no se les pueden cargar resultados hasta volver a encenderlo;
+- una venta pagada con un perfil **no se puede cargar** en "Crear laboratorio"
+  (el perfil no está en la lista), así que su solicitud no se podría crear;
+- los perfiles dejan de venderse y desaparecen del catálogo, aunque sigan en las
+  ventas y solicitudes ya hechas.
+
+Ver e imprimir esas solicitudes, el reporte general y la caja siguen funcionando,
+pero el trabajo diario del laboratorio quedaría trabado. Si hubiera que apagarlo
+por un problema, antes hay que terminar (resultados cargados) todas las
+solicitudes con perfiles que estén en `CREADO`.
 
 ---
 
@@ -482,7 +549,7 @@ Cómo resolverlo, en este orden:
    existía, `con_grupo` y `huella_grupos` también deben ser idénticos. Si la
    columna se creó en el paso 7.1, `con_grupo` debe ser **0**.
 2. `php scripts/verificar_migraciones.php` → `OK`, con solo las neutralizadas
-   pendientes (si no se registraron en 7.7).
+   pendientes (si no se registraron en 7.9).
 3. Prueba funcional:
    - crear un laboratorio con código laboratorio (por ejemplo `A19`) y abrir su
      PDF: CODELAB encima, código `LAB-…-A19`, dirección bajo el logo, datos del
@@ -499,7 +566,8 @@ Cómo resolverlo, en este orden:
    - en Laboratorio → Catálogo de pruebas: no debe aparecer el filtro "Tipo" ni
      el selector "Examen / Perfil" (perfiles apagados), y el listado, "Nueva
      venta" y "Crear laboratorio" deben cargar normalmente (si fallan con
-     `es_perfil`, faltó el paso 7.5 o 7.6).
+     `es_perfil` o con `solicitud_laboratorio_perfiles`, faltó alguno de los
+     pasos 7.5 a 7.8).
 4. **Categoría para gastos generales (decisión de la administración).** Las
    categorías de gasto son las de los tipos de producto (Laboratorio, Farmacia,
    Servicios médicos, Hospitalización, Imagenología), y ninguna sirve para gastos
@@ -520,9 +588,12 @@ Cómo resolverlo, en este orden:
   (borra los códigos laboratorio cargados desde el despliegue). Lo mismo con las
   de categoría de gasto (`2026_11_04_000200_…` primero y luego
   `2026_11_04_000100_…`), que borran las categorías cargadas en los gastos.
-  Las de perfiles (`2026_11_11_000200_…` primero y luego `2026_11_11_000100_…`)
+  Las de perfiles (`2026_11_12_000200_…`, `2026_11_12_000100_…`,
+  `2026_11_11_000200_…` y `2026_11_11_000100_…`, en ese orden)
   solo se revierten **después** de volver al código anterior: el código nuevo
-  las necesita. Con los perfiles apagados no tienen datos que perder.
+  las necesita. Si los perfiles nunca se encendieron, no tienen datos que
+  perder; si ya se usaron, revertirlas borra los perfiles de las solicitudes y
+  su composición (no hacerlo sin respaldo).
 - **Datos:** si las comprobaciones del paso 12 muestran cambios, restaurar el
   respaldo del paso 1.
 

@@ -74,7 +74,9 @@ Tomadas tras revisar esta fase. Prevalecen sobre las sugerencias de §10 donde d
 |---|---|---|
 | 0 | Diagnóstico y decisiones (este documento) | Hecha (2026-11-10) |
 | 1 | Modelo y catálogo de perfiles | Implementada en `master` (2026-11-11), con el interruptor apagado |
-| 2 y siguientes | Venta, solicitud (expansión), kardex, informe y reportes | Pendientes |
+| 2 | Venta y solicitud (expansión), reporte general | Implementada en `master` (2026-11-11), con el interruptor apagado |
+| 3 | Kardex de reactivos | **Cubierta sin cambios**: el kardex cuenta los exámenes expandidos, un examen compartido por dos perfiles cuenta una vez y el perfil no tiene reactivos propios (D7; test en `PerfilSolicitudTest`) |
+| 4 | Informe agrupado por perfil | **Siguiente.** Hasta terminarla, `LAB_PERFILES_HABILITADO` sigue en `false` en producción |
 
 ### Fase 1: modelo y catálogo
 
@@ -112,6 +114,213 @@ Tomadas tras revisar esta fase. Prevalecen sobre las sugerencias de §10 donde d
 - En `laboratorio/index.vue`: chip "PERFIL" y filtro "Tipo".
 
 **Tests.** `tests/Feature/PerfilLaboratorioTest.php` tiene 16 casos sobre un esquema propio en SQLite, sin depender de las migraciones que fallan.
+
+---
+
+## Diseño Fase 2: venta y solicitud
+
+**Estado (2026-11-11):** implementada según este diseño y las decisiones de abajo.
+- Migraciones `2026_11_12_000100` y `000200`.
+- Tests en `tests/Feature/PerfilSolicitudTest.php`: 13 casos.
+- Verificada en `urme_prueba` con el interruptor encendido y apagado.
+
+Diferencias con el diseño:
+- `GET /solicitudes-laboratorio/form-data` devuelve también `perfiles_habilitado`, para que "Crear laboratorio" no dependa de que `/me` haya respondido.
+- `Producto::motivoPerfilNoVendible()` da el motivo concreto para los mensajes de P4; `esPerfilVendible()` lo usa.
+  - Usa el área y la composición ya cargadas, si las hay, y si no las consulta.
+  - Así, `form-data` carga los perfiles de una vez y hace una cantidad fija de consultas: 10 con perfiles en lugar de 6, sin importar cuántos perfiles haya. Antes eran 5 por perfil.
+  - Los listados de productos y el reporte general no consultan nada por fila: el reporte suma 1 consulta fija, el conteo de perfiles del resumen.
+
+Regla general: **todo lo nuevo actúa solo con `LAB_PERFILES_HABILITADO=true`.** Con `false`:
+- siguen las defensas de la Fase 1 (venta y solicitud rechazan un perfil con 422);
+- `GET /productos` sigue excluyendo los perfiles;
+- las tablas nuevas quedan vacías y todo se ve como hoy.
+
+Fuera de alcance: el informe agrupado por perfil (Fase 4) y el vínculo venta–solicitud (pendiente propio).
+
+### D1. Esquema (2 migraciones aditivas, `down()` completo)
+
+**Migración 1: tabla `solicitud_laboratorio_perfiles`.** El perfil tal como quedó en la solicitud.
+
+| Columna | Tipo | Nota |
+|---|---|---|
+| `id` | bigint | |
+| `solicitude_id` | FK → `solicitudes`, `ON DELETE CASCADE` | Se llama `solicitude_id`, no `solicitud_id`, por coherencia con `solicitud_laboratorio_items.solicitude_id` y con la relación de Eloquent del modelo `Solicitude` (ver P1) |
+| `perfil_producto_id` | FK → `productos`, nullable, `ON DELETE SET NULL` | Igual que `items.producto_id`: el nombre y el precio quedan copiados |
+| `nombre` | varchar(255) | Copia de `productos.nombre` al guardar |
+| `precio` | decimal(10,2) | Copia de `productos.precio` al guardar; mismo tipo que `items.precio` |
+| `orden` | int unsigned | Posición en la solicitud; comparable con `items.orden` (ver D2) |
+| timestamps, `deleted_at` | | |
+
+- Índices: `solicitude_id` y `perfil_producto_id`.
+- **Soft delete**, coherente con los ítems y resultados: hoy, al editar, `syncLaboratorios` quita lo que sobra con soft delete (§2.5).
+- Modelo `SolicitudLaboratorioPerfil` con `SoftDeletes` y `Auditable`. Se suma a `SolicitudeController::auditoria()` con la entidad "Perfil: {nombre}".
+- Sin índice único (solicitud, perfil): con soft delete, quitar y volver a poner un perfil chocaría con la fila borrada. La unicidad la garantiza `distinct` en la validación.
+
+**Migración 2: `solicitud_laboratorio_items.solicitud_laboratorio_perfil_id`.**
+- Nullable, FK → `solicitud_laboratorio_perfiles`, `ON DELETE SET NULL`, con índice.
+- Indica de qué perfil de la solicitud vino el examen. `NULL` significa examen suelto, que es el caso de todos los ítems existentes.
+
+**No hace falta ninguna otra columna:**
+- el precio de un examen del perfil es 0 y el reporte lo muestra como "incluido en el perfil" (decisión 6), así que no se guarda un precio de referencia;
+- `solicitudes.total` ya existe.
+
+### D2. Expansión al crear y al editar (`CREADO`)
+
+**Dónde.** En `SolicitudeController`: `validatedPayload()` valida y `syncLaboratorios()` guarda. Corre dentro de la **misma transacción** que ya usan `store()` y `update()`.
+
+Cubre todos los caminos, porque todos llegan a esos dos métodos:
+- "Crear laboratorio" y "Crear e imprimir" (`POST`);
+- "Guardar e imprimir" (`PUT`);
+- el formulario cargado desde "Cargar venta pagada".
+
+**Contrato.** No cambia la forma del payload.
+- `producto_ids` sigue siendo la lista ordenada de lo que se eligió en el catálogo, y ahora puede traer ids de perfiles mezclados con exámenes sueltos.
+- Sigue con `distinct`.
+- El backend distingue los perfiles por `es_perfil`.
+
+**Validación** (`validatedPayload`):
+1. Si hay perfiles y el interruptor está apagado, responde 422, como en la Fase 1.
+2. Cada perfil debe cumplir `esPerfilVendible()`. Si no: 422 «El perfil X no se puede usar: tiene exámenes inactivos».
+3. Se arma el plan, recorriendo `producto_ids` en orden:
+   - **perfil**: sus exámenes vigentes, en su orden. Un examen que ya tomó un perfil anterior se salta (decisión 4) y se informa en la respuesta, en `avisos`.
+   - **examen suelto**: si algún perfil de la solicitud lo incluye, responde 422 «X está incluido en el perfil Y: quítelo de los sueltos» (decisión 3; la pantalla ya lo evita).
+4. Los resultados (`resultados[]`, por `producto_laboratorio_dato_id`) se validan contra los exámenes **expandidos**. Como cada examen aparece una sola vez, la clave sigue siendo única.
+
+**Guardado** (`syncLaboratorios`):
+- **Filas de perfil.**
+  - Se reutilizan las existentes por `perfil_producto_id`: se actualizan `nombre`, `precio` y `orden` desde el catálogo (decisión 2, sin congelar).
+  - Se crean las nuevas.
+  - Las que ya no vienen se quitan con soft delete.
+- **Ítems.**
+  - Igual que hoy, se reutilizan por `producto_id`, así que un examen que pasa de suelto a perfil, o al revés, **conserva sus resultados**.
+  - Se fija `solicitud_laboratorio_perfil_id`.
+  - `precio = 0` si es de un perfil, o `productos.precio` si es suelto.
+  - `orden` es correlativo: `(n + 1) × 10`, en el orden del plan.
+- **Orden del perfil.** `orden` = el orden de su primer examen. Así el frontend reconstruye la selección mezclando perfiles e ítems sueltos por `orden`.
+- **Total.** `solicitudes.total = Σ precio de los perfiles + Σ precio de los ítems sueltos`. Los exámenes de un perfil valen 0, así que nada se cuenta dos veces.
+- **Respuesta.** `store()`, `update()` y `show()` cargan también `perfiles` (la relación nueva `Solicitude::laboratorioPerfiles`) y `laboratorioItems.perfil`.
+
+### D3. Duplicados
+
+| Caso | Frontend (`nueva.vue`) | Backend |
+|---|---|---|
+| Se agrega un perfil que incluye un examen ya elegido suelto | Quita el suelto y avisa: «SODIO ya está en IONOGRAMA: se quitó el suelto» | Rechaza el payload si llegara así (D2, paso 3) |
+| Se agrega suelto un examen ya incluido en un perfil elegido | No lo agrega y avisa: «SODIO está incluido en IONOGRAMA» | Rechaza con 422 (D2, paso 3) |
+| Dos perfiles comparten un examen | Lo permite y avisa: «CLORO ya está en IONOGRAMA: aparecerá una sola vez» | Lo asigna al primer perfil y devuelve `avisos` |
+| Mismo id repetido | Imposible (es un toggle) | `distinct`, como hoy |
+
+### D4. Edición en `CREADO`
+
+- **Agregar o quitar un perfil:** siempre entero (decisión 8). En la pantalla, los exámenes de un perfil no tienen el botón "quitar" ni se arrastran sueltos; se arrastra el bloque del perfil completo.
+- **Quitar un perfil con resultados cargados:** sus ítems y resultados se quitan con soft delete, igual que hoy al quitar un examen suelto. Quedan en la auditoría. Antes de quitarlo, la pantalla pide confirmación: «Se perderán N resultados cargados de IONOGRAMA».
+  - Excepción: un examen del perfil quitado que siga en la solicitud, por estar suelto o en otro perfil, conserva su ítem y sus resultados (reutilización por `producto_id`).
+- **Vuelve a expandir desde el catálogo** (decisión 2): si la composición del perfil cambió, al guardar se agregan o quitan exámenes. Si el perfil dejó de ser vendible, no se puede guardar mientras siga en la solicitud (ver P4).
+- **Con el interruptor apagado**, una solicitud que tiene perfiles **no se puede modificar**: `update()` responde 422 «Esta solicitud incluye perfiles y los perfiles están deshabilitados». Así se evita que la pantalla vieja la guarde como solo sueltos y pierda los perfiles. Ver, imprimir y el PDF siguen funcionando.
+
+### D5. Venta
+
+- **Listado.** `GET /productos` incluye los perfiles **solo con el interruptor encendido y si se piden** (`incluir_perfiles=1`). "Nueva venta" los pide; el selector de cargos de internación no (ver P2).
+  - Cada perfil trae `perfil_vendible`, calculado con una subconsulta: no tiene exámenes dados de baja ni fuera de un área de laboratorio, y tiene al menos 2.
+- **`ventas/crear.vue`.**
+  - Chip "PERFIL".
+  - Si no es vendible, el botón se deshabilita con el tooltip «Tiene exámenes inactivos».
+  - Se agrega como cualquier servicio sin lote: una línea con `nombre` y `precio` del perfil, precio editable y el asterisco si se cambia (`precio_original` = precio del perfil).
+- **Precio de seguro.** Hoy la venta no usa `precio_seguro` para ningún producto (§3.2); el perfil queda igual (decisión 9).
+- **`VentaController::store`.** La defensa de la Fase 1 se convierte en:
+  - con el interruptor apagado: 422, como hoy;
+  - encendido: 422 si `! esPerfilVendible()`.
+
+  Un perfil no es de FARMACIA, así que no pide lote ni toca stock (`requiereLote` compara con el nombre del tipo). `venta_detalles` guarda una línea; los exámenes no se expanden en la venta.
+- La cantidad > 1 se permite sin aviso en la venta (ver P3).
+
+### D6. "Cargar venta pagada"
+
+- `ventasLaboratorio` ya trae las líneas de perfil, porque el perfil está en un área de laboratorio. No cambia.
+- `aplicarVentaLaboratorio`, con el interruptor encendido:
+  - pone en `producto_ids` los perfiles y los exámenes de la venta;
+  - aplica las reglas de D3: si la venta trae IONOGRAMA y además SODIO suelto, se quita el suelto con aviso. En la venta se cobraron los dos; el aviso lo dice;
+  - si una línea de perfil o examen tiene cantidad > 1, avisa: «La venta tiene 2 × IONOGRAMA: se carga una sola vez» (decisión 13);
+  - si una línea no está en el catálogo (examen dado de baja o perfil no vendible), avisa en lugar de omitirla en silencio.
+- Con el interruptor apagado no cambia nada.
+
+### D7. Kardex de reactivos (sin cambios)
+
+`ReactivoKardex` cuenta `solicitud_laboratorio_items` por `producto_id`. Los exámenes expandidos son ítems con el `producto_id` del examen, así que cuentan **sin tocar el servicio**.
+- Un examen compartido por dos perfiles es **un solo ítem** (D2, paso 3), así que se cuenta una vez.
+- El perfil no tiene ítem propio (vive en la tabla nueva) y no puede tener reactivos (Fase 1), así que no suma.
+
+Se agrega un test que lo compruebe.
+
+### D8. Reportes y pantallas con importes de la solicitud
+
+| Lugar | Cambio |
+|---|---|
+| Reporte general: pantalla, Excel y PDF (`LaboratorioReporteController`) | Las filas pasan a ser la **unión** de los ítems y de las filas de `solicitud_laboratorio_perfiles` (`unionAll` paginado con `fromSub`). Para cada perfil: una fila "IONOGRAMA" con su precio, y debajo sus exámenes con el importe «Incluido en IONOGRAMA» (0). Resumen: solicitudes, **exámenes** (cantidad de ítems), **perfiles** y **importe = Σ precio de los ítems + Σ precio de los perfiles**. El filtro por nombre busca en ambos. Sin perfiles, la unión devuelve exactamente las filas de hoy |
+| Listado de solicitudes (`solicitudes-laboratorio/index.vue`) | Los chips muestran primero los perfiles y luego los sueltos. El total ya es correcto (`solicitudes.total`). El índice carga también `laboratorioPerfiles` |
+| Detalle (diálogo del listado) | Encabezado del perfil con su precio. Sus exámenes dicen «Incluido en el perfil» en lugar de «Bs 0.00» |
+| "Crear laboratorio" / "Modificar" | Total = perfiles + sueltos (D2), con el bloque del perfil y su precio |
+| Informe PDF y verificación pública | Sin cambios en esta fase: imprimen los exámenes como hoy, sin importes. La agrupación por perfil es la Fase 4 |
+
+### D9. Lo que sigue igual
+
+Caja, cierre de caja, dashboard, historial y exportaciones de ventas, ventas por cliente y estado de cuenta (simple, agrupado y por categoría) leen `venta_detalles`. El perfil es **una línea con su precio**, así que funcionan sin cambios, como ya se confirmó en §6:
+- el dashboard lo suma en su área;
+- el estado de cuenta por categoría lo suma en LABORATORIO.
+
+Se verificará con una venta de perfil en `urme_prueba`: el cierre, el comprobante y el estado de cuenta.
+
+### D10. Riesgos y cómo se prueban
+
+| Riesgo | Prueba |
+|---|---|
+| Importe inflado o perdido en el total o en el reporte | Test: perfil de Bs 100 con 3 exámenes de Bs 43 más un suelto de Bs 20 da total 120 y reporte 120 |
+| Duplicados (suelto incluido, perfiles que comparten un examen) | Tests de 422 y del examen asignado al primer perfil; ítems únicos por `producto_id` |
+| Resultados perdidos al editar | Test: un examen que pasa de suelto a perfil conserva su resultado; al quitar el perfil, los resultados quedan con soft delete y en la auditoría |
+| Doble consumo en el kardex | Test del kardex con un examen compartido |
+| Solicitud con perfiles editada con el interruptor apagado | Test de 422 en `update()` |
+| Venta de un perfil no vendible | Test de 422 en `VentaController` y botón deshabilitado en la pantalla |
+| Con el interruptor apagado, algo cambia | Checksums antes y después en `urme_prueba`; reporte general idéntico (mismas filas y el mismo importe) |
+| Migración de esquema sobre datos existentes | `--pretend` y conteos: todos los ítems existentes quedan con `solicitud_laboratorio_perfil_id = NULL` |
+
+Los tests usan un esquema propio en SQLite, como en la Fase 1. La verificación funcional en `urme_prueba` cubre los dos estados del interruptor:
+- venta de un perfil;
+- "Cargar venta pagada";
+- crear y editar una solicitud con perfiles;
+- reporte, Excel y PDF;
+- kardex.
+
+### D11. Pendientes de la Fase 1 que se resuelven aquí
+
+- **Acceso por URL directa con el interruptor apagado.** Si el producto tiene `es_perfil` y no llega el bloque `perfil`, `laboratorio/[id].vue` muestra un aviso: «Es un perfil de exámenes; los perfiles están deshabilitados». Oculta «Nuevo dato» y las secciones de configuración.
+- **Farmacia → productos no filtra los perfiles.** `ProductoController::datos` y las exportaciones de productos (PDF y Excel) los excluyen **siempre**: los perfiles se administran solo en el catálogo de laboratorio.
+
+### Decisiones de la Fase 2 (2026-11-11)
+
+Diseño aprobado con estas respuestas:
+- **P1:** la columna se llama `solicitude_id`.
+- **P2:** no se cargan perfiles como cargo de internación. El backend también los rechaza; queda como pendiente en `PENDIENTES.md`.
+- **P3:** el aviso de cantidad > 1 se da solo al cargar la venta pagada.
+- **P4:** se bloquea el guardado, con un mensaje que nombra el perfil y el examen que lo hace no vendible.
+- **P5:** el reporte general muestra la fila del perfil con su precio y sus exámenes como «Incluido en …», también en el Excel y el PDF.
+
+Agregados:
+- **A1. Cambio de composición en `CREADO`.** Si al editar una solicitud la composición actual del perfil en el catálogo difiere de la guardada, la pantalla avisa **antes de guardar**:
+  - qué exámenes entran y cuáles salen;
+  - si los que salen tienen resultados cargados.
+
+  El backend aplica la expansión igual que en D2.
+- **A2. Interruptor.** Una vez que se vendan perfiles en producción, `LAB_PERFILES_HABILITADO` no debe volver a `false`. El motivo queda en `DESPLIEGUE_PRODUCCION.md`.
+
+### Preguntas abiertas de la Fase 2 (respondidas arriba)
+
+- **P1. Nombre de la columna.** Propongo `solicitude_id` en lugar de `solicitud_id`, por coherencia con la tabla de ítems y con el modelo `Solicitude`. ¿De acuerdo?
+- **P2. Internación.** ¿Se pueden cargar perfiles como cargo de internación?
+  - Recomiendo **no por ahora**: el selector de internación no los pide, y `InternacionItemController::store` los rechaza con 422.
+  - Con el cobro de la internación, la línea pierde el `producto_id` y la solicitud no se puede cargar desde ella.
+- **P3. Cantidad > 1 en "Nueva venta".** Recomiendo no avisar al vender (vender 2 perfiles puede ser legítimo, para dos pacientes) y avisar solo al cargar la venta pagada (D6).
+- **P4. Un perfil que deja de ser vendible con una solicitud en `CREADO`.** Recomiendo **bloquear el guardado** hasta quitar el perfil o corregir el catálogo, coherente con "sin congelamiento". La alternativa es conservar la composición guardada solo en ese caso.
+- **P5. Reporte general con filas unidas** (perfil con su precio y sus exámenes «incluido»). ¿Se aprueba este formato, también para el Excel y el PDF?
 
 ---
 

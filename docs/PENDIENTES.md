@@ -9,8 +9,7 @@ revisan y, si corresponde, se corrigen desde la pantalla.
 | Pendiente | Gravedad | Decide |
 |---|---|---|
 | [Venta pagada sin vínculo con la solicitud de laboratorio](#venta-pagada-sin-vínculo-con-la-solicitud-de-laboratorio) | Alta | Desarrollo y laboratorio |
-| [Perfiles: acceso por URL directa con el interruptor apagado](#perfiles-acceso-por-url-directa-con-el-interruptor-apagado) | Baja | Desarrollo (Fase 2) |
-| [Perfiles: Farmacia → productos no los filtra](#perfiles-farmacia--productos-no-los-filtra) | Baja | Desarrollo (Fase 2) |
+| [Perfiles de exámenes como cargo de internación](#perfiles-de-exámenes-como-cargo-de-internación) | Baja | Laboratorio y administración |
 | [Movimientos de caja con la hora corrida](#movimientos-de-caja-con-la-hora-corrida-en-producción) | Alta | Administración, caso por caso |
 | [Categoría para gastos generales](#categoría-para-gastos-generales) | Media | Administración |
 | [Comprobantes impresos](#comprobantes-impresos-frontsrcaddonsprintjs) | Baja | Desarrollo |
@@ -44,28 +43,20 @@ revisan y, si corresponde, se corrigen desde la pantalla.
   `solicitudes.venta_id` (o una tabla de enlace) con aviso si la venta ya se usó,
   hasta qué hacer con la solicitud al anular la venta.
 
-### Perfiles: acceso por URL directa con el interruptor apagado
+### Perfiles de exámenes como cargo de internación
 
-- **Origen:** Fase 1 de perfiles de exámenes (2026-11-11), en
-  [`ANALISIS_PERFILES_FASE0.md`](ANALISIS_PERFILES_FASE0.md), «Estado del proyecto».
-- **Gravedad:** baja. Solo pasa si se crearon perfiles con
-  `LAB_PERFILES_HABILITADO=true` y después se apagó el interruptor.
-  - El catálogo ya no los lista, pero entrando a mano a `/laboratorio/{id}` de un
-    perfil se ve la pantalla de un examen común, con «Nuevo dato».
-  - El backend igual rechaza agregarle parámetros, fórmulas o validaciones (422).
-- **Decide:** desarrollo, en la Fase 2: mostrar un aviso, o volver al catálogo,
-  cuando el producto es un perfil y el interruptor está apagado.
-
-### Perfiles: Farmacia → productos no los filtra
-
-- **Origen:** Fase 1 de perfiles de exámenes (2026-11-11).
-- **Gravedad:** baja. La pantalla general de productos (`GET /farmacia/datos`)
-  lista todos los productos, también los perfiles, con o sin interruptor. Solo se
-  nota si existen perfiles. Desde ahí se puede editar un perfil:
-  - el backend no deja cambiarlo a un área que no sea de laboratorio;
-  - sí deja darlo de baja, lo que no afecta a sus exámenes.
-- **Decide:** desarrollo, en la Fase 2: excluir los perfiles de esa pantalla o
-  marcarlos con un chip «PERFIL».
+- **Origen:** Fase 2 de perfiles de exámenes (2026-11-11), decisión P2 de
+  [`ANALISIS_PERFILES_FASE0.md`](ANALISIS_PERFILES_FASE0.md).
+- **Gravedad:** baja. Un perfil (p. ej. IONOGRAMA) **no se puede cargar a una
+  internación**: el selector de cargos no lo ofrece y
+  `POST /internaciones/{id}/items` lo rechaza con 422. Hay que cargar sus
+  exámenes por separado, cada uno con su precio suelto.
+- **Por qué:** al cobrar la internación, sus cargos pasan a la venta sin
+  `producto_id`, y esa venta no se puede cargar en "Crear laboratorio": el perfil
+  no se expandiría en ninguna solicitud.
+- **Decide:** laboratorio y administración: si los perfiles deben poder cargarse
+  a una internación (con su precio) y cómo llegarían a la solicitud. Depende del
+  vínculo venta–solicitud (pendiente de arriba).
 
 ### Movimientos de caja con la hora corrida en producción
 
@@ -216,6 +207,14 @@ fechas de la API recortadas como texto en UTC.** Una sola observación, menor:
   respaldo de `back` en lugar de borrar fila por fila.
 
 ## Resueltos
+
+- **Perfiles: acceso por URL directa con el interruptor apagado** (Fase 2,
+  2026-11-11): `laboratorio/[id].vue` muestra «Este producto es un perfil de
+  exámenes y los perfiles están deshabilitados» y oculta «Nuevo dato» y la
+  configuración.
+- **Perfiles: Farmacia → productos no los filtraba** (Fase 2, 2026-11-11):
+  `GET /farmacia/datos` y las exportaciones de productos (PDF y Excel) excluyen
+  siempre los perfiles; se administran solo en el catálogo de laboratorio.
 
 - **Hora al editar movimientos de caja** (commit `e4dccfb`, 2026-11-04): el
   formulario convierte la fecha de UTC a hora de Bolivia y, si no se cambia, no

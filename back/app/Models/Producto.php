@@ -145,19 +145,78 @@ class Producto extends Model implements AuditableContract
 
     /**
      * Un perfil se puede vender si sigue vigente en un área de laboratorio, tiene
-     * al menos dos exámenes y todos están activos. Lo usará la venta (Fase 2).
+     * al menos dos exámenes y todos están activos.
      */
     public function esPerfilVendible(): bool
     {
-        if (! $this->es_perfil || $this->trashed() || ! $this->tipoProducto?->es_laboratorio) {
-            return false;
+        return $this->motivoPerfilNoVendible() === null;
+    }
+
+    /** Por qué el perfil no se puede vender ni usar en una solicitud; null si se puede. */
+    public function motivoPerfilNoVendible(): ?string
+    {
+        if (! $this->es_perfil) {
+            return "{$this->nombre} no es un perfil de exámenes.";
+        }
+        if ($this->trashed()) {
+            return "El perfil {$this->nombre} está dado de baja.";
+        }
+        // Si quien llama ya cargó el área con es_laboratorio se usa; si no (p. ej.
+        // la venta la carga solo con id y nombre), se consulta aparte.
+        $area = $this->relationLoaded('tipoProducto') && $this->tipoProducto
+            && array_key_exists('es_laboratorio', $this->tipoProducto->getAttributes())
+            ? $this->tipoProducto->es_laboratorio
+            : TipoProducto::whereKey($this->tipo_producto_id)->value('es_laboratorio');
+        if (! $area) {
+            return "El perfil {$this->nombre} no pertenece a un área de laboratorio.";
         }
 
-        $items = $this->perfilItems()
-            ->with(['producto' => fn ($query) => $query->withTrashed()->with('tipoProducto')])
-            ->get();
+        // Los listados cargan de una vez perfilItems.producto (con los dados de baja) y su área.
+        $items = $this->relationLoaded('perfilItems')
+            ? $this->perfilItems
+            : $this->perfilItems()->with(['producto' => fn ($query) => $query->withTrashed()->with('tipoProducto')])->get();
+        if ($items->count() < 2) {
+            return "El perfil {$this->nombre} tiene menos de 2 exámenes.";
+        }
+        foreach ($items as $item) {
+            $examen = $item->producto;
+            if (! self::examenActivo($examen)) {
+                $motivo = match (true) {
+                    $examen === null => 'ya no existe',
+                    $examen->trashed() => 'está dado de baja',
+                    default => 'no pertenece a un área de laboratorio',
+                };
 
-        return $items->count() >= 2
-            && $items->every(fn (ProductoPerfilItem $item) => self::examenActivo($item->producto));
+                return "El perfil {$this->nombre} no se puede usar: su examen "
+                    .($examen?->nombre ?? "#{$item->producto_id}")." {$motivo}.";
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Exámenes vigentes del perfil, en orden: los que se agregan a la solicitud.
+     * Solo tiene sentido en un perfil vendible.
+     */
+    public function examenesDelPerfil()
+    {
+        return $this->perfilItems()->with('producto')->get()->pluck('producto')->filter()->values();
+    }
+
+    /**
+     * Agrega perfil_vendible al listado: 1 si el perfil tiene al menos 2 exámenes
+     * y ninguno está dado de baja ni fuera de un área de laboratorio.
+     */
+    public function scopeConPerfilVendible($query)
+    {
+        $inactivos = '(SELECT COUNT(*) FROM producto_perfil_items ppi
+            LEFT JOIN productos ex ON ex.id = ppi.producto_id
+            LEFT JOIN tipo_productos tx ON tx.id = ex.tipo_producto_id AND tx.deleted_at IS NULL
+            WHERE ppi.perfil_id = productos.id
+              AND (ex.id IS NULL OR ex.deleted_at IS NOT NULL OR tx.id IS NULL OR tx.es_laboratorio = 0))';
+        $total = '(SELECT COUNT(*) FROM producto_perfil_items ppi WHERE ppi.perfil_id = productos.id)';
+
+        return $query->selectRaw("productos.es_perfil = 1 AND {$inactivos} = 0 AND {$total} >= 2 AS perfil_vendible");
     }
 }

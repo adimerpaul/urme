@@ -248,9 +248,15 @@ class VentaController extends Controller
                 $producto = ! empty($item['producto_id'])
                     ? Producto::with('tipoProducto:id,nombre')->find($item['producto_id'])
                     : null;
-                // Los perfiles de exámenes todavía no se venden (llegan en la Fase 2).
+                // Perfil de exámenes: una sola línea con su precio, sin lote ni stock.
+                // Solo con los perfiles habilitados y si todos sus exámenes están activos.
                 if ($producto?->es_perfil) {
-                    abort(422, "{$producto->nombre} es un perfil de exámenes: todavía no se puede vender");
+                    if (! config('laboratorio.perfiles_habilitado')) {
+                        abort(422, "{$producto->nombre} es un perfil de exámenes: todavía no se puede vender");
+                    }
+                    if ($motivo = $producto->motivoPerfilNoVendible()) {
+                        abort(422, $motivo);
+                    }
                 }
                 $precio = (float) $item['precio'];
                 $cantidad = (float) $item['cantidad'];

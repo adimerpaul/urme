@@ -24,7 +24,9 @@ class ProductosExport implements FromCollection, ShouldAutoSize, WithHeadings, W
 
     public function collection()
     {
+        // Los perfiles de exámenes se administran solo en el catálogo de laboratorio.
         $query = Producto::with(['fabricante:id,nombre', 'unidad:id,nombre,abreviatura', 'tipoProducto:id,nombre'])
+            ->where('es_perfil', false)
             ->orderBy('nombre');
 
         $tipoProductoId = $this->filters['tipo_producto_id'] ?? '';

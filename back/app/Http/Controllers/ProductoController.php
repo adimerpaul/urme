@@ -44,6 +44,8 @@ class ProductoController extends Controller
             ->withSum(['compraDetalles as stock' => function ($q) {
                 $q->whereHas('compra', fn ($cq) => $cq->where('estado', 'ACTIVO'));
             }], 'cantidad')
+            // Los perfiles de exámenes se administran solo en el catálogo de laboratorio.
+            ->where('es_perfil', false)
             ->orderBy('nombre');
         if ($qProductos) {
             $productosQuery->where(function ($sq) use ($qProductos) {
@@ -523,9 +525,11 @@ class ProductoController extends Controller
             $query->whereHas('tipoProducto', fn ($tq) => $tq->where('es_laboratorio', true));
         }
 
-        // Los perfiles todavía no se venden: solo los pide el catálogo de laboratorio
-        // (?incluir_perfiles=1) y solo con los perfiles habilitados.
+        // Los perfiles solo salen si se piden (?incluir_perfiles=1: catálogo de
+        // laboratorio y "Nueva venta") y con los perfiles habilitados. La internación
+        // no los pide. Cada fila trae perfil_vendible.
         if (config('laboratorio.perfiles_habilitado') && $request->boolean('incluir_perfiles')) {
+            $query->conPerfilVendible();
             if ($request->input('clase') === 'perfil') {
                 $query->where('es_perfil', true);
             } elseif ($request->input('clase') === 'examen') {
@@ -611,6 +615,7 @@ class ProductoController extends Controller
         $tipoProductoId = $request->input('tipo_producto_id', '');
 
         $query = Producto::with(['fabricante:id,nombre', 'unidad:id,nombre,abreviatura', 'tipoProducto:id,nombre,color,es_laboratorio'])
+            ->where('es_perfil', false)
             ->orderBy('nombre');
         if ($tipoProductoId) {
             $query->where('tipo_producto_id', $tipoProductoId);

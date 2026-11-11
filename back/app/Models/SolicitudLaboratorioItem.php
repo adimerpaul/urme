@@ -11,7 +11,7 @@ class SolicitudLaboratorioItem extends Model implements AuditableContract
 {
     use AuditableTrait, SoftDeletes;
 
-    protected $fillable = ['solicitude_id', 'producto_id', 'producto_nombre', 'precio', 'orden'];
+    protected $fillable = ['solicitude_id', 'producto_id', 'solicitud_laboratorio_perfil_id', 'producto_nombre', 'precio', 'orden'];
 
     protected $hidden = ['deleted_at'];
 
@@ -25,6 +25,12 @@ class SolicitudLaboratorioItem extends Model implements AuditableContract
     public function producto()
     {
         return $this->belongsTo(Producto::class);
+    }
+
+    /** Perfil de la solicitud del que vino el examen (null = examen suelto). */
+    public function perfil()
+    {
+        return $this->belongsTo(SolicitudLaboratorioPerfil::class, 'solicitud_laboratorio_perfil_id');
     }
 
     public function resultados()

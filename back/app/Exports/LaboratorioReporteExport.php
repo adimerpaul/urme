@@ -2,8 +2,8 @@
 
 namespace App\Exports;
 
-use Illuminate\Database\Eloquent\Builder;
-use Maatwebsite\Excel\Concerns\FromQuery;
+use Illuminate\Support\Collection;
+use Maatwebsite\Excel\Concerns\FromCollection;
 use Maatwebsite\Excel\Concerns\ShouldAutoSize;
 use Maatwebsite\Excel\Concerns\WithCustomValueBinder;
 use Maatwebsite\Excel\Concerns\WithHeadings;
@@ -12,11 +12,12 @@ use Maatwebsite\Excel\Concerns\WithStyles;
 use PhpOffice\PhpSpreadsheet\Cell\StringValueBinder;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
-class LaboratorioReporteExport extends StringValueBinder implements FromQuery, ShouldAutoSize, WithCustomValueBinder, WithHeadings, WithMapping, WithStyles
+class LaboratorioReporteExport extends StringValueBinder implements FromCollection, ShouldAutoSize, WithCustomValueBinder, WithHeadings, WithMapping, WithStyles
 {
-    public function __construct(private Builder $items) {}
+    /** @param  Collection  $items  Filas de LaboratorioReporteController (exámenes y perfiles). */
+    public function __construct(private Collection $items) {}
 
-    public function query()
+    public function collection()
     {
         return $this->items;
     }
@@ -34,9 +35,10 @@ class LaboratorioReporteExport extends StringValueBinder implements FromQuery, S
             $item->solicitude->codigo_laboratorio,
             $item->solicitude->paciente?->nombre_completo,
             $item->solicitude->paciente?->ci,
-            $item->producto_nombre,
+            $item->clase === 'perfil' ? $item->producto_nombre.' (PERFIL)' : $item->producto_nombre,
             $item->solicitude->estado,
-            (float) $item->precio,
+            // Un examen de perfil no tiene importe propio: lo cobra el perfil.
+            $item->perfil_nombre ? 'Incluido en '.$item->perfil_nombre : (float) $item->precio,
         ];
     }
 

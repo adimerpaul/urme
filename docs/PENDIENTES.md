@@ -187,7 +187,10 @@ fechas de la API recortadas como texto en UTC.** Una sola observación, menor:
        `TipoProducto` corre en migraciones anteriores a esa tabla. La corrección
        existe en `stash@{0}` (22-10-2026): no ejecutar el hook mientras no exista
        la columna `tipo_producto_padre_id`. **No se aplicó**, porque por sí sola
-       no corrige ningún test.
+       no corrige ningún test. El diff completo del stash quedó guardado en
+       [`stash_2026-10-22_ajustes_informe.patch`](stash_2026-10-22_ajustes_informe.patch)
+       (el cambio está en `back/app/Models/TipoProducto.php`), para no depender
+       del stash cuando se descarte.
     2. «no such table: producto_perfil_items»: el hook `deleting` de `Producto`
        (perfiles, Fase 1) consulta esa tabla cuando migraciones antiguas dan de
        baja productos con Eloquent. Se corrige igual, con

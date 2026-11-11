@@ -248,6 +248,10 @@ class VentaController extends Controller
                 $producto = ! empty($item['producto_id'])
                     ? Producto::with('tipoProducto:id,nombre')->find($item['producto_id'])
                     : null;
+                // Los perfiles de exámenes todavía no se venden (llegan en la Fase 2).
+                if ($producto?->es_perfil) {
+                    abort(422, "{$producto->nombre} es un perfil de exámenes: todavía no se puede vender");
+                }
                 $precio = (float) $item['precio'];
                 $cantidad = (float) $item['cantidad'];
 

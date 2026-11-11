@@ -119,6 +119,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/productos/{id}/lotes-disponibles', [ProductoController::class, 'lotesDisponibles']);
     Route::get('/productos/{producto}/laboratorio-configuracion', [ProductoLaboratorioController::class, 'show']);
     Route::put('/productos/{producto}/laboratorio-reporte', [ProductoLaboratorioController::class, 'updateReporte']);
+    Route::put('/productos/{producto}/laboratorio-perfil', [ProductoLaboratorioController::class, 'updatePerfil']);
     Route::post('/productos/{producto}/laboratorio-datos', [ProductoLaboratorioController::class, 'storeDato']);
     Route::put('/productos/{producto}/laboratorio-datos/orden', [ProductoLaboratorioController::class, 'reorderDatos']);
     Route::put('/producto-laboratorio-datos/{dato}', [ProductoLaboratorioController::class, 'updateDato']);

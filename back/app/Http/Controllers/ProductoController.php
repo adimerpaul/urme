@@ -283,7 +283,9 @@ class ProductoController extends Controller
         $q = $request->input('q', '');
         $perPage = $request->input('per_page');
 
-        $query = TipoProducto::with('padre:id,nombre,color,icono')->withCount('productos');
+        // Con los perfiles apagados no se cuentan: el catálogo tampoco los muestra.
+        $query = TipoProducto::with('padre:id,nombre,color,icono')->withCount(['productos' => fn ($productos) => $productos
+            ->when(! config('laboratorio.perfiles_habilitado'), fn ($sinPerfiles) => $sinPerfiles->where('es_perfil', false))]);
 
         if ($request->filled('tipo_producto_padre_id')) {
             $query->where('tipo_producto_padre_id', $request->input('tipo_producto_padre_id'));
@@ -521,6 +523,18 @@ class ProductoController extends Controller
             $query->whereHas('tipoProducto', fn ($tq) => $tq->where('es_laboratorio', true));
         }
 
+        // Los perfiles todavía no se venden: solo los pide el catálogo de laboratorio
+        // (?incluir_perfiles=1) y solo con los perfiles habilitados.
+        if (config('laboratorio.perfiles_habilitado') && $request->boolean('incluir_perfiles')) {
+            if ($request->input('clase') === 'perfil') {
+                $query->where('es_perfil', true);
+            } elseif ($request->input('clase') === 'examen') {
+                $query->where('es_perfil', false);
+            }
+        } else {
+            $query->where('es_perfil', false);
+        }
+
         return response()->json($query->paginate($perPage));
     }
 
@@ -560,6 +574,10 @@ class ProductoController extends Controller
             'precio_seguro' => 'nullable|numeric|min:0',
             'tipo_producto_id' => 'nullable|exists:tipo_productos,id',
         ]);
+        if ($producto->es_perfil
+            && ! TipoProducto::whereKey($request->tipo_producto_id)->where('es_laboratorio', true)->exists()) {
+            abort(422, 'Un perfil debe pertenecer a un área de laboratorio.');
+        }
         $producto->update([
             'codigo' => $request->codigo ? mb_strtoupper($request->codigo) : null,
             'nombre' => mb_strtoupper($request->nombre),

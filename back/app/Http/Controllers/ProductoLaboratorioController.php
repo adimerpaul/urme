@@ -19,12 +19,69 @@ class ProductoLaboratorioController extends Controller
         $this->authorizeAny($request, ['Ver Productos', 'Editar Productos']);
         $this->ensureLaboratorio($producto);
 
-        return response()->json($producto->load([
+        $producto->load([
             'laboratorioDatos.formula',
             'laboratorioDatos.opciones',
             'laboratorioFormulas',
             'laboratorioValidaciones',
-        ]));
+        ]);
+        if (config('laboratorio.perfiles_habilitado')) {
+            $producto->setAttribute('perfil', $this->datosPerfil($producto));
+        }
+
+        return response()->json($producto);
+    }
+
+    /**
+     * Marca o desmarca el producto como perfil y guarda sus exámenes en el orden
+     * recibido. Con es_perfil = false se quitan todos sus exámenes.
+     */
+    public function updatePerfil(Request $request, Producto $producto)
+    {
+        abort_unless(config('laboratorio.perfiles_habilitado'), 404);
+        $this->authorizeAny($request, 'Editar Productos');
+        $this->ensureLaboratorio($producto);
+
+        $data = $request->validate([
+            'es_perfil' => ['required', 'boolean'],
+            'producto_ids' => ['exclude_unless:es_perfil,true', 'required', 'array', 'min:2'],
+            'producto_ids.*' => ['integer', 'distinct'],
+        ], [
+            'producto_ids.required' => 'Agregue los exámenes del perfil.',
+            'producto_ids.min' => 'Un perfil debe tener al menos 2 exámenes.',
+            'producto_ids.*.distinct' => 'Un examen no puede repetirse en el perfil.',
+        ]);
+
+        if (! $data['es_perfil']) {
+            DB::transaction(function () use ($producto) {
+                $producto->perfilItems()->get()->each->delete();
+                $producto->update(['es_perfil' => false]);
+            });
+
+            return response()->json($this->datosPerfil($producto->fresh()));
+        }
+
+        $this->validarPuedeSerPerfil($producto);
+        $ids = array_map('intval', $data['producto_ids']);
+        $this->validarExamenes($producto, $ids);
+
+        DB::transaction(function () use ($producto, $ids) {
+            $producto->update(['es_perfil' => true]);
+            // Se conservan las filas que siguen para no perder su historial de auditoría.
+            $existentes = $producto->perfilItems()->get()->keyBy('producto_id');
+            foreach ($ids as $indice => $id) {
+                $orden = ($indice + 1) * 10;
+                $item = $existentes->pull($id);
+                if (! $item) {
+                    $producto->perfilItems()->create(['producto_id' => $id, 'orden' => $orden]);
+                } elseif ((int) $item->orden !== $orden) {
+                    $item->update(['orden' => $orden]);
+                }
+            }
+            $existentes->each->delete();
+        });
+
+        return response()->json($this->datosPerfil($producto->fresh()));
     }
 
     /**
@@ -54,6 +111,7 @@ class ProductoLaboratorioController extends Controller
     {
         $this->authorizeAny($request, 'Editar Productos');
         $this->ensureLaboratorio($producto);
+        $this->ensureNoPerfil($producto);
         $data = $this->validateDato($request, $producto);
         $opciones = $data['opciones'];
         unset($data['opciones']);
@@ -164,6 +222,7 @@ class ProductoLaboratorioController extends Controller
     {
         $this->authorizeAny($request, 'Editar Productos');
         $this->ensureLaboratorio($producto);
+        $this->ensureNoPerfil($producto);
         $data = $this->validateFormula($request, $producto);
         $data['producto_id'] = $producto->id;
         $data['orden'] = ((int) $producto->laboratorioFormulas()->max('orden')) + 10;
@@ -378,6 +437,7 @@ class ProductoLaboratorioController extends Controller
     {
         $this->authorizeAny($request, 'Editar Productos');
         $this->ensureLaboratorio($producto);
+        $this->ensureNoPerfil($producto);
         $data = $this->validateValidacion($request, $producto);
         $data['producto_id'] = $producto->id;
         $data['orden'] = ((int) $producto->laboratorioValidaciones()->max('orden')) + 10;
@@ -440,6 +500,89 @@ class ProductoLaboratorioController extends Controller
         }
 
         return $data;
+    }
+
+    /** Composición del perfil (o perfiles que incluyen al examen) para la pantalla del catálogo. */
+    private function datosPerfil(Producto $producto): array
+    {
+        $items = $producto->perfilItems()
+            ->with(['producto' => fn ($query) => $query->withTrashed()->with('tipoProducto:id,nombre,es_laboratorio')])
+            ->get();
+
+        return [
+            'es_perfil' => (bool) $producto->es_perfil,
+            'vendible' => $producto->esPerfilVendible(),
+            'examenes' => $items->map(fn ($item) => [
+                'id' => $item->producto_id,
+                'codigo' => $item->producto?->codigo,
+                'nombre' => $item->producto?->nombre,
+                'precio' => $item->producto?->precio,
+                'area' => $item->producto?->tipoProducto?->nombre,
+                'activo' => Producto::examenActivo($item->producto),
+            ])->values(),
+            'perfiles' => $producto->perfiles()->orderBy('nombre')->get(['productos.id', 'productos.nombre'])
+                ->map(fn ($perfil) => ['id' => $perfil->id, 'nombre' => $perfil->nombre]),
+        ];
+    }
+
+    /** Un perfil no tiene parámetros, fórmulas, validaciones ni reactivos propios, ni integra otro perfil. */
+    private function validarPuedeSerPerfil(Producto $producto): void
+    {
+        $propios = collect([
+            'parámetros' => $producto->laboratorioDatos()->exists(),
+            'fórmulas' => $producto->laboratorioFormulas()->exists(),
+            'mensajes de validación' => $producto->laboratorioValidaciones()->exists(),
+            'reactivos' => $producto->reactivoServicios()->exists(),
+        ])->filter()->keys();
+        if ($propios->isNotEmpty()) {
+            throw ValidationException::withMessages([
+                'es_perfil' => "{$producto->nombre} no puede ser un perfil: tiene ".$propios->join(', ', ' y ')
+                    .' propios. Un perfil solo agrupa exámenes; quítelos primero.',
+            ]);
+        }
+
+        $perfiles = $producto->perfiles()->pluck('nombre');
+        if ($perfiles->isNotEmpty()) {
+            throw ValidationException::withMessages([
+                'es_perfil' => "{$producto->nombre} no puede ser un perfil: forma parte del perfil "
+                    .$perfiles->implode(', ').'.',
+            ]);
+        }
+    }
+
+    /** Los exámenes deben existir, estar activos, ser de laboratorio y no ser perfiles. */
+    private function validarExamenes(Producto $perfil, array $ids): void
+    {
+        $examenes = Producto::withTrashed()->with('tipoProducto')->whereIn('id', $ids)->get()->keyBy('id');
+        $errores = [];
+        foreach ($ids as $id) {
+            $examen = $examenes->get($id);
+            if ($id === $perfil->id) {
+                $errores[] = 'Un perfil no puede incluirse a sí mismo.';
+            } elseif (! $examen) {
+                $errores[] = "El examen #{$id} no existe.";
+            } elseif ($examen->trashed()) {
+                $errores[] = "{$examen->nombre} está dado de baja.";
+            } elseif ($examen->es_perfil) {
+                $errores[] = "{$examen->nombre} es un perfil: un perfil no puede incluir otro perfil.";
+            } elseif (! $examen->tipoProducto?->es_laboratorio) {
+                $errores[] = "{$examen->nombre} no es un examen de laboratorio.";
+            }
+        }
+
+        if ($errores) {
+            throw ValidationException::withMessages(['producto_ids' => $errores]);
+        }
+    }
+
+    /** Defensa también con los perfiles apagados: un perfil no lleva configuración propia. */
+    private function ensureNoPerfil(Producto $producto): void
+    {
+        abort_if(
+            $producto->es_perfil,
+            422,
+            'Un perfil no tiene parámetros, fórmulas ni mensajes de validación propios: se configuran en sus exámenes.'
+        );
     }
 
     private function ensureLaboratorio(Producto $producto): void

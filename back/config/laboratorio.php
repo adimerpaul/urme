@@ -13,4 +13,8 @@ return [
 
     'celular' => env('LAB_CELULAR', '63944238'),
 
+    // Perfiles de exámenes (docs/ANALISIS_PERFILES_FASE0.md). Apagado, el catálogo
+    // no ofrece perfiles y sus endpoints responden 404.
+    'perfiles_habilitado' => filter_var(env('LAB_PERFILES_HABILITADO', false), FILTER_VALIDATE_BOOLEAN),
+
 ];

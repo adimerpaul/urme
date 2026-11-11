@@ -62,6 +62,7 @@ class SolicitudeController extends Controller
             'doctores' => Doctor::where('estado', 'ACTIVO')->orderBy('nombre')->get(['id', 'nombre', 'registro']),
             'laboratorios' => Producto::query()
                 ->whereHas('tipoProducto', fn ($query) => $query->where('es_laboratorio', true))
+                ->where('es_perfil', false)
                 ->with(['laboratorioDatos.formula', 'laboratorioDatos.opciones', 'laboratorioValidaciones' => fn ($query) => $query->where('activo', true)])
                 ->orderBy('nombre')
                 ->get(['id', 'codigo', 'nombre', 'precio', 'descripcion']),
@@ -379,6 +380,7 @@ class SolicitudeController extends Controller
         $productos = Producto::query()
             ->whereIn('id', $validated['producto_ids'])
             ->whereHas('tipoProducto', fn ($query) => $query->where('es_laboratorio', true))
+            ->where('es_perfil', false)
             ->with(['laboratorioDatos.formula', 'laboratorioDatos.opciones'])
             ->get()
             ->sortBy(fn ($producto) => array_search($producto->id, $validated['producto_ids'], true))

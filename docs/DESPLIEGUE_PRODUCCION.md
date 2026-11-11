@@ -68,6 +68,7 @@ donde esos productos ya existen.
 |---|---|
 | Base de datos | `2026_10_22_000100_add_grupo_reporte_to_productos_table` (si está pendiente), `2026_11_02_000100_add_codigo_laboratorio_to_solicitudes_table`, `2026_11_04_000100_add_categoria_gasto_to_ventas_table`, `2026_11_04_000200_add_categoria_gasto_to_caja_movimientos_table`, `2026_11_11_000100_add_es_perfil_to_productos_table`, `2026_11_11_000200_create_producto_perfil_items_table`, `2026_11_12_000100_create_solicitud_laboratorio_perfiles_table` y `2026_11_12_000200_add_perfil_to_solicitud_laboratorio_items_table`. Todas son de esquema y aditivas: columnas nullable o con valor por defecto, y una tabla nueva vacía. |
 | Backend | Informe de laboratorio (firma, dirección, CODELAB, datos del paciente en 3 columnas), campo código laboratorio obligatorio en solicitudes nuevas, código compuesto `LAB-AAAAMMDD-00000-<código>` en informes y pantallas. Categoría (obligatoria) y subcategoría de los gastos de Ventas y de las dos cajas, con `GET /categorias-gasto`. Perfiles de exámenes, Fases 1, 2 y 4 (catálogo, venta y expansión en la solicitud, reporte general, informe agrupado por perfil), **apagados** con `LAB_PERFILES_HABILITADO=false`: el sistema funciona como antes. Ya rigen siempre: no se puede dar de baja un examen que forma parte de un perfil, los perfiles no se cargan a una internación y no aparecen en Farmacia → productos (no hay perfiles hasta que se encienda). |
+| Informe de laboratorio (colores) | Azules oscurecidos (`5ed09e1`, rehechos del stash del 22/10): `#0B3D91` en el título, los encabezados de tabla, el nombre de la firma y el título de los perfiles; `#0E4BB6` en el código, el CODELAB y el slogan; `#1D69EE` en el borde del encabezado; `#0F54CC` en los bordes de tabla. Solo cambian colores: textos, tamaños y paginación no cambian. |
 | `.env` del backend | 6 variables nuevas (paso 8). |
 | Frontend | Campo "Código laboratorio" en Crear laboratorio, código compuesto en listado, WhatsApp, verificación y reporte general. Categoría y subcategoría en "Nuevo gasto" de Ventas y en los gastos de las cajas. Corrección de la hora al editar movimientos de caja (antes se corría +4 h). **Se publica en el mismo despliegue** (paso 10). |
 | Reactivos | Unidades µL, DETERMINACIÓN y TACO en «Nuevo reactivo»; el signo micro se guarda siempre como U+00B5 y no pasa a mayúsculas (rama `reactivos-unidades`, integrada en `master` en `1484a76`). Sin migraciones ni cambios de datos. Según el equipo ya está en producción: se incluye para que el despliegue de `master` no lo revierta. |
@@ -586,6 +587,11 @@ Cómo resolverlo, en este orden:
 2. `php scripts/verificar_migraciones.php` → `OK`, con solo las neutralizadas
    pendientes (si no se registraron en 7.9).
 3. Prueba funcional:
+   - **comprobación visual del PDF del informe**: el título «INFORME DE
+     LABORATORIO CLÍNICO», los encabezados de tabla (ANÁLISIS, RESULTADO…) y el
+     nombre de la firma salen en azul oscuro (`#0B3D91`); el código de la
+     solicitud, el CODELAB y el slogan del pie, en azul (`#0E4BB6`). Los textos
+     y la cantidad de páginas no cambian respecto de antes del despliegue;
    - crear un laboratorio con código laboratorio (por ejemplo `A19`) y abrir su
      PDF: CODELAB encima, código `LAB-…-A19`, dirección bajo el logo, datos del
      paciente en 3 columnas y la firma con su espacio;

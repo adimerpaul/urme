@@ -254,6 +254,8 @@ async function enviarWhatsApp (row) {
       `Clínica URME - Laboratorio Clínico`,
       `Paciente: ${row.paciente?.nombre_completo || ''}`,
       `Informe: ${row.codigo_completo}`,
+      // Solo si la solicitud tiene perfiles: sin perfiles el mensaje queda igual.
+      ...((row.laboratorio_perfiles || []).length ? [`Perfiles: ${row.laboratorio_perfiles.map(perfil => perfil.nombre).join(', ')}`] : []),
       `Adjuntamos su informe de laboratorio en formato PDF.`,
     ].join('\n')
     const whatsappUrl = `https://wa.me/${telefono}?text=${encodeURIComponent(mensaje)}`

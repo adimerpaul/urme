@@ -55,6 +55,16 @@
         .footer-space { height: 78px; }
     </style>
     @endif
+@if(collect($bloques)->contains('tipo', 'perfil'))
+    <style>
+        /* Perfiles de exámenes: el título va en el thead para repetirse si la tabla se parte;
+           thead y filas de área no quedan solas al pie de la página. Mismo azul de los títulos. */
+        .perfil-tabla thead tr { page-break-after: avoid; }
+        .results .perfil-titulo th { border-top: 0; border-bottom: 0; color: #0b5ed7; font-size: 10.5px; text-align: center; letter-spacing: .3px; padding: 7px 0 2px; }
+        .perfil-area { page-break-after: avoid; }
+        .perfil-examen td { font-weight: bold; padding-top: 5px; }
+    </style>
+@endif
 </head>
 <body>
 @if($paraNavegador ?? false)
@@ -128,6 +138,43 @@
         @if($bloque['descripcion'])
             <div class="description">{!! $bloque['descripcion'] !!}</div>
         @endif
+    </div>
+@elseif($bloque['tipo'] === 'perfil')
+    {{-- Perfil de exámenes: corto, en un bloque que no se parte; largo, repite el título (thead) en cada página. --}}
+    <div class="{{ $bloque['corto'] ? 'bloque-grupo' : 'bloque-perfil' }}">
+        <table class="results perfil-tabla">
+            <thead>
+                <tr class="perfil-titulo"><th colspan="5">{{ mb_strtoupper($bloque['titulo']) }}</th></tr>
+                <tr>
+                    <th style="width:25%">ANÁLISIS</th>
+                    <th style="width:15%">RESULTADO</th>
+                    <th style="width:26%">VALORES DE REFERENCIA</th>
+                    <th style="width:18%">MÉTODO</th>
+                    <th style="width:16%">MUESTRA</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach($bloque['filas'] as $fila)
+                    @if($fila['tipo'] === 'area')
+                        <tr class="area perfil-area"><td colspan="5">ÁREA DE {{ $fila['nombre'] }}</td></tr>
+                    @elseif($fila['tipo'] === 'examen')
+                        <tr class="perfil-examen"><td colspan="5">{{ $fila['nombre'] }}</td></tr>
+                    @else
+                        @php($resultado = $fila['resultado'])
+                        <tr>
+                            <td>{{ $fila['nombre'] }}</td>
+                            <td class="result">{{ filled($resultado->valor) ? $resultado->valor : '-' }} {{ $resultado->unidad }}</td>
+                            <td class="reference">{!! filled($resultado->rango_referencia) ? $resultado->rango_referencia_html : '-' !!}</td>
+                            <td>{{ $resultado->metodo ?: '-' }}</td>
+                            <td>{{ $resultado->muestra ?: '-' }}</td>
+                        </tr>
+                    @endif
+                @endforeach
+            </tbody>
+        </table>
+        @foreach($bloque['descripciones'] as $descripcion)
+            <div class="description">{!! $descripcion !!}</div>
+        @endforeach
     </div>
 @else
     @php($item = $bloque['item'])

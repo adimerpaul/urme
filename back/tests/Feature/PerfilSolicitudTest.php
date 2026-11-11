@@ -313,3 +313,75 @@ it('el reporte general suma el perfil una vez y muestra sus exámenes como inclu
             ['examen', 'GLUCOSA', '20.00', null],
         ]);
 });
+
+/** Resumen de los bloques del informe: [tipo, título, filas] para comparar fácil. */
+function bloquesDe(int $solicitudId): array
+{
+    $solicitud = Solicitude::with(['laboratorioItems.producto.tipoProducto', 'laboratorioItems.resultados', 'laboratorioItems.perfil'])->find($solicitudId);
+    $bloques = (new ReflectionMethod(SolicitudeController::class, 'bloquesInforme'))->invoke(new SolicitudeController, $solicitud);
+
+    return array_map(fn ($b) => match ($b['tipo']) {
+        'perfil' => ['perfil', $b['titulo'], array_map(fn ($f) => match ($f['tipo']) {
+            'area' => 'ÁREA '.$f['nombre'], 'examen' => '['.$f['nombre'].']', default => $f['nombre'],
+        }, $b['filas'])],
+        'grupo' => ['grupo', $b['titulo'], array_column($b['filas'], 'nombre')],
+        default => ['producto', $b['item']->producto_nombre],
+    }, $bloques);
+}
+
+it('informe: el perfil va en su posición, con fila de área al cambiar y sin grupo_reporte adentro', function () {
+    $hemato = TipoProducto::create(['nombre' => 'HEMATOLOGIA', 'tipo_producto_padre_id' => $this->area->tipo_producto_padre_id]);
+    $hemograma = Producto::create(['nombre' => 'HEMOGRAMA', 'precio' => 30, 'tipo_producto_id' => $hemato->id]);
+    foreach (['HEMOGLOBINA', 'HEMATOCRITO'] as $i => $dato) {
+        ProductoLaboratorioDato::create(['producto_id' => $hemograma->id, 'nombre' => $dato, 'nombre_variable' => mb_strtolower($dato), 'orden' => $i]);
+    }
+    $mixto = Producto::create(['nombre' => 'PERFIL MIXTO', 'precio' => 120, 'tipo_producto_id' => $this->area->id, 'es_perfil' => true]);
+    foreach ([$this->sodio, $hemograma, $this->cloro] as $i => $examen) {
+        ProductoPerfilItem::create(['perfil_id' => $mixto->id, 'producto_id' => $examen->id, 'orden' => $i]);
+    }
+    // Con grupo_reporte: suelto se agrupa; dentro del perfil se ignora.
+    $this->sodio->update(['grupo_reporte' => 'Electrolitos']);
+    $this->potasio->update(['grupo_reporte' => 'Electrolitos']);
+
+    $datos = ($this->crear)([$this->glucosa, $mixto, $this->potasio]);
+
+    expect(bloquesDe($datos['id']))->toBe([
+        ['producto', 'GLUCOSA'],
+        ['perfil', 'PERFIL MIXTO', [
+            'ÁREA IONOGRAMA / ELECTROLITOS', 'SODIO',
+            'ÁREA HEMATOLOGIA', '[HEMOGRAMA]', 'HEMOGLOBINA', 'HEMATOCRITO',
+            'ÁREA IONOGRAMA / ELECTROLITOS', 'CLORO',
+        ]],
+        ['grupo', 'Electrolitos', ['POTASIO']],
+    ]);
+
+    // Verificación pública: cada examen dice de qué perfil viene.
+    $codigo = Solicitude::find($datos['id'])->codigo_verificacion;
+    $publico = (new SolicitudeController)->verificacion($codigo)->getData(true);
+    expect(array_map(fn ($l) => [$l['nombre'], $l['perfil']], $publico['laboratorios']))
+        ->toBe([['GLUCOSA', null], ['SODIO', 'PERFIL MIXTO'], ['HEMOGRAMA', 'PERFIL MIXTO'], ['CLORO', 'PERFIL MIXTO'], ['POTASIO', null]]);
+});
+
+it('informe: dos perfiles que comparten un examen lo muestran una vez, en el primero', function () {
+    $datos = ($this->crear)([$this->ionograma, $this->renal]);
+
+    expect(bloquesDe($datos['id']))->toBe([
+        ['perfil', 'IONOGRAMA', ['ÁREA IONOGRAMA / ELECTROLITOS', 'SODIO', 'POTASIO', 'CLORO']],
+        ['perfil', 'PERFIL MINERAL', ['ÁREA IONOGRAMA / ELECTROLITOS', 'CALCIO']],
+    ]);
+});
+
+it('informe: un perfil sin resultados visibles no se imprime, ni su título solo', function () {
+    $ocultos = array_map(fn ($examen) => [...($this->resultado)($examen, '1'), 'visible' => false], [$this->sodio, $this->potasio, $this->cloro]);
+    $datos = ($this->crear)([$this->ionograma, $this->glucosa], $ocultos);
+
+    expect(bloquesDe($datos['id']))->toBe([['producto', 'GLUCOSA']]);
+});
+
+it('informe: usa el nombre del perfil guardado en la solicitud aunque el catálogo cambie', function () {
+    $datos = ($this->crear)([$this->ionograma]);
+    $this->ionograma->update(['nombre' => 'ELECTROLITOS NUEVO']);
+    $this->ionograma->delete();
+
+    expect(bloquesDe($datos['id'])[0][1])->toBe('IONOGRAMA');
+});

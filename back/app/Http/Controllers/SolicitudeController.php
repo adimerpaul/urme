@@ -23,6 +23,9 @@ use OwenIt\Auditing\Models\Audit;
 
 class SolicitudeController extends Controller
 {
+    /** Hasta cuántas filas un perfil va entero en una página (ver docs/ANALISIS_PERFILES_FASE0.md, F4.4). */
+    private const FILAS_PERFIL_SIN_PARTIR = 12;
+
     public function index(Request $request)
     {
         $this->authorizeAny($request, 'Ver Solicitudes Laboratorio');
@@ -228,6 +231,7 @@ class SolicitudeController extends Controller
             'user',
             'laboratorioItems.producto.tipoProducto:id,nombre',
             'laboratorioItems.resultados',
+            'laboratorioItems.perfil',
         ]);
 
         $impresoPor = $request->user();
@@ -342,7 +346,7 @@ class SolicitudeController extends Controller
 
         $solicitude = Solicitude::query()
             ->where('codigo_verificacion', $codigo)
-            ->with(['paciente', 'doctor', 'laboratorioItems.resultados'])
+            ->with(['paciente', 'doctor', 'laboratorioItems.resultados', 'laboratorioItems.perfil'])
             ->firstOrFail();
 
         return response()->json([
@@ -364,6 +368,8 @@ class SolicitudeController extends Controller
                 ->filter(fn ($item) => $item->resultados->where('visible', true)->isNotEmpty())
                 ->map(fn ($item) => [
                     'nombre' => $item->producto_nombre,
+                    // Nombre del perfil guardado en la solicitud (null: examen suelto).
+                    'perfil' => $item->perfil?->nombre,
                     'resultados' => $item->resultados->where('visible', true)->values()->map(fn ($resultado) => [
                         'nombre' => $resultado->nombre,
                         'valor' => $resultado->valor,
@@ -540,7 +546,22 @@ class SolicitudeController extends Controller
 
         $bloques = [];
         $indiceGrupo = [];
+        $indicePerfil = [];
         foreach ($items as $posicion => $item) {
+            // Examen de un perfil: va al bloque de su perfil, en la posición del
+            // primero. Dentro del perfil no se aplica grupo_reporte.
+            if ($item->solicitud_laboratorio_perfil_id && $item->perfil) {
+                $clave = $item->solicitud_laboratorio_perfil_id;
+                if (! isset($indicePerfil[$clave])) {
+                    $indicePerfil[$clave] = count($bloques);
+                    // Nombre guardado en la solicitud: vale aunque el perfil ya no exista en el catálogo.
+                    $bloques[] = ['tipo' => 'perfil', 'titulo' => $item->perfil->nombre, 'items' => []];
+                }
+                $bloques[$indicePerfil[$clave]]['items'][] = $item;
+
+                continue;
+            }
+
             $grupo = trim((string) $item->producto?->grupo_reporte);
             if ($grupo === '') {
                 $bloques[] = ['tipo' => 'producto', 'item' => $item];
@@ -582,7 +603,58 @@ class SolicitudeController extends Controller
             unset($bloques[$indice]['items']);
         }
 
-        return $bloques;
+        foreach ($indicePerfil as $indice) {
+            $bloques[$indice] = $this->bloquePerfil($bloques[$indice]);
+        }
+
+        // Un perfil sin ningún resultado visible no se imprime (ni su título solo).
+        return array_values(array_filter($bloques, fn ($bloque) => $bloque['tipo'] !== 'perfil' || $bloque['tiene_resultados']));
+    }
+
+    /**
+     * Filas del bloque de un perfil, en el orden guardado: una fila «ÁREA DE …»
+     * cada vez que cambia el área; un examen de un solo resultado es una fila
+     * con su nombre; uno de varios lleva un subtítulo y debajo sus resultados.
+     * Las descripciones de los exámenes van al pie, sin repetir.
+     */
+    private function bloquePerfil(array $bloque): array
+    {
+        $filas = [];
+        $descripciones = [];
+        $areaAnterior = null;
+        foreach ($bloque['items'] as $item) {
+            if (filled($item->producto?->descripcion)) {
+                $descripciones[(string) $item->producto->descripcion] = $item->producto->descripcion_html;
+            }
+            $visibles = $item->resultados->where('visible', true)->values();
+            if ($visibles->isEmpty()) {
+                continue;
+            }
+            $area = $item->producto?->tipoProducto?->nombre ?: 'LABORATORIO';
+            if ($area !== $areaAnterior) {
+                $filas[] = ['tipo' => 'area', 'nombre' => $area];
+                $areaAnterior = $area;
+            }
+            if ($item->resultados->count() === 1) {
+                $filas[] = ['tipo' => 'resultado', 'nombre' => $item->producto_nombre, 'resultado' => $visibles->first()];
+
+                continue;
+            }
+            $filas[] = ['tipo' => 'examen', 'nombre' => $item->producto_nombre];
+            foreach ($visibles as $resultado) {
+                $filas[] = ['tipo' => 'resultado', 'nombre' => $resultado->nombre, 'resultado' => $resultado];
+            }
+        }
+
+        return [
+            'tipo' => 'perfil',
+            'titulo' => $bloque['titulo'],
+            'filas' => $filas,
+            'descripciones' => array_values($descripciones),
+            'tiene_resultados' => collect($filas)->contains('tipo', 'resultado'),
+            // Corto: cabe en una página y se imprime sin partir; largo: repite el título en cada página.
+            'corto' => count($filas) <= self::FILAS_PERFIL_SIN_PARTIR,
+        ];
     }
 
     /**

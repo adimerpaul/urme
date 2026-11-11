@@ -10,7 +10,6 @@ revisan y, si corresponde, se corrigen desde la pantalla.
 |---|---|---|
 | [Venta pagada sin vínculo con la solicitud de laboratorio](#venta-pagada-sin-vínculo-con-la-solicitud-de-laboratorio) | Alta | Desarrollo y laboratorio |
 | [Perfiles de exámenes como cargo de internación](#perfiles-de-exámenes-como-cargo-de-internación) | Baja | Laboratorio y administración |
-| [Ajustes visuales del informe guardados en un stash](#ajustes-visuales-del-informe-guardados-en-un-stash) | Baja | Equipo |
 | [Movimientos de caja con la hora corrida](#movimientos-de-caja-con-la-hora-corrida-en-producción) | Alta | Administración, caso por caso |
 | [Categoría para gastos generales](#categoría-para-gastos-generales) | Media | Administración |
 | [Comprobantes impresos](#comprobantes-impresos-frontsrcaddonsprintjs) | Baja | Desarrollo |
@@ -43,23 +42,6 @@ revisan y, si corresponde, se corrigen desde la pantalla.
 - **Decide:** desarrollo, con el laboratorio. Las opciones van desde
   `solicitudes.venta_id` (o una tabla de enlace) con aviso si la venta ya se usó,
   hasta qué hacer con la solicitud al anular la venta.
-
-### Ajustes visuales del informe guardados en un stash
-
-- **Origen:** Fase 4 de perfiles (2026-11-11), al elegir el color del título del perfil.
-- **Gravedad:** baja. Hay un ajuste visual del informe de laboratorio que **nunca
-  se aplicó** a ninguna rama. Está solo en `stash@{0}` («On master:
-  !!GitHub_Desktop<master>», 22-10-2026), en la copia local:
-  - azules más oscuros (`#0B3D91` en títulos, encabezados de tabla y firma;
-    `#0E4BB6` en el código y el lema; `#0F54CC` en los bordes);
-  - tamaños de letra distintos.
-
-  El stash también toca `.env.example`, `SolicitudeController`, `TipoProducto` y
-  `config/laboratorio.php`, que ya cambiaron mucho desde entonces. En `master`,
-  el informe usa `#0b5ed7`, y el título de los perfiles se hizo con ese mismo azul.
-- **Decide:** el equipo: si esos ajustes se quieren, rehacerlos como un cambio
-  nuevo sobre `master` (sin aplicar el stash entero) y comparar los PDF antes y
-  después; si no, descartar el stash.
 
 ### Perfiles de exámenes como cargo de internación
 
@@ -192,19 +174,32 @@ fechas de la API recortadas como texto en UTC.** Una sola observación, menor:
 
 ### Tests que fallan por causas previas
 
-- **Origen:** estado conocido de la suite (`CLAUDE.md`), revisado el 2026-11-04.
+- **Origen:** estado conocido de la suite (`CLAUDE.md`), revisado el 2026-11-11.
 - **Gravedad:** media: hoy la suite no sirve como red de seguridad.
-- **Estado en `master`:** `php artisan test` → **8 de 18 fallan** (pasan 10,
-  entre ellos los 6 de `ReactivoUnidadTest`, que llegaron con `reactivos-unidades`).
-  - `EditarLotesFarmaciaTest` (4) y `LaboratorioDescripcionHtmlTest` (2): corren
-    las migraciones sobre SQLite y fallan con «no such table:
-    tipo_producto_padres».
+- **Estado en `master`:** `php artisan test` → **8 de 51 fallan** (pasan 43,
+  entre ellos los 6 de `ReactivoUnidadTest` y los 33 de perfiles).
   - `ReactivoKardexTest` (2): llaman a `ReactivoKardex::datos()` con 2
     argumentos y la firma ahora pide 3.
-  - Además, desde que se neutralizó `2026_09_28_000100_reiniciar_inventario_oficial_farmacia`,
-    una instalación desde cero falla en
-    `2026_10_06_000100_actualizar_inventario_farmacia_con_precios`, porque espera
-    los productos que creaba esa migración.
+  - `EditarLotesFarmaciaTest` (4) y `LaboratorioDescripcionHtmlTest` (2): corren
+    todas las migraciones sobre SQLite, es decir, una instalación desde cero, y
+    tropiezan con **tres obstáculos seguidos** (probado el 2026-11-11):
+    1. «no such table: tipo_producto_padres»: el hook `saving` de
+       `TipoProducto` corre en migraciones anteriores a esa tabla. La corrección
+       existe en `stash@{0}` (22-10-2026): no ejecutar el hook mientras no exista
+       la columna `tipo_producto_padre_id`. **No se aplicó**, porque por sí sola
+       no corrige ningún test.
+    2. «no such table: producto_perfil_items»: el hook `deleting` de `Producto`
+       (perfiles, Fase 1) consulta esa tabla cuando migraciones antiguas dan de
+       baja productos con Eloquent. Se corrige igual, con
+       `Schema::hasTable('producto_perfil_items')`. No afecta a producción, donde
+       esas migraciones ya corrieron.
+    3. «Inventario farmacia: no se encontró el producto KETOROLACO 60MG…»:
+       desde que se neutralizó `2026_09_28_000100_reiniciar_inventario_oficial_farmacia`,
+       `2026_10_06_000100_actualizar_inventario_farmacia_con_precios` espera los
+       productos que creaba esa migración.
+
+    Con 1 y 2 corregidos, los 6 tests siguen fallando por 3. Hay que resolver
+    los tres juntos, o hacer que esos tests no ejecuten las migraciones de datos.
 - **Decide:** desarrollo.
 
 ### Limpieza de los datos de prueba de `urme_prueba`
@@ -225,6 +220,16 @@ fechas de la API recortadas como texto en UTC.** Una sola observación, menor:
   respaldo de `back` en lugar de borrar fila por fila.
 
 ## Resueltos
+
+- **Azules oscurecidos del informe** (commit `5ed09e1`, 2026-11-11): rehechos a
+  mano desde `stash@{0}` (sin aplicarlo):
+  - `#0B3D91` en el título del informe, los encabezados de tabla, el nombre de la firma y el título de los perfiles;
+  - `#0E4BB6` en el código, el CODELAB y el slogan;
+  - `#1D69EE` en el borde del encabezado;
+  - `#0F54CC` en los bordes de tabla.
+
+  Los tamaños del stash ya estaban en `master`. Del stash solo queda sin aplicar
+  el cambio de `TipoProducto` (ver «Tests que fallan por causas previas»).
 
 - **Perfiles: acceso por URL directa con el interruptor apagado** (Fase 2,
   2026-11-11): `laboratorio/[id].vue` muestra «Este producto es un perfil de

@@ -522,6 +522,18 @@ php artisan up
 El backend nuevo exige el código laboratorio en las solicitudes nuevas, así
 que **el frontend nuevo tiene que publicarse en este mismo despliegue**.
 
+> **Para este despliegue (URME v1.0.1) el paso 10.1 ya viene hecho en `master`.**
+> `front/dist/pwa` está compilado con `VITE_VERSION=1.0.1` y
+> `VITE_API_BACK=https://burme.tuprogam.com/api`; se comprobó que el menú
+> lateral muestra «URME v1.0.1». Basta con publicarlo (10.2) y comprobarlo
+> (10.3).
+>
+> **En cada despliegue futuro hay que volver a compilar** con una versión nueva
+> (1.0.2, 1.0.3…), siguiendo 10.1, y commitear `front/dist/pwa`.
+> `front/.env.production` **no está en git** (`front/.gitignore`: `.env*`): la
+> versión y la URL de la API se ajustan en ese archivo, en la máquina que
+> compila.
+
 10.1 Subir la versión en `front/.env.production` (por ejemplo de `1.0.0` a
 `1.0.1`) y revisar que `VITE_API_BACK` apunte a la API de producción. Luego:
 

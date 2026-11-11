@@ -1,0 +1,1 @@
+async function e(e){let{data:t}=await e.get(`categorias-gasto`);return t||[]}function t(e){let t=e?.categoria_gasto?.nombre;if(t){let n=e?.subcategoria_gasto?.nombre;return n?`${t} / ${n}`:t}let n=String(e?.categoria||``).trim();return n?`Sin categoría (${n})`:`Sin categoría`}export{t as n,e as t};

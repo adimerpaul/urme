@@ -19,6 +19,7 @@ revisan y, si corresponde, se corrigen desde la pantalla.
 | [Unidad escrita a mano en reactivos](#unidad-escrita-a-mano-en-reactivos-que-no-se-aplica) | Baja | Desarrollo y laboratorio |
 | [Reactivos vinculados a productos dados de baja](#reactivos-vinculados-a-productos-dados-de-baja-r-001-r-006-y-r-009) | Baja | Responsable de reactivos, desde la pantalla |
 | [Vínculos de reactivos que se recrean al editar](#vínculos-de-reactivos-que-se-borran-y-recrean-al-editar) | Baja | Desarrollo |
+| [Título del perfil al partirse un área posterior](#título-del-perfil-al-partirse-un-área-posterior-limitación-de-dompdf) | Baja | Laboratorio, si algún día se pide |
 | [Tests que fallan por causas previas](#tests-que-fallan-por-causas-previas) | Media | Desarrollo |
 | [Datos de prueba en `urme_prueba`](#limpieza-de-los-datos-de-prueba-de-urme_prueba) | Baja | Desarrollo |
 
@@ -172,6 +173,27 @@ fechas de la API recortadas como texto en UTC.** Una sola observación, menor:
   registros de auditoría que no corresponden a cambios reales.
 - **Decide:** desarrollo: sincronizar solo los vínculos que cambian.
 
+### Título del perfil al partirse un área posterior (limitación de dompdf)
+
+- **Origen:** informe de laboratorio agrupado por área (commit `d67d603`,
+  2026-11-14).
+- **Gravedad:** baja. Limitación conocida, aceptada. En el PDF, cada área de un
+  perfil es una tabla cuyo encabezado (nombre del área y títulos de columna) se
+  repite si el área sigue en la página siguiente. El **título del perfil** va solo
+  en el encabezado de su **primera** área: si se parte la primera área, el título
+  se repite; si se parte una área posterior del mismo perfil, la continuación
+  muestra el área y las columnas, pero no el título del perfil.
+- **Por qué no se resolvió:** dompdf no permite una fila de encabezado que salga
+  solo en las páginas de continuación. La única vía, anidar las tablas de área
+  dentro de una tabla del perfil, no es fiable: dompdf no parte una tabla
+  anidada en una celda. En la prueba, un área de 45 filas saltó entera de página,
+  invadió el pie y **perdió 2 de 70 filas**.
+- **Alternativa si algún día se pide:** imprimir el nombre del perfil sobre
+  **cada** área del perfil (también en la primera página), por ejemplo como una
+  línea chica encima del nombre del área. Es fiable, pero cambia el diseño
+  aprobado.
+- **Decide:** laboratorio, si lo pide.
+
 ### Tests que fallan por causas previas
 
 - **Origen:** estado conocido de la suite (`CLAUDE.md`), revisado el 2026-11-11.
@@ -223,6 +245,13 @@ fechas de la API recortadas como texto en UTC.** Una sola observación, menor:
   respaldo de `back` en lugar de borrar fila por fila.
 
 ## Resueltos
+
+- **Test de venta del perfil y `tipo_paciente`** (commit `42da05a`, 2026-11-14):
+  desde el merge `d076126`, `POST /ventas` exige `tipo_paciente`, y
+  `PerfilSolicitudTest` («vende el perfil como una línea…») fallaba porque no lo
+  enviaba y su esquema SQLite de `ventas` no tenía las columnas nuevas. Era el
+  test el desactualizado, no el código: la pantalla de venta siempre envía el
+  tipo. La suite volvió a 43 de 51 con los 8 fallos conocidos.
 
 - **Azules oscurecidos del informe** (commit `5ed09e1`, 2026-11-11): rehechos a
   mano desde `stash@{0}` (sin aplicarlo):

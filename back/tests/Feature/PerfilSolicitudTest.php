@@ -85,7 +85,9 @@ beforeEach(function () {
         $t->integer('orden')->default(0), $t->boolean('visible')->default(true)]);
     $tabla('cierres_caja', $textos(['user_id', 'fecha', 'autorizado_hasta']));
     $tabla('ventas', fn ($t) => [$t->unsignedBigInteger('user_id')->nullable(), $t->unsignedBigInteger('cobrado_por_id')->nullable(),
-        $t->string('tipo_movimiento')->nullable(), $t->unsignedBigInteger('paciente_id')->nullable(), $t->unsignedBigInteger('doctor_id')->nullable(),
+        $t->string('tipo_movimiento')->nullable(), $t->string('tipo_paciente', 20)->nullable(), $t->string('servicio', 100)->nullable(),
+        $t->boolean('con_factura')->default(false), $t->string('numero_factura', 50)->nullable(),
+        $t->unsignedBigInteger('paciente_id')->nullable(), $t->unsignedBigInteger('doctor_id')->nullable(),
         $t->unsignedBigInteger('seguro_id')->nullable(), $t->string('cliente')->nullable(), $t->dateTime('fecha_hora')->nullable(),
         $t->dateTime('fecha_hora_cobro')->nullable(), $t->string('tipo_pago')->nullable(), $t->string('comentario')->nullable(),
         $t->string('estado')->nullable(), $t->decimal('total', 14, 2)->default(0), $t->decimal('total_original', 14, 2)->nullable(),
@@ -261,7 +263,7 @@ it('con los perfiles apagados: rechaza el perfil, no edita solicitudes con perfi
 
 it('vende el perfil como una línea si es vendible; si no, o con los perfiles apagados, lo rechaza', function () {
     $vender = fn () => (new VentaController)->store(($this->peticion)([
-        'paciente_id' => $this->paciente->id, 'tipo_pago' => 'EFECTIVO', 'pago' => 100,
+        'tipo_paciente' => 'EXTERNO', 'paciente_id' => $this->paciente->id, 'tipo_pago' => 'EFECTIVO', 'pago' => 100,
         'detalles' => [['producto_id' => $this->ionograma->id, 'precio' => 100, 'cantidad' => 1]],
     ]));
 

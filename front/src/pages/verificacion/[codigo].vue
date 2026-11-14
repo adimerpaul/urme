@@ -43,51 +43,40 @@
               </q-card-section>
             </q-card>
 
-            <!-- Perfil de exámenes: una tarjeta con el título del perfil y sus exámenes, como en el informe -->
-            <template v-for="bloque in bloques" :key="bloque.clave">
-            <q-card v-if="bloque.perfil" flat bordered class="q-mt-md">
-              <q-card-section class="bg-blue-grey-1 text-weight-bold text-primary text-uppercase">
-                {{ bloque.perfil }}
+            <!-- Como en el informe: una tarjeta por área (cada área una sola vez) y una por perfil,
+                 con sus exámenes separados por área. -->
+            <q-card v-for="(bloque, indice) in informe.bloques || []" :key="indice" flat bordered class="q-mt-md">
+              <q-card-section class="bg-blue-grey-1 text-weight-bold text-primary text-uppercase text-center">
+                {{ bloque.tipo === 'perfil' ? bloque.titulo : bloque.nombre }}
               </q-card-section>
-              <q-markup-table flat dense separator="horizontal">
-                <thead><tr>
-                  <th class="text-left">Análisis</th><th class="text-left">Resultado</th>
-                  <th class="text-left">Referencia</th><th class="text-left">Método</th><th class="text-left">Muestra</th>
-                </tr></thead>
+              <template v-for="area in (bloque.tipo === 'perfil' ? bloque.areas : [bloque])" :key="area.nombre">
+              <div v-if="bloque.tipo === 'perfil'" class="text-center text-primary text-weight-bold text-uppercase text-caption q-pt-sm">
+                {{ area.nombre }}
+              </div>
+              <q-markup-table flat dense separator="horizontal" class="tabla-informe">
+                <thead>
+                  <tr>
+                    <th class="text-left">Análisis</th><th class="text-left">Resultado</th>
+                    <th class="text-left">Referencia</th><th class="text-left">Método</th><th class="text-left">Muestra</th>
+                  </tr>
+                </thead>
                 <tbody>
-                  <template v-for="laboratorio in bloque.laboratorios" :key="laboratorio.nombre">
-                    <tr v-if="laboratorio.resultados.length > 1"><td colspan="5" class="text-weight-bold">{{ laboratorio.nombre }}</td></tr>
-                    <tr v-for="resultado in laboratorio.resultados" :key="resultado.nombre">
-                      <td>{{ laboratorio.resultados.length === 1 ? laboratorio.nombre : resultado.nombre }}</td>
-                      <td class="text-weight-bold">{{ resultado.valor || '-' }} {{ resultado.unidad || '' }}</td>
-                      <td><div v-if="resultado.rango_referencia" class="html-rango" v-html="resultado.rango_referencia_html" /><template v-else>-</template></td>
-                      <td>{{ resultado.metodo || '-' }}</td>
-                      <td>{{ resultado.muestra || '-' }}</td>
-                    </tr>
+                  <template v-for="(prueba, p) in area.pruebas" :key="p">
+                    <template v-for="(fila, f) in prueba" :key="`${p}-${f}`">
+                      <tr v-if="fila.tipo === 'subtitulo'"><td colspan="5" class="text-weight-bold">{{ fila.nombre }}</td></tr>
+                      <tr v-else>
+                        <td>{{ fila.nombre }}</td>
+                        <td class="text-weight-bold">{{ fila.valor || '-' }} {{ fila.unidad || '' }}</td>
+                        <td><div v-if="fila.rango_referencia" class="html-rango" v-html="fila.rango_referencia_html" /><template v-else>-</template></td>
+                        <td>{{ fila.metodo || '-' }}</td>
+                        <td>{{ fila.muestra || '-' }}</td>
+                      </tr>
+                    </template>
                   </template>
                 </tbody>
               </q-markup-table>
+              </template>
             </q-card>
-            <q-card v-else v-for="laboratorio in bloque.laboratorios" :key="laboratorio.nombre"
-                    flat bordered class="q-mt-md">
-              <q-card-section class="bg-blue-grey-1 text-weight-bold text-primary">
-                {{ laboratorio.nombre }}
-              </q-card-section>
-              <q-markup-table flat dense separator="horizontal">
-                <thead><tr>
-                  <th class="text-left">Análisis</th><th class="text-left">Resultado</th>
-                  <th class="text-left">Referencia</th><th class="text-left">Método</th><th class="text-left">Muestra</th>
-                </tr></thead>
-                <tbody><tr v-for="resultado in laboratorio.resultados" :key="resultado.nombre">
-                  <td>{{ resultado.nombre }}</td>
-                  <td class="text-weight-bold">{{ resultado.valor || '-' }} {{ resultado.unidad || '' }}</td>
-                  <td><div v-if="resultado.rango_referencia" class="html-rango" v-html="resultado.rango_referencia_html" /><template v-else>-</template></td>
-                  <td>{{ resultado.metodo || '-' }}</td>
-                  <td>{{ resultado.muestra || '-' }}</td>
-                </tr></tbody>
-              </q-markup-table>
-            </q-card>
-            </template>
 
             <div v-if="informe.observaciones" class="q-mt-md text-body2">
               <b>Observaciones:</b> {{ informe.observaciones }}
@@ -103,19 +92,12 @@
 </template>
 
 <script setup>
-import { computed, getCurrentInstance, onMounted, ref } from 'vue'
+import { getCurrentInstance, onMounted, ref } from 'vue'
 
 const { proxy } = getCurrentInstance()
 const loading = ref(true)
 const error = ref(false)
 const informe = ref(null)
-// Exámenes seguidos del mismo perfil van juntos bajo su título; los sueltos, uno por tarjeta.
-const bloques = computed(() => (informe.value?.laboratorios || []).reduce((lista, laboratorio, indice) => {
-  const ultimo = lista[lista.length - 1]
-  if (laboratorio.perfil && ultimo?.perfil === laboratorio.perfil) ultimo.laboratorios.push(laboratorio)
-  else lista.push({ clave: indice, perfil: laboratorio.perfil || null, laboratorios: [laboratorio] })
-  return lista
-}, []))
 
 function fecha (value) {
   if (!value) return '-'
@@ -140,6 +122,14 @@ onMounted(cargarInforme)
 .verification-layout { background: #f4f7f9; min-height: 100vh; }
 .verification-toolbar { max-width: 1120px; margin: 0 auto; width: 100%; }
 .verification-content { max-width: 1120px; margin: 0 auto; }
+/* Mismas columnas en todas las tablas del informe (como en el PDF). */
+:deep(.tabla-informe table) { table-layout: fixed; min-width: 640px; }
+:deep(.tabla-informe th:nth-child(1)) { width: 25%; }
+:deep(.tabla-informe th:nth-child(2)) { width: 15%; }
+:deep(.tabla-informe th:nth-child(3)) { width: 26%; }
+:deep(.tabla-informe th:nth-child(4)) { width: 18%; }
+:deep(.tabla-informe th:nth-child(5)) { width: 16%; }
+:deep(.tabla-informe td) { white-space: normal; }
 @media (max-width: 700px) {
   :deep(.q-table__container) { overflow-x: auto; }
 }

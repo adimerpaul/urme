@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <style>
         @page { size: letter; margin: 22px 32px 92px; }
-        .description { margin: 5px 0 8px; line-height: 1.4; }
+        .description { margin: 3px 0 6px; line-height: 1.4; color: #4b5563; font-size: 8.5px; }
         .description p { margin: 3px 0; }
         body { font-family: DejaVu Sans, sans-serif; color: #1f2937; font-size: 9.5px; }
         .header, .patient, .results { width: 100%; border-collapse: collapse; }
@@ -21,13 +21,24 @@
         .patient { table-layout: fixed; }
         .patient td { border: 1px solid #aeb9c5; padding: 3px 5px; vertical-align: top; }
         .label { font-weight: bold; color: #374151; }
-        .service-title { color: #1f2937; font-size: 10.5px; font-weight: bold; text-align: center; margin: 7px 0 2px; }
         .results { margin-bottom: 4px; }
         .results th { border-top: 1.5px solid #0F54CC; border-bottom: 1.5px solid #0F54CC; color: #0B3D91; padding: 4px; text-align: left; font-size: 8.5px; }
         .results td { border-bottom: 1px solid #e5e7eb; padding: 3.5px 4px; vertical-align: top; }
         .results tr { page-break-inside: avoid; }
         .bloque-grupo { page-break-inside: avoid; break-inside: avoid; }
-        .area td { color: #1f2937; font-size: 10px; font-weight: bold; padding: 4px; text-decoration: underline; }
+        /* Un área por tabla: nombre del área y títulos de columna en el thead, que se repite
+           si el área sigue en otra página y no queda solo al pie. Columnas fijas: las pruebas
+           anidadas (que no se parten) usan los mismos anchos y quedan alineadas. */
+        .area-tabla { table-layout: fixed; }
+        .area-tabla thead tr { page-break-after: avoid; }
+        .results .area-titulo th { border-top: 0; border-bottom: 0; color: #0B3D91; font-size: 10.5px; text-align: center; letter-spacing: .3px; padding: 7px 0 3px; }
+        .results td.contenedor { padding: 0; border-bottom: 0; }
+        .results .medidas td { padding: 0; border: 0; height: 0; line-height: 0; font-size: 0; }
+        .prueba-tabla { width: 100%; border-collapse: collapse; table-layout: fixed; }
+        .results tr.subtitulo { page-break-after: avoid; }
+        .subtitulo td { color: #1f2937; font-weight: bold; padding-top: 5px; }
+        .results .descripcion-fila td { border-bottom: 0; padding: 0 4px; }
+        .descripcion-fila .description { margin: 2px 0 4px; }
         .result { font-weight: bold; }
         .reference p, .reference div, .reference ul, .reference ol, .reference blockquote { margin: 0; }
         .reference ul, .reference ol { padding-left: 12px; }
@@ -57,12 +68,9 @@
     @endif
 @if(collect($bloques)->contains('tipo', 'perfil'))
     <style>
-        /* Perfiles de exámenes: el título va en el thead para repetirse si la tabla se parte;
-           thead y filas de área no quedan solas al pie de la página. Mismo azul de los títulos. */
-        .perfil-tabla thead tr { page-break-after: avoid; }
-        .results .perfil-titulo th { border-top: 0; border-bottom: 0; color: #0B3D91; font-size: 10.5px; text-align: center; letter-spacing: .3px; padding: 7px 0 2px; }
-        .perfil-area { page-break-after: avoid; }
-        .perfil-examen td { font-weight: bold; padding-top: 5px; }
+        /* Perfiles de exámenes: el título va en el thead de su primera área para repetirse
+           si esa tabla se parte. Mismo azul de los títulos. */
+        .results .perfil-titulo th { border-top: 0; border-bottom: 0; color: #0B3D91; font-size: 12px; text-align: center; letter-spacing: .5px; padding: 9px 0 1px; }
     </style>
 @endif
 </head>
@@ -107,104 +115,18 @@
     </tr>
 </table>
 @foreach($bloques as $bloque)
-@if($bloque['tipo'] === 'grupo')
-    {{-- Productos agrupados (grupo_reporte): título, una tabla y sus filas no se separan entre páginas. --}}
-    <div class="bloque-grupo">
-        <div class="service-title">{{ mb_strtoupper($bloque['titulo']) }}</div>
-        <table class="results">
-            <thead><tr>
-                <th style="width:25%">ANÁLISIS</th>
-                <th style="width:15%">RESULTADO</th>
-                <th style="width:26%">VALORES DE REFERENCIA</th>
-                <th style="width:18%">MÉTODO</th>
-                <th style="width:16%">MUESTRA</th>
-            </tr></thead>
-            <tbody>
-                <tr class="area">
-                    <td colspan="5">ÁREA DE {{ $bloque['area'] }}</td>
-                </tr>
-                @foreach($bloque['filas'] as $fila)
-                    @php($resultado = $fila['resultado'])
-                    <tr>
-                        <td>{{ $fila['nombre'] }}</td>
-                        <td class="result">{{ filled($resultado->valor) ? $resultado->valor : '-' }} {{ $resultado->unidad }}</td>
-                        <td class="reference">{!! filled($resultado->rango_referencia) ? $resultado->rango_referencia_html : '-' !!}</td>
-                        <td>{{ $resultado->metodo ?: '-' }}</td>
-                        <td>{{ $resultado->muestra ?: '-' }}</td>
-                    </tr>
-                @endforeach
-            </tbody>
-        </table>
-        @if($bloque['descripcion'])
-            <div class="description">{!! $bloque['descripcion'] !!}</div>
-        @endif
-    </div>
-@elseif($bloque['tipo'] === 'perfil')
-    {{-- Perfil de exámenes: corto, en un bloque que no se parte; largo, repite el título (thead) en cada página. --}}
+@if($bloque['tipo'] === 'perfil')
+    {{-- Perfil de exámenes: corto, en un bloque que no se parte; largo, cada área repite sus títulos en cada página. --}}
     <div class="{{ $bloque['corto'] ? 'bloque-grupo' : 'bloque-perfil' }}">
-        <table class="results perfil-tabla">
-            <thead>
-                <tr class="perfil-titulo"><th colspan="5">{{ mb_strtoupper($bloque['titulo']) }}</th></tr>
-                <tr>
-                    <th style="width:25%">ANÁLISIS</th>
-                    <th style="width:15%">RESULTADO</th>
-                    <th style="width:26%">VALORES DE REFERENCIA</th>
-                    <th style="width:18%">MÉTODO</th>
-                    <th style="width:16%">MUESTRA</th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach($bloque['filas'] as $fila)
-                    @if($fila['tipo'] === 'area')
-                        <tr class="area perfil-area"><td colspan="5">ÁREA DE {{ $fila['nombre'] }}</td></tr>
-                    @elseif($fila['tipo'] === 'examen')
-                        <tr class="perfil-examen"><td colspan="5">{{ $fila['nombre'] }}</td></tr>
-                    @else
-                        @php($resultado = $fila['resultado'])
-                        <tr>
-                            <td>{{ $fila['nombre'] }}</td>
-                            <td class="result">{{ filled($resultado->valor) ? $resultado->valor : '-' }} {{ $resultado->unidad }}</td>
-                            <td class="reference">{!! filled($resultado->rango_referencia) ? $resultado->rango_referencia_html : '-' !!}</td>
-                            <td>{{ $resultado->metodo ?: '-' }}</td>
-                            <td>{{ $resultado->muestra ?: '-' }}</td>
-                        </tr>
-                    @endif
-                @endforeach
-            </tbody>
-        </table>
-        @foreach($bloque['descripciones'] as $descripcion)
-            <div class="description">{!! $descripcion !!}</div>
-        @endforeach
+@foreach($bloque['areas'] as $area)
+        @include('reportes.solicitud-laboratorio-area', ['area' => $area, 'perfilTitulo' => $loop->first ? $bloque['titulo'] : null])
+@endforeach
+@foreach($bloque['descripciones'] as $descripcion)
+        <div class="description">{!! $descripcion !!}</div>
+@endforeach
     </div>
 @else
-    @php($item = $bloque['item'])
-    <div class="service-title">{{ $item->producto_nombre }}</div>
-    @if($item->producto?->descripcion)
-        <div class="description">{!! $item->producto->descripcion_html !!}</div>
-    @endif
-    <table class="results">
-        <thead><tr>
-            <th style="width:25%">ANÁLISIS</th>
-            <th style="width:15%">RESULTADO</th>
-            <th style="width:26%">VALORES DE REFERENCIA</th>
-            <th style="width:18%">MÉTODO</th>
-            <th style="width:16%">MUESTRA</th>
-        </tr></thead>
-        <tbody>
-            <tr class="area">
-                <td colspan="5">ÁREA DE {{ $item->producto?->tipoProducto?->nombre ?: 'LABORATORIO' }}</td>
-            </tr>
-            @foreach($item->resultados->where('visible', true) as $resultado)
-                <tr>
-                    <td>{{ $resultado->nombre }}</td>
-                    <td class="result">{{ filled($resultado->valor) ? $resultado->valor : '-' }} {{ $resultado->unidad }}</td>
-                    <td class="reference">{!! filled($resultado->rango_referencia) ? $resultado->rango_referencia_html : '-' !!}</td>
-                    <td>{{ $resultado->metodo ?: '-' }}</td>
-                    <td>{{ $resultado->muestra ?: '-' }}</td>
-                </tr>
-            @endforeach
-        </tbody>
-    </table>
+    @include('reportes.solicitud-laboratorio-area', ['area' => $bloque, 'perfilTitulo' => null])
 @endif
 @endforeach
 @if($solicitude->observaciones)

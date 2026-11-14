@@ -26,6 +26,9 @@ class SolicitudeController extends Controller
     /** Hasta cuántas filas un perfil va entero en una página (ver docs/ANALISIS_PERFILES_FASE0.md, F4.4). */
     private const FILAS_PERFIL_SIN_PARTIR = 12;
 
+    /** Hasta cuántas filas un examen (o un grupo_reporte) se imprime sin partirse entre páginas. */
+    private const FILAS_PRUEBA_SIN_PARTIR = 12;
+
     public function index(Request $request)
     {
         $this->authorizeAny($request, 'Ver Solicitudes Laboratorio');
@@ -346,7 +349,7 @@ class SolicitudeController extends Controller
 
         $solicitude = Solicitude::query()
             ->where('codigo_verificacion', $codigo)
-            ->with(['paciente', 'doctor', 'laboratorioItems.resultados', 'laboratorioItems.perfil'])
+            ->with(['paciente', 'doctor', 'laboratorioItems.producto.tipoProducto:id,nombre', 'laboratorioItems.resultados', 'laboratorioItems.perfil'])
             ->firstOrFail();
 
         return response()->json([
@@ -364,6 +367,8 @@ class SolicitudeController extends Controller
                 'sexo' => $solicitude->paciente->sexo,
             ],
             'doctor' => $solicitude->doctor ? ['nombre' => $solicitude->doctor->nombre] : null,
+            // Mismo orden y agrupación por área que el informe impreso (sin descripciones).
+            'bloques' => $this->bloquesVerificacion($solicitude),
             'laboratorios' => $solicitude->laboratorioItems
                 ->filter(fn ($item) => $item->resultados->where('visible', true)->isNotEmpty())
                 ->map(fn ($item) => [
@@ -533,10 +538,13 @@ class SolicitudeController extends Controller
     }
 
     /**
-     * Bloques del informe en orden de impresión. Un producto sin grupo_reporte
-     * es su propio bloque, como siempre. Los productos de una misma área con el
-     * mismo grupo se juntan bajo un título, en la posición del primero, ordenados
-     * por orden_reporte (vacíos al final) y luego por el orden de la solicitud.
+     * Bloques del informe en orden de impresión:
+     * - un bloque por área (tipo_productos) con los exámenes sueltos: cada área
+     *   sale una sola vez, en la posición de su primer examen, con todos los
+     *   sueltos de esa área juntos en el orden de la solicitud. Dentro del área,
+     *   los exámenes con el mismo grupo_reporte van juntos bajo su título;
+     * - un bloque por perfil, en la posición de su primer examen, con sus
+     *   exámenes separados por área (dentro del perfil no se aplica grupo_reporte).
      */
     private function bloquesInforme(Solicitude $solicitude): array
     {
@@ -545,11 +553,9 @@ class SolicitudeController extends Controller
             ->values();
 
         $bloques = [];
-        $indiceGrupo = [];
+        $indiceArea = [];
         $indicePerfil = [];
         foreach ($items as $posicion => $item) {
-            // Examen de un perfil: va al bloque de su perfil, en la posición del
-            // primero. Dentro del perfil no se aplica grupo_reporte.
             if ($item->solicitud_laboratorio_perfil_id && $item->perfil) {
                 $clave = $item->solicitud_laboratorio_perfil_id;
                 if (! isset($indicePerfil[$clave])) {
@@ -562,47 +568,17 @@ class SolicitudeController extends Controller
                 continue;
             }
 
-            $grupo = trim((string) $item->producto?->grupo_reporte);
-            if ($grupo === '') {
-                $bloques[] = ['tipo' => 'producto', 'item' => $item];
-
-                continue;
+            $clave = $item->producto?->tipo_producto_id ?: 0;
+            if (! isset($indiceArea[$clave])) {
+                $indiceArea[$clave] = count($bloques);
+                $bloques[] = ['tipo' => 'area', 'nombre' => $this->nombreArea($item), 'items' => []];
             }
-
-            $clave = mb_strtoupper($grupo).'|'.$item->producto->tipo_producto_id;
-            if (! isset($indiceGrupo[$clave])) {
-                $indiceGrupo[$clave] = count($bloques);
-                $bloques[] = [
-                    'tipo' => 'grupo',
-                    'titulo' => $grupo,
-                    'area' => $item->producto->tipoProducto?->nombre ?: 'LABORATORIO',
-                    'items' => [],
-                ];
-            }
-            $bloques[$indiceGrupo[$clave]]['items'][] = ['item' => $item, 'posicion' => $posicion];
+            $bloques[$indiceArea[$clave]]['items'][] = ['item' => $item, 'posicion' => $posicion];
         }
 
-        foreach ($indiceGrupo as $indice) {
-            $miembros = collect($bloques[$indice]['items'])
-                ->sortBy(fn ($m) => [$m['item']->producto->orden_reporte === null ? 1 : 0, $m['item']->producto->orden_reporte ?? 0, $m['posicion']])
-                ->pluck('item');
-
-            // Producto de un solo parámetro: la fila lleva el nombre del producto
-            // en lugar del genérico "RESULTADO".
-            $bloques[$indice]['filas'] = $miembros->flatMap(fn ($item) => $item->resultados->where('visible', true)
-                ->map(fn ($resultado) => [
-                    'nombre' => $item->resultados->count() === 1 ? $item->producto_nombre : $resultado->nombre,
-                    'resultado' => $resultado,
-                ]))->values()->all();
-
-            // La descripción se imprime una vez solo si es idéntica en todos.
-            $descripciones = $miembros->map(fn ($item) => (string) $item->producto?->descripcion)->unique();
-            $bloques[$indice]['descripcion'] = $descripciones->count() === 1 && filled($descripciones->first())
-                ? $miembros->first()->producto->descripcion_html
-                : null;
-            unset($bloques[$indice]['items']);
+        foreach ($indiceArea as $indice) {
+            $bloques[$indice] = $this->bloqueArea($bloques[$indice]);
         }
-
         foreach ($indicePerfil as $indice) {
             $bloques[$indice] = $this->bloquePerfil($bloques[$indice]);
         }
@@ -612,48 +588,176 @@ class SolicitudeController extends Controller
     }
 
     /**
-     * Filas del bloque de un perfil, en el orden guardado: una fila «ÁREA DE …»
-     * cada vez que cambia el área; un examen de un solo resultado es una fila
-     * con su nombre; uno de varios lleva un subtítulo y debajo sus resultados.
-     * Las descripciones de los exámenes van al pie, sin repetir.
+     * Bloques del informe para la página pública de verificación: áreas y
+     * perfiles con sus pruebas, sin descripciones.
+     */
+    private function bloquesVerificacion(Solicitude $solicitude): array
+    {
+        $pruebas = fn (array $pruebas) => array_values(array_filter(array_map(function ($prueba) {
+            $filas = [];
+            foreach ($prueba['filas'] as $fila) {
+                if ($fila['tipo'] === 'subtitulo') {
+                    $filas[] = ['tipo' => 'subtitulo', 'nombre' => $fila['nombre']];
+                } elseif ($fila['tipo'] === 'resultado') {
+                    $resultado = $fila['resultado'];
+                    $filas[] = [
+                        'tipo' => 'resultado',
+                        'nombre' => $fila['nombre'],
+                        'valor' => $resultado->valor,
+                        'unidad' => $resultado->unidad,
+                        'rango_referencia' => $resultado->rango_referencia,
+                        'rango_referencia_html' => $resultado->rango_referencia_html,
+                        'metodo' => $resultado->metodo,
+                        'muestra' => $resultado->muestra,
+                    ];
+                }
+            }
+
+            // Un examen que solo tenía descripción no se muestra.
+            return collect($filas)->contains('tipo', 'resultado') ? $filas : null;
+        }, $pruebas)));
+        $area = fn (array $area) => ['nombre' => $area['nombre'], 'pruebas' => $pruebas($area['pruebas'])];
+
+        return collect($this->bloquesInforme($solicitude))
+            ->map(fn ($bloque) => $bloque['tipo'] === 'perfil'
+                ? ['tipo' => 'perfil', 'titulo' => $bloque['titulo'], 'areas' => array_map($area, $bloque['areas'])]
+                : ['tipo' => 'area', ...$area($bloque)])
+            ->filter(fn ($bloque) => $bloque['tipo'] === 'perfil' || $bloque['pruebas'] !== [])
+            ->values()
+            ->all();
+    }
+
+    private function nombreArea($item): string
+    {
+        return $item->producto?->tipoProducto?->nombre ?: 'LABORATORIO';
+    }
+
+    /**
+     * Pruebas de un área: cada examen suelto, o un grupo_reporte con sus
+     * exámenes (en la posición del primero, ordenados por orden_reporte, vacíos
+     * al final, y luego por el orden de la solicitud).
+     */
+    private function bloqueArea(array $bloque): array
+    {
+        $secciones = [];
+        $indiceGrupo = [];
+        foreach ($bloque['items'] as $miembro) {
+            $grupo = trim((string) $miembro['item']->producto?->grupo_reporte);
+            if ($grupo === '') {
+                $secciones[] = ['grupo' => null, 'miembros' => [$miembro]];
+
+                continue;
+            }
+            $clave = mb_strtoupper($grupo);
+            if (! isset($indiceGrupo[$clave])) {
+                $indiceGrupo[$clave] = count($secciones);
+                $secciones[] = ['grupo' => $grupo, 'miembros' => []];
+            }
+            $secciones[$indiceGrupo[$clave]]['miembros'][] = $miembro;
+        }
+
+        $pruebas = array_map(function ($seccion) {
+            if ($seccion['grupo'] === null) {
+                $item = $seccion['miembros'][0]['item'];
+                $filas = $this->filasExamen($item);
+                if (filled($item->producto?->descripcion)) {
+                    $filas[] = ['tipo' => 'descripcion', 'html' => $item->producto->descripcion_html];
+                }
+
+                return $filas;
+            }
+
+            $miembros = collect($seccion['miembros'])
+                ->sortBy(fn ($m) => [$m['item']->producto->orden_reporte === null ? 1 : 0, $m['item']->producto->orden_reporte ?? 0, $m['posicion']])
+                ->pluck('item');
+            $filas = [['tipo' => 'subtitulo', 'nombre' => mb_strtoupper($seccion['grupo'])]];
+            foreach ($miembros as $item) {
+                // Dentro de un grupo, cada parámetro es una fila (como antes); un
+                // examen de un solo parámetro lleva el nombre del examen.
+                foreach ($item->resultados->where('visible', true) as $resultado) {
+                    $filas[] = ['tipo' => 'resultado', 'nombre' => $item->resultados->count() === 1 ? $item->producto_nombre : $resultado->nombre, 'resultado' => $resultado];
+                }
+            }
+            // La descripción se imprime una vez solo si es idéntica en todos.
+            $descripciones = $miembros->map(fn ($item) => (string) $item->producto?->descripcion)->unique();
+            if ($descripciones->count() === 1 && filled($descripciones->first())) {
+                $filas[] = ['tipo' => 'descripcion', 'html' => $miembros->first()->producto->descripcion_html];
+            }
+
+            return $filas;
+        }, $secciones);
+
+        return ['tipo' => 'area', 'nombre' => $bloque['nombre'], 'pruebas' => $this->conAgrupacion($pruebas)];
+    }
+
+    /**
+     * Filas de un examen: con un solo parámetro, una fila con el nombre del
+     * examen (en lugar del genérico «RESULTADO»); con varios, un subtítulo con
+     * el nombre del examen y debajo sus resultados visibles. Sin resultados
+     * visibles (solo descripción), el subtítulo si se pide.
+     */
+    private function filasExamen($item, bool $subtituloSiVacio = true): array
+    {
+        $visibles = $item->resultados->where('visible', true)->values();
+        if ($item->resultados->count() === 1 && $visibles->isNotEmpty()) {
+            return [['tipo' => 'resultado', 'nombre' => $item->producto_nombre, 'resultado' => $visibles->first()]];
+        }
+        if ($visibles->isEmpty()) {
+            return $subtituloSiVacio ? [['tipo' => 'subtitulo', 'nombre' => $item->producto_nombre]] : [];
+        }
+
+        return [
+            ['tipo' => 'subtitulo', 'nombre' => $item->producto_nombre],
+            ...$visibles->map(fn ($resultado) => ['tipo' => 'resultado', 'nombre' => $resultado->nombre, 'resultado' => $resultado])->all(),
+        ];
+    }
+
+    /**
+     * Cada prueba lleva «junta» si cabe en una página: se imprime en una sola
+     * fila (tabla anidada) y no se parte; si es más larga, sus filas van sueltas
+     * y el subtítulo queda pegado a la primera.
+     */
+    private function conAgrupacion(array $pruebas): array
+    {
+        return array_values(array_map(fn ($filas) => [
+            'filas' => $filas,
+            'junta' => count($filas) <= self::FILAS_PRUEBA_SIN_PARTIR,
+        ], array_filter($pruebas)));
+    }
+
+    /**
+     * Bloque de un perfil, en el orden guardado: los exámenes se separan por
+     * área cada vez que el área cambia, con el formato de área (nombre centrado
+     * y títulos de columna). Las descripciones van al pie, sin repetir.
      */
     private function bloquePerfil(array $bloque): array
     {
-        $filas = [];
+        $areas = [];
         $descripciones = [];
-        $areaAnterior = null;
         foreach ($bloque['items'] as $item) {
             if (filled($item->producto?->descripcion)) {
                 $descripciones[(string) $item->producto->descripcion] = $item->producto->descripcion_html;
             }
-            $visibles = $item->resultados->where('visible', true)->values();
-            if ($visibles->isEmpty()) {
+            if ($item->resultados->where('visible', true)->isEmpty()) {
                 continue;
             }
-            $area = $item->producto?->tipoProducto?->nombre ?: 'LABORATORIO';
-            if ($area !== $areaAnterior) {
-                $filas[] = ['tipo' => 'area', 'nombre' => $area];
-                $areaAnterior = $area;
+            $area = $this->nombreArea($item);
+            if (! $areas || $areas[count($areas) - 1]['nombre'] !== $area) {
+                $areas[] = ['nombre' => $area, 'pruebas' => []];
             }
-            if ($item->resultados->count() === 1) {
-                $filas[] = ['tipo' => 'resultado', 'nombre' => $item->producto_nombre, 'resultado' => $visibles->first()];
-
-                continue;
-            }
-            $filas[] = ['tipo' => 'examen', 'nombre' => $item->producto_nombre];
-            foreach ($visibles as $resultado) {
-                $filas[] = ['tipo' => 'resultado', 'nombre' => $resultado->nombre, 'resultado' => $resultado];
-            }
+            $areas[count($areas) - 1]['pruebas'][] = $this->filasExamen($item, false);
         }
+        $areas = array_map(fn ($area) => ['nombre' => $area['nombre'], 'pruebas' => $this->conAgrupacion($area['pruebas'])], $areas);
+        $filas = collect($areas)->sum(fn ($area) => 1 + collect($area['pruebas'])->sum(fn ($prueba) => count($prueba['filas'])));
 
         return [
             'tipo' => 'perfil',
             'titulo' => $bloque['titulo'],
-            'filas' => $filas,
+            'areas' => $areas,
             'descripciones' => array_values($descripciones),
-            'tiene_resultados' => collect($filas)->contains('tipo', 'resultado'),
+            'tiene_resultados' => $areas !== [],
             // Corto: cabe en una página y se imprime sin partir; largo: repite el título en cada página.
-            'corto' => count($filas) <= self::FILAS_PERFIL_SIN_PARTIR,
+            'corto' => $filas <= self::FILAS_PERFIL_SIN_PARTIR,
         ];
     }
 

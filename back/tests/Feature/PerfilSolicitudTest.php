@@ -314,22 +314,24 @@ it('el reporte general suma el perfil una vez y muestra sus exámenes como inclu
         ]);
 });
 
-/** Resumen de los bloques del informe: [tipo, título, filas] para comparar fácil. */
+/**
+ * Resumen de los bloques del informe para comparar fácil: [tipo, título, filas],
+ * con «ÁREA …» al empezar cada área de un perfil y «[…]» para los subtítulos.
+ */
 function bloquesDe(int $solicitudId): array
 {
     $solicitud = Solicitude::with(['laboratorioItems.producto.tipoProducto', 'laboratorioItems.resultados', 'laboratorioItems.perfil'])->find($solicitudId);
     $bloques = (new ReflectionMethod(SolicitudeController::class, 'bloquesInforme'))->invoke(new SolicitudeController, $solicitud);
+    $filas = fn (array $pruebas) => collect($pruebas)->flatMap(fn ($prueba) => array_map(fn ($f) => match ($f['tipo']) {
+        'subtitulo' => '['.$f['nombre'].']', 'descripcion' => 'DESCRIPCIÓN', default => $f['nombre'],
+    }, $prueba['filas']))->all();
 
-    return array_map(fn ($b) => match ($b['tipo']) {
-        'perfil' => ['perfil', $b['titulo'], array_map(fn ($f) => match ($f['tipo']) {
-            'area' => 'ÁREA '.$f['nombre'], 'examen' => '['.$f['nombre'].']', default => $f['nombre'],
-        }, $b['filas'])],
-        'grupo' => ['grupo', $b['titulo'], array_column($b['filas'], 'nombre')],
-        default => ['producto', $b['item']->producto_nombre],
-    }, $bloques);
+    return array_map(fn ($b) => $b['tipo'] === 'perfil'
+        ? ['perfil', $b['titulo'], collect($b['areas'])->flatMap(fn ($area) => ['ÁREA '.$area['nombre'], ...$filas($area['pruebas'])])->all()]
+        : ['area', $b['nombre'], $filas($b['pruebas'])], $bloques);
 }
 
-it('informe: el perfil va en su posición, con fila de área al cambiar y sin grupo_reporte adentro', function () {
+it('informe: los sueltos de un área van juntos una vez; el perfil en su posición, por áreas y sin grupo_reporte adentro', function () {
     $hemato = TipoProducto::create(['nombre' => 'HEMATOLOGIA', 'tipo_producto_padre_id' => $this->area->tipo_producto_padre_id]);
     $hemograma = Producto::create(['nombre' => 'HEMOGRAMA', 'precio' => 30, 'tipo_producto_id' => $hemato->id]);
     foreach (['HEMOGLOBINA', 'HEMATOCRITO'] as $i => $dato) {
@@ -345,21 +347,24 @@ it('informe: el perfil va en su posición, con fila de área al cambiar y sin gr
 
     $datos = ($this->crear)([$this->glucosa, $mixto, $this->potasio]);
 
+    // GLUCOSA y POTASIO (sueltos, misma área) van juntos en el área, en la posición
+    // de GLUCOSA; el perfil, en la suya, separado por áreas.
     expect(bloquesDe($datos['id']))->toBe([
-        ['producto', 'GLUCOSA'],
+        ['area', 'IONOGRAMA / ELECTROLITOS', ['GLUCOSA', '[ELECTROLITOS]', 'POTASIO']],
         ['perfil', 'PERFIL MIXTO', [
             'ÁREA IONOGRAMA / ELECTROLITOS', 'SODIO',
             'ÁREA HEMATOLOGIA', '[HEMOGRAMA]', 'HEMOGLOBINA', 'HEMATOCRITO',
             'ÁREA IONOGRAMA / ELECTROLITOS', 'CLORO',
         ]],
-        ['grupo', 'Electrolitos', ['POTASIO']],
     ]);
 
-    // Verificación pública: cada examen dice de qué perfil viene.
+    // Verificación pública: cada examen dice de qué perfil viene, y los bloques siguen el informe.
     $codigo = Solicitude::find($datos['id'])->codigo_verificacion;
     $publico = (new SolicitudeController)->verificacion($codigo)->getData(true);
     expect(array_map(fn ($l) => [$l['nombre'], $l['perfil']], $publico['laboratorios']))
         ->toBe([['GLUCOSA', null], ['SODIO', 'PERFIL MIXTO'], ['HEMOGRAMA', 'PERFIL MIXTO'], ['CLORO', 'PERFIL MIXTO'], ['POTASIO', null]]);
+    expect(array_map(fn ($b) => $b['tipo'] === 'perfil' ? [$b['titulo'], array_column($b['areas'], 'nombre')] : [$b['nombre'], count($b['pruebas'])], $publico['bloques']))
+        ->toBe([['IONOGRAMA / ELECTROLITOS', 2], ['PERFIL MIXTO', ['IONOGRAMA / ELECTROLITOS', 'HEMATOLOGIA', 'IONOGRAMA / ELECTROLITOS']]]);
 });
 
 it('informe: dos perfiles que comparten un examen lo muestran una vez, en el primero', function () {
@@ -375,7 +380,7 @@ it('informe: un perfil sin resultados visibles no se imprime, ni su título solo
     $ocultos = array_map(fn ($examen) => [...($this->resultado)($examen, '1'), 'visible' => false], [$this->sodio, $this->potasio, $this->cloro]);
     $datos = ($this->crear)([$this->ionograma, $this->glucosa], $ocultos);
 
-    expect(bloquesDe($datos['id']))->toBe([['producto', 'GLUCOSA']]);
+    expect(bloquesDe($datos['id']))->toBe([['area', 'IONOGRAMA / ELECTROLITOS', ['GLUCOSA']]]);
 });
 
 it('informe: usa el nombre del perfil guardado en la solicitud aunque el catálogo cambie', function () {

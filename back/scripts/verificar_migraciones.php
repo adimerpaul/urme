@@ -134,8 +134,15 @@ const CLASIFICACION = [
     '2026_11_04_000200_add_categoria_gasto_to_caja_movimientos_table' => ['ESQUEMA', 'caja_movimientos + tipo_producto_padre_id, tipo_producto_id (nullable, índices y claves foráneas)'],
     '2026_11_11_000100_add_es_perfil_to_productos_table' => ['ESQUEMA', 'productos + es_perfil (boolean default false, índice)'],
     '2026_11_11_000200_create_producto_perfil_items_table' => ['ESQUEMA', 'crea producto_perfil_items (perfil_id, producto_id, orden; único y claves foráneas)'],
+    '2026_11_11_000300_add_tipo_paciente_to_ventas_table' => ['ESQUEMA', 'ventas + tipo_paciente (nullable)'],
+    '2026_11_11_000400_add_factura_to_ventas_table' => ['ESQUEMA', 'ventas + con_factura (default false), numero_factura (nullable)'],
+    '2026_11_11_000400_add_servicio_to_ventas_table' => ['ESQUEMA', 'ventas + servicio (nullable)'],
+    '2026_11_11_000500_add_user_id_to_pacientes_table' => ['ESQUEMA', 'pacientes + user_id (nullable, clave foránea). El relleno desde la auditoría se quitó el 2026-11-18: si figura ejecutada, puede haberse corrido la versión original con relleno'],
     '2026_11_12_000100_create_solicitud_laboratorio_perfiles_table' => ['ESQUEMA', 'crea solicitud_laboratorio_perfiles (vacía; claves foráneas a solicitudes y productos)'],
     '2026_11_12_000200_add_perfil_to_solicitud_laboratorio_items_table' => ['ESQUEMA', 'solicitud_laboratorio_items + solicitud_laboratorio_perfil_id (nullable, índice y clave foránea)'],
+    '2026_11_18_000100_add_arqueo_efectivo_to_cierres_caja_table' => ['ESQUEMA', 'cierres_caja + formula y cifras del arqueo de efectivo (todas nullable; los cierres existentes quedan en null)'],
+    '2026_11_18_000200_add_anulado_to_ventas_table' => ['ESQUEMA', 'ventas + anulado_en, anulado_por_id (nullable, clave foránea)'],
+    '2026_11_18_000300_add_anular_ventas_caja_cerrada_permission' => ['DATOS', 'agrega el permiso Anular Ventas Caja Cerrada + admin (no modifica filas existentes)'],
 ];
 
 $base = $raiz.'/database/migrations';

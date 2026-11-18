@@ -15,6 +15,11 @@
           <div class="text-caption text-grey-6">Un cierre por usuario y por día</div>
         </div>
         <q-space />
+        <!-- Turno de noche: jornadas de los últimos días que quedaron sin cierre. -->
+        <q-btn v-if="canAutorizar" outline dense no-caps color="orange-9" icon="history" class="q-mr-sm"
+               label="Jornadas sin cerrar" padding="2px 10px" @click="abrirJornadas">
+          <q-badge v-if="jornadas.length" color="orange-9" floating rounded>{{ jornadas.length }}</q-badge>
+        </q-btn>
         <q-btn flat round dense color="primary" icon="refresh" :loading="loading" @click="cargar">
           <q-tooltip>Actualizar</q-tooltip>
         </q-btn>
@@ -30,20 +35,23 @@
         <q-space />
         <!-- Sin 'Ver Montos Caja' solo se muestra lo declarado, nunca el
              total del sistema ni la diferencia. -->
+        <!-- Totales de todos los cierres del filtro (no solo de la página). -->
         <div class="col-auto text-caption text-grey-7">
-          <template v-if="canMontos">
-            Sistema: <b>{{ money(totalSistema) }} Bs</b>
+          <template v-if="canMontos && totales">
+            Efectivo esperado: <b>{{ money(totales.efectivo_esperado) }} Bs</b>
             <span class="q-mx-xs">·</span>
           </template>
-          Declarado: <b class="text-primary">{{ money(totalDeclarado) }} Bs</b>
-          <template v-if="canMontos">
+          Declarado: <b class="text-primary">{{ money(totales ? totales.declarado : totalDeclarado) }} Bs</b>
+          <template v-if="canMontos && totales">
             <span class="q-mx-xs">·</span>
-            Diferencia:
-            <b :class="diferencia(totalDiferencia).texto">
-              <q-icon :name="diferencia(totalDiferencia).icono" size="13px" />
-              {{ diferencia(totalDiferencia).monto }} Bs
-              <q-tooltip>{{ diferencia(totalDiferencia).titulo }}</q-tooltip>
+            Dif. de efectivo:
+            <b :class="diferencia(totales.diferencia_efectivo).texto">
+              <q-icon :name="diferencia(totales.diferencia_efectivo).icono" size="13px" />
+              {{ diferencia(totales.diferencia_efectivo).monto }} Bs
+              <q-tooltip>{{ diferencia(totales.diferencia_efectivo).titulo }}</q-tooltip>
             </b>
+            <span class="q-mx-xs">·</span>
+            QR: <b>{{ money(totales.qr_total) }} Bs</b>
           </template>
         </div>
       </div>
@@ -76,9 +84,10 @@
             <th class="text-left">Fecha</th>
             <th class="text-left">Usuario</th>
             <th class="text-right">Ventas del día</th>
-            <th v-if="canMontos" class="text-right">Sistema (Bs)</th>
+            <th v-if="canMontos" class="text-right">Efectivo esperado (Bs)</th>
             <th class="text-right">Declarado (Bs)</th>
-            <th v-if="canMontos" class="text-right">Diferencia</th>
+            <th v-if="canMontos" class="text-right">Dif. efectivo</th>
+            <th v-if="canMontos" class="text-right">QR (Bs)</th>
             <th class="text-left">Cerrado el</th>
             <th class="text-center">Corrección</th>
             <th class="text-left">Validación</th>
@@ -87,10 +96,10 @@
         </thead>
         <tbody>
           <tr v-if="loading">
-            <td :colspan="canMontos ? 11 : 9" class="text-center q-pa-md"><q-spinner color="primary" size="24px" /></td>
+            <td :colspan="canMontos ? 12 : 9" class="text-center q-pa-md"><q-spinner color="primary" size="24px" /></td>
           </tr>
           <tr v-else-if="!cierres.length">
-            <td :colspan="canMontos ? 11 : 9" class="text-center text-grey-5 q-pa-md">Sin cierres registrados</td>
+            <td :colspan="canMontos ? 12 : 9" class="text-center text-grey-5 q-pa-md">Sin cierres registrados</td>
           </tr>
           <tr v-else v-for="row in cierres" :key="row.id">
             <td class="text-center">
@@ -109,6 +118,14 @@
                     <q-item-section>
                       <q-item-label class="text-orange-9">Autorizar más ventas</q-item-label>
                       <q-item-label caption>Da tiempo extra para vender con la caja cerrada</q-item-label>
+                    </q-item-section>
+                  </q-item>
+                  <!-- Reporte completo: solo con el cierre validado y con 'Ver Montos Caja'. -->
+                  <q-item v-if="row.validado && canMontos" clickable v-close-popup @click="verReporte(row)">
+                    <q-item-section avatar><q-icon name="summarize" color="teal-8" size="18px" /></q-item-section>
+                    <q-item-section>
+                      <q-item-label class="text-teal-8">Reporte de cierre de caja</q-item-label>
+                      <q-item-label caption>Arqueo, ventas, gastos y controles</q-item-label>
                     </q-item-section>
                   </q-item>
                   <q-item clickable v-close-popup @click="verVentas(row)">
@@ -136,15 +153,25 @@
             <td>{{ formatSoloFecha(row.fecha) }}</td>
             <td>{{ row.user?.name || '—' }}</td>
             <td class="text-right">{{ row.cantidad_ventas }}</td>
-            <td v-if="canMontos" class="text-right">{{ money(row.monto_sistema) }}</td>
+            <td v-if="canMontos" class="text-right">{{ money(row.efectivo_esperado) }}</td>
             <td class="text-right text-weight-bold">{{ money(row.monto) }}</td>
             <td v-if="canMontos" class="text-right">
-              <q-badge :color="diferencia(row.diferencia).color" class="text-weight-bold">
-                <q-icon :name="diferencia(row.diferencia).icono" size="12px" class="q-mr-xs" />
-                {{ diferencia(row.diferencia).monto }}
-                <q-tooltip>{{ diferencia(row.diferencia).titulo }}</q-tooltip>
+              <q-badge :color="diferencia(row.diferencia_efectivo).color" class="text-weight-bold">
+                <q-icon :name="diferencia(row.diferencia_efectivo).icono" size="12px" class="q-mr-xs" />
+                {{ diferencia(row.diferencia_efectivo).monto }}
+                <q-tooltip>{{ diferencia(row.diferencia_efectivo).titulo }}</q-tooltip>
               </q-badge>
+              <!-- Cierre anterior: su diferencia registrada era contra el total, QR incluido. -->
+              <div v-if="row.formula_anterior" class="text-grey-6 formula-anterior">
+                fórmula anterior
+                <q-tooltip>
+                  Cierre hecho con la fórmula anterior. Diferencia registrada al cerrar:
+                  {{ money(row.diferencia) }} Bs (contra el total, QR incluido). Aquí se muestra la
+                  diferencia de efectivo recalculada con los movimientos actuales.
+                </q-tooltip>
+              </div>
             </td>
+            <td v-if="canMontos" class="text-right">{{ money(row.qr_total) }}</td>
             <td>{{ formatFecha(row.fecha_hora) }}</td>
             <td class="text-center">
               <q-badge v-if="row.modificado_en" color="orange-8">
@@ -261,7 +288,7 @@
               </div>
             </div>
 
-            <q-banner v-if="rangoAplicado && resumenVentas" dense rounded class="bg-orange-1 text-orange-10 q-mb-xs text-caption">
+            <q-banner v-if="rangoAplicado && resumenVentas && canMontos" dense rounded class="bg-orange-1 text-orange-10 q-mb-xs text-caption">
               <template v-slot:avatar><q-icon name="schedule" color="orange-9" /></template>
               Del <b>{{ rangoAplicado.desde }}</b> al <b>{{ rangoAplicado.hasta }}</b> ·
               Ventas ({{ resumenVentas.cantidad_ventas }}): <b>{{ money(resumenVentas.ingresos) }} Bs</b>
@@ -280,16 +307,17 @@
             </q-banner>
 
             <div class="row q-col-gutter-xs q-mb-xs items-center text-caption text-grey-8">
-              <div v-if="canMontos" class="col-auto">Sistema: <b>{{ money(cierreSel?.monto_sistema) }} Bs</b></div>
+              <div v-if="canMontos" class="col-auto">Efectivo esperado: <b>{{ money(cierreSel?.efectivo_esperado) }} Bs</b></div>
               <div class="col-auto">{{ canMontos ? '· ' : '' }}Declarado: <b>{{ money(cierreSel?.monto) }} Bs</b></div>
               <div v-if="canMontos" class="col-auto">
-                · Diferencia:
-                <b :class="diferencia(cierreSel?.diferencia).texto">
-                  <q-icon :name="diferencia(cierreSel?.diferencia).icono" size="13px" />
-                  {{ diferencia(cierreSel?.diferencia).monto }} Bs
-                  <q-tooltip>{{ diferencia(cierreSel?.diferencia).titulo }}</q-tooltip>
+                · Dif. de efectivo:
+                <b :class="diferencia(cierreSel?.diferencia_efectivo).texto">
+                  <q-icon :name="diferencia(cierreSel?.diferencia_efectivo).icono" size="13px" />
+                  {{ diferencia(cierreSel?.diferencia_efectivo).monto }} Bs
+                  <q-tooltip>{{ diferencia(cierreSel?.diferencia_efectivo).titulo }}</q-tooltip>
                 </b>
               </div>
+              <div v-if="canMontos" class="col-auto">· QR: <b>{{ money(cierreSel?.qr_total) }} Bs</b></div>
               <q-space />
               <div class="col-auto">
                 <q-select v-model="porPaginaVentas" dense outlined label="Por página"
@@ -333,8 +361,9 @@
                   <td>{{ v.paciente?.nombre_completo || v.cliente || (esEgreso(v) ? 'GASTO DE CAJA' : 'SIN CLIENTE') }}</td>
                   <!-- Cada ítem con su precio; el "*" marca el precio que cambió la vendedora -->
                   <td class="detalle">
+                    <!-- Sin 'Ver Montos Caja' la API no envía precios ni totales. -->
                     <div v-for="d in (v.detalles || [])" :key="d.id" :class="{ 'precio-mod': precioModificado(d) }">
-                      {{ Number(d.cantidad) }} x {{ d.nombre }} · {{ money(d.precio) }}<b v-if="precioModificado(d)">*</b>
+                      {{ Number(d.cantidad) }} x {{ d.nombre }}<template v-if="d.precio !== undefined"> · {{ money(d.precio) }}</template><b v-if="precioModificado(d)">*</b>
                       <span v-if="precioModificado(d)" class="text-grey-6"> (lista {{ money(d.precio_original) }})</span>
                     </div>
                     <span v-if="!(v.detalles || []).length" class="text-grey-5">—</span>
@@ -349,7 +378,8 @@
                   <td class="comentario">{{ v.comentario || '' }}</td>
                   <!-- El gasto se muestra en negativo: es dinero que salió de caja -->
                   <td class="text-right text-weight-bold" :class="{ 'text-deep-orange-8': esEgreso(v) }">
-                    {{ esEgreso(v) ? '-' : '' }}{{ money(v.total) }}
+                    <template v-if="v.total === undefined">—</template>
+                    <template v-else>{{ esEgreso(v) ? '-' : '' }}{{ money(v.total) }}</template>
                   </td>
                 </tr>
               </tbody>
@@ -364,8 +394,8 @@
                             boundary-links direction-links size="sm" @update:model-value="cargarVentas()" />
             </div>
 
-            <!-- Resumen de caja: solo lo registrado por el usuario del cierre en su día
-                 (o en el rango). Sin 'Ver Montos Caja' llega sin importes. -->
+            <!-- Resumen de caja: la misma definición del arqueo (lo que entró a la caja del
+                 usuario en su día o en el rango). Sin 'Ver Montos Caja' llega sin importes. -->
             <div v-if="resumenCaja" class="resumen-caja q-mt-sm">
               <q-markup-table dense flat bordered separator="horizontal">
                 <thead>
@@ -388,12 +418,229 @@
                   </tr>
                 </tbody>
               </q-markup-table>
-              <div v-if="resumenCaja.cobros_ajenos?.cantidad" class="text-caption text-grey-7 q-mt-xs">
-                {{ resumenCaja.cobros_ajenos.cantidad }} cobro(s) de pendientes de otros días u otros usuarios
-                <template v-if="resumenCaja.cobros_ajenos.importe !== null">({{ importeCaja(resumenCaja.cobros_ajenos.importe) }})</template>
-                figuran en el detalle pero no en este resumen.
+            </div>
+          </q-card-section>
+        </q-card>
+      </q-dialog>
+
+      <!-- ── Reporte de cierre de caja (solo cierres validados) ── -->
+      <q-dialog v-model="dialogReporte" :maximized="$q.screen.lt.md">
+        <q-card class="ventas-card reporte-cierre">
+          <q-card-section class="row items-center q-py-sm bg-teal-9 text-white">
+            <q-icon name="summarize" size="20px" class="q-mr-sm" />
+            <div>
+              <div class="text-subtitle1 text-weight-bold">Reporte de cierre de caja</div>
+              <div class="text-caption" v-if="reporte">
+                {{ reporte.encabezado.cajero }} · {{ formatSoloFecha(reporte.encabezado.fecha) }}
               </div>
             </div>
+            <q-space />
+            <q-btn flat dense no-caps color="white" icon="picture_as_pdf" label="PDF" class="q-mx-xs"
+                   :loading="exportando === 'reporte'" :disable="!reporte" @click="exportarReportePdf" />
+            <q-btn icon="close" flat round dense color="white" v-close-popup />
+          </q-card-section>
+
+          <q-card-section v-if="cargandoReporte" class="text-center q-pa-lg"><q-spinner color="primary" size="32px" /></q-card-section>
+          <q-card-section v-else-if="reporte" class="q-pa-sm">
+            <div class="row q-col-gutter-sm">
+              <!-- Encabezado y arqueo -->
+              <div class="col-12 col-md-6">
+                <div class="seccion-titulo">Cierre</div>
+                <q-markup-table dense flat bordered>
+                  <tbody>
+                    <tr><td>Cajero</td><td class="text-weight-bold">{{ reporte.encabezado.cajero }}</td></tr>
+                    <tr><td>Jornada</td><td>{{ formatSoloFecha(reporte.encabezado.fecha) }}</td></tr>
+                    <tr><td>Cerrado el</td><td>{{ textoFecha(reporte.encabezado.cerrado_en) }}</td></tr>
+                    <tr v-if="reporte.encabezado.corregido_en"><td>Corrección</td><td>{{ textoFecha(reporte.encabezado.corregido_en) }}</td></tr>
+                    <tr><td>Estado</td><td><q-badge color="positive">{{ reporte.encabezado.estado }}</q-badge>
+                      {{ reporte.encabezado.validado_por }} · {{ textoFecha(reporte.encabezado.validado_en) }}</td></tr>
+                    <tr v-if="reporte.encabezado.comentario"><td>Comentario</td><td>{{ reporte.encabezado.comentario }}</td></tr>
+                  </tbody>
+                </q-markup-table>
+              </div>
+              <div class="col-12 col-md-6">
+                <div class="seccion-titulo">1. Arqueo de efectivo</div>
+                <q-markup-table dense flat bordered>
+                  <tbody>
+                    <tr><td>Efectivo de las ventas</td><td class="text-right">{{ money(reporte.arqueo.efectivo_ingresos) }}</td></tr>
+                    <tr><td>(−) Gastos en efectivo ({{ reporte.arqueo.gastos_cantidad }})</td><td class="text-right">{{ money(reporte.arqueo.gastos_efectivo) }}</td></tr>
+                    <tr class="text-weight-bold"><td>Efectivo esperado</td><td class="text-right">{{ money(reporte.arqueo.efectivo_esperado) }}</td></tr>
+                    <tr><td>Efectivo declarado
+                      <span v-if="reporte.arqueo.desglose.length" class="text-grey-6 text-caption">
+                        ({{ reporte.arqueo.desglose.map(d => d.cantidad + '×' + d.corte).join(' · ') }})
+                      </span></td><td class="text-right">{{ money(reporte.arqueo.declarado) }}</td></tr>
+                    <tr class="text-weight-bold"><td>Diferencia de efectivo</td>
+                      <td class="text-right" :class="diferencia(reporte.arqueo.diferencia_efectivo).texto">
+                        {{ diferencia(reporte.arqueo.diferencia_efectivo).titulo.split(':')[0] }} {{ diferencia(reporte.arqueo.diferencia_efectivo).monto }}
+                      </td></tr>
+                  </tbody>
+                </q-markup-table>
+                <q-banner v-if="reporte.arqueo.formula_anterior" dense rounded class="bg-orange-1 text-orange-10 q-mt-xs text-caption">
+                  <b>Fórmula anterior.</b> Diferencia registrada al cerrar: {{ money(reporte.arqueo.diferencia_registrada) }} Bs
+                  (contra el total del sistema, {{ money(reporte.arqueo.monto_sistema_registrado) }} Bs, QR incluido).
+                  {{ reporte.arqueo.nota }}
+                </q-banner>
+              </div>
+
+              <!-- Otros medios y ventas -->
+              <div class="col-12 col-md-4">
+                <div class="seccion-titulo">2. Otros medios (no entran en el arqueo)</div>
+                <q-markup-table dense flat bordered>
+                  <tbody>
+                    <tr><td>QR (con la parte QR de los mixtos)</td><td class="text-right">{{ reporte.otros_medios.qr_cantidad }}</td><td class="text-right">{{ money(reporte.otros_medios.qr_total) }}</td></tr>
+                    <tr v-for="o in reporte.otros_medios.otros" :key="o.medio"><td>{{ o.medio }}</td><td class="text-right">{{ o.cantidad }}</td><td class="text-right">{{ money(o.total) }}</td></tr>
+                  </tbody>
+                </q-markup-table>
+                <div class="seccion-titulo q-mt-sm">3. Ventas por forma de pago</div>
+                <q-markup-table dense flat bordered>
+                  <tbody>
+                    <tr v-for="f in reporte.ventas.por_forma_de_pago.filas" :key="f.clave"><td>{{ f.nombre }}</td><td class="text-right">{{ f.cantidad }}</td><td class="text-right">{{ money(f.total) }}</td></tr>
+                    <tr class="text-weight-bold"><td>Total ({{ reporte.ventas.cantidad }} ventas)</td><td /><td class="text-right">{{ money(reporte.ventas.por_forma_de_pago.total) }}</td></tr>
+                  </tbody>
+                </q-markup-table>
+              </div>
+              <div class="col-12 col-md-4">
+                <div class="seccion-titulo">Por categoría</div>
+                <q-markup-table dense flat bordered>
+                  <tbody>
+                    <tr v-for="f in reporte.ventas.por_categoria" :key="f.nombre"><td>{{ f.nombre }}</td><td class="text-right">{{ f.cantidad }}</td><td class="text-right">{{ money(f.total) }}</td></tr>
+                  </tbody>
+                </q-markup-table>
+                <div class="seccion-titulo q-mt-sm">Por tipo de paciente</div>
+                <q-markup-table dense flat bordered>
+                  <tbody>
+                    <tr v-for="f in reporte.ventas.por_tipo_paciente" :key="f.nombre"><td>{{ f.nombre }}</td><td class="text-right">{{ f.cantidad }}</td><td class="text-right">{{ money(f.total) }}</td></tr>
+                  </tbody>
+                </q-markup-table>
+              </div>
+              <div class="col-12 col-md-4">
+                <div class="seccion-titulo">Incluidos en el total</div>
+                <q-markup-table dense flat bordered>
+                  <tbody>
+                    <tr><td>Cobros de internación</td><td class="text-right">{{ reporte.ventas.internaciones.cantidad }}</td><td class="text-right">{{ money(reporte.ventas.internaciones.total) }}</td></tr>
+                    <tr><td>Pendientes de otros días cobradas hoy</td><td class="text-right">{{ reporte.ventas.pendientes_otros_dias.cantidad }}</td><td class="text-right">{{ money(reporte.ventas.pendientes_otros_dias.total) }}</td></tr>
+                  </tbody>
+                </q-markup-table>
+                <div class="seccion-titulo q-mt-sm">4. Gastos ({{ reporte.gastos.cantidad }} · Bs {{ money(reporte.gastos.total) }})</div>
+                <q-markup-table dense flat bordered>
+                  <tbody>
+                    <tr v-for="g in reporte.gastos.lista" :key="g.id">
+                      <td>{{ g.hora }} {{ g.descripcion }}<div class="text-grey-6 text-caption">{{ g.categoria }}{{ g.subcategoria ? ' / ' + g.subcategoria : '' }}</div></td>
+                      <td class="text-right">{{ money(g.total) }}</td>
+                    </tr>
+                    <tr v-if="!reporte.gastos.lista.length"><td class="text-grey-5">Sin gastos</td><td /></tr>
+                  </tbody>
+                </q-markup-table>
+              </div>
+
+              <!-- Controles y cuadres -->
+              <div class="col-12 col-md-8">
+                <div class="seccion-titulo">5. Controles</div>
+                <q-markup-table dense flat bordered>
+                  <tbody>
+                    <tr class="bg-grey-1"><td colspan="4" class="text-weight-bold">Ventas anuladas del día (no se suman)</td></tr>
+                    <tr v-for="x in reporte.controles.anuladas" :key="'a' + x.id">
+                      <td>N° {{ x.id }} · {{ x.hora }} · {{ x.cliente }}</td>
+                      <td>{{ textoFecha(x.anulado_en) }}<span v-if="x.fuente !== 'registro'" class="text-grey-6"> ({{ x.fuente }})</span> {{ x.anulado_por || '' }}</td>
+                      <td><q-badge v-if="x.despues_del_cierre" color="negative">DESPUÉS DEL CIERRE</q-badge><span v-else class="text-grey-7">antes del cierre</span></td>
+                      <td class="text-right">{{ money(x.total) }}</td>
+                    </tr>
+                    <tr v-if="!reporte.controles.anuladas.length"><td colspan="4" class="text-grey-5">Ninguna</td></tr>
+                    <tr class="bg-grey-1"><td colspan="4" class="text-weight-bold">Precio modificado (distinto al de lista)</td></tr>
+                    <tr v-for="(x, i) in reporte.controles.precio_modificado" :key="'p' + i">
+                      <td>Venta N° {{ x.venta_id }} · {{ x.item }}</td>
+                      <td>lista {{ money(x.precio_lista) }} → cobrado {{ money(x.precio_cobrado) }}</td>
+                      <td>× {{ x.cantidad }}</td><td class="text-right">{{ money(x.diferencia) }}</td>
+                    </tr>
+                    <tr v-if="!reporte.controles.precio_modificado.length"><td colspan="4" class="text-grey-5">Ninguno</td></tr>
+                    <tr class="bg-grey-1"><td colspan="4" class="text-weight-bold">Pendientes sin cobrar al cierre</td></tr>
+                    <tr v-for="x in reporte.controles.pendientes_sin_cobrar" :key="'s' + x.id">
+                      <td>N° {{ x.id }} · {{ x.hora }} · {{ x.cliente }}</td>
+                      <td colspan="2">{{ x.cobrada_despues ? 'cobrada después: ' + textoFecha(x.cobrada_despues) : 'sin cobrar' }}</td>
+                      <td class="text-right">{{ money(x.total) }}</td>
+                    </tr>
+                    <tr v-if="!reporte.controles.pendientes_sin_cobrar.length"><td colspan="4" class="text-grey-5">Ninguna</td></tr>
+                  </tbody>
+                </q-markup-table>
+              </div>
+              <div class="col-12 col-md-4">
+                <div class="seccion-titulo">Cuadres del reporte</div>
+                <q-markup-table dense flat bordered>
+                  <tbody>
+                    <tr v-for="x in reporte.cuadres" :key="x.texto">
+                      <td>{{ x.texto }}</td>
+                      <td class="text-right"><q-icon :name="x.ok ? 'check_circle' : 'error'" :color="x.ok ? 'positive' : 'negative'" size="16px" /></td>
+                    </tr>
+                  </tbody>
+                </q-markup-table>
+              </div>
+
+              <!-- Detalle -->
+              <div class="col-12">
+                <div class="seccion-titulo">6. Detalle de movimientos</div>
+                <q-markup-table dense flat bordered separator="cell" class="tabla-compacta tabla-ventas">
+                  <thead>
+                    <tr class="bg-grey-1 text-grey-7 text-uppercase">
+                      <th class="text-left">N°</th><th class="text-left">Hora</th><th class="text-left">Cliente / Paciente</th>
+                      <th class="text-left">Ítems</th><th class="text-left">Pago</th><th class="text-right">Efectivo</th>
+                      <th class="text-right">QR</th><th class="text-right">Otros</th><th class="text-center">Estado</th><th class="text-right">Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="x in reporte.detalle" :key="x.id">
+                      <td>{{ x.id }}</td><td>{{ x.hora }}</td><td>{{ x.tipo === 'GASTO' ? 'GASTO: ' : '' }}{{ x.cliente }}</td>
+                      <td class="detalle"><div v-for="(it, i) in x.items" :key="i">{{ it.cantidad }} x {{ it.nombre }} @ {{ money(it.precio) }} = {{ money(it.subtotal) }}</div></td>
+                      <td>{{ x.tipo_pago }}</td>
+                      <td class="text-right">{{ x.tipo === 'GASTO' ? '-' : '' }}{{ money(x.efectivo) }}</td>
+                      <td class="text-right">{{ money(x.qr) }}</td><td class="text-right">{{ money(x.otros) }}</td>
+                      <td class="text-center">{{ x.estado }}</td>
+                      <td class="text-right text-weight-bold">{{ money(x.total) }}</td>
+                    </tr>
+                  </tbody>
+                </q-markup-table>
+              </div>
+            </div>
+          </q-card-section>
+        </q-card>
+      </q-dialog>
+
+      <!-- ── Jornadas sin cerrar: el supervisor las cierra en nombre del cajero ── -->
+      <q-dialog v-model="dialogJornadas">
+        <q-card style="width:min(96vw,560px)">
+          <q-card-section class="row items-center bg-orange-9 text-white q-py-sm">
+            <q-icon name="history" size="20px" class="q-mr-sm" />
+            <div>
+              <div class="text-subtitle1 text-weight-bold">Jornadas sin cerrar</div>
+              <div class="text-caption">Últimos 2 días con movimientos y sin cierre</div>
+            </div>
+            <q-space />
+            <q-btn icon="close" flat round dense color="white" v-close-popup />
+          </q-card-section>
+          <q-card-section class="q-pa-sm">
+            <q-markup-table v-if="!jornadaSel" dense flat bordered>
+              <tbody>
+                <tr v-for="j in jornadas" :key="j.user.id + j.fecha">
+                  <td>{{ j.user.name }}</td><td>{{ formatSoloFecha(j.fecha) }}</td><td>{{ j.movimientos }} movimientos</td>
+                  <td class="text-right"><q-btn dense flat no-caps color="orange-9" icon="lock_clock" label="Cerrar en su nombre" @click="elegirJornada(j)" /></td>
+                </tr>
+                <tr v-if="!jornadas.length"><td class="text-grey-5 text-center q-pa-md">No hay jornadas sin cerrar</td></tr>
+              </tbody>
+            </q-markup-table>
+            <q-form v-else @submit.prevent="cerrarEnNombre">
+              <div class="text-body2 q-mb-sm">
+                Cierre de <b>{{ jornadaSel.user.name }}</b> del <b>{{ formatSoloFecha(jornadaSel.fecha) }}</b>
+                ({{ jornadaSel.movimientos }} movimientos).
+              </div>
+              <q-input v-model.number="formJornada.monto" label="Efectivo que entregó el cajero (Bs) *" dense outlined type="number"
+                       step="0.01" min="0" input-class="text-right text-weight-bold" class="q-mb-sm"
+                       :rules="[v => v !== null && v !== '' || 'Requerido']" />
+              <q-input v-model="formJornada.comentario" label="Comentario (por qué se cierra en su nombre) *" dense outlined
+                       type="textarea" rows="2" v-uppercase :rules="[v => !!(v || '').trim() || 'Requerido']" />
+              <div class="row justify-end q-gutter-sm q-mt-sm">
+                <q-btn flat dense no-caps label="Volver" @click="jornadaSel = null" />
+                <q-btn dense no-caps color="orange-9" icon="lock_clock" label="Cerrar la jornada" type="submit" :loading="cerrandoJornada" />
+              </div>
+            </q-form>
           </q-card-section>
         </q-card>
       </q-dialog>
@@ -484,9 +731,10 @@ function fechaManual () {
 }
 
 const paginas = computed(() => Math.max(1, Math.ceil(total.value / porPagina.value)))
+// Totales de todo el filtro que calcula la API (solo con 'Ver Montos Caja'); sin
+// ese permiso, lo declarado de la página.
+const totales = ref(null)
 const totalDeclarado = computed(() => cierres.value.reduce((suma, c) => suma + Number(c.monto || 0), 0))
-const totalSistema = computed(() => cierres.value.reduce((suma, c) => suma + Number(c.monto_sistema || 0), 0))
-const totalDiferencia = computed(() => Math.round((totalDeclarado.value - totalSistema.value) * 100) / 100)
 
 function money (v) { return Number(v || 0).toFixed(2) }
 
@@ -526,6 +774,7 @@ async function cargar () {
     })
     cierres.value = data.data || []
     total.value = data.total || 0
+    totales.value = data.totales || null
   } catch (error) {
     proxy.$alert.error(error.response?.data?.message || 'No se pudieron cargar los cierres')
   } finally {
@@ -626,6 +875,7 @@ const lineasCaja = computed(() => {
     { etiqueta: 'Total ventas', ...r.total_ventas },
     { etiqueta: '(−) Ventas pendientes de cobro', ...r.pendientes },
     { etiqueta: '(−) Cobros por QR', ...r.qr },
+    { etiqueta: '(−) Otros medios (transferencia / tarjeta)', ...r.otros },
     { etiqueta: '(−) Gastos en efectivo', ...r.gastos },
   ]
 })
@@ -731,6 +981,7 @@ async function imprimirVoucher (cierre, conRango = false) {
       verMontos: canMontos.value,
       rango: data.rango || null,
       resumen: data.resumen || null,
+      resumenCaja: data.resumen_caja || null,
     })
   } catch (error) {
     proxy.$alert.error(error.response?.data?.message || 'No se pudo imprimir el voucher del cierre')
@@ -782,10 +1033,104 @@ async function exportarPdf (cierre, conRango = false) {
   }
 }
 
+// ── Reporte de cierre de caja (cierres validados) ─────────────────
+const dialogReporte = ref(false)
+const cargandoReporte = ref(false)
+const reporte = ref(null)
+const cierreReporte = ref(null)
+
+function textoFecha (valor) {
+  if (!valor) return '—'
+  const [fecha, hora] = String(valor).split(' ')
+  return formatSoloFecha(fecha) + (hora ? ' ' + hora : '')
+}
+
+async function verReporte (row) {
+  cierreReporte.value = row
+  reporte.value = null
+  dialogReporte.value = true
+  cargandoReporte.value = true
+  try {
+    const { data } = await proxy.$axios.get('cierres-caja/' + row.id + '/reporte')
+    reporte.value = data
+  } catch (error) {
+    dialogReporte.value = false
+    proxy.$alert.error(error.response?.data?.message || 'No se pudo generar el reporte de cierre de caja')
+  } finally {
+    cargandoReporte.value = false
+  }
+}
+
+async function exportarReportePdf () {
+  if (!cierreReporte.value) return
+  exportando.value = 'reporte'
+  try {
+    const res = await proxy.$axios.get('cierres-caja/' + cierreReporte.value.id + '/reporte/pdf', { responseType: 'blob' })
+    window.open(window.URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' })), '_blank')
+  } catch {
+    proxy.$alert.error('Error al generar el PDF del reporte')
+  } finally {
+    exportando.value = null
+  }
+}
+
+// ── Jornadas sin cerrar (supervisor: cierra en nombre del cajero) ──
+const dialogJornadas = ref(false)
+const jornadas = ref([])
+const jornadaSel = ref(null)
+const formJornada = ref({ monto: null, comentario: '' })
+const cerrandoJornada = ref(false)
+
+async function cargarJornadas () {
+  if (!canAutorizar.value) return
+  try {
+    const { data } = await proxy.$axios.get('cierres-caja/jornadas-pendientes')
+    jornadas.value = data || []
+  } catch {
+    jornadas.value = []
+  }
+}
+
+function abrirJornadas () {
+  jornadaSel.value = null
+  dialogJornadas.value = true
+  cargarJornadas()
+}
+
+function elegirJornada (jornada) {
+  jornadaSel.value = jornada
+  formJornada.value = { monto: null, comentario: '' }
+}
+
+async function cerrarEnNombre () {
+  if (formJornada.value.monto === null || formJornada.value.monto === '' || !String(formJornada.value.comentario || '').trim()) {
+    proxy.$alert.error('Indique el efectivo entregado y el comentario')
+    return
+  }
+  cerrandoJornada.value = true
+  try {
+    const { data } = await proxy.$axios.post('cierres-caja', {
+      user_id: jornadaSel.value.user.id,
+      fecha: jornadaSel.value.fecha,
+      monto: formJornada.value.monto,
+      comentario: formJornada.value.comentario,
+    })
+    proxy.$alert.success(data.message || 'Caja cerrada')
+    jornadaSel.value = null
+    await cargarJornadas()
+    cargar()
+  } catch (error) {
+    proxy.$alert.error(error.response?.data?.message || 'No se pudo cerrar la jornada')
+  } finally {
+    cerrandoJornada.value = false
+  }
+}
+
 watch(() => proxy.$store.isLogged, logged => {
   if (logged && canVer.value) {
     aplicarRango('semana')
     cargarUsuarios()
+    cargarJornadas()
   }
 }, { immediate: true })
 </script>
@@ -813,6 +1158,9 @@ watch(() => proxy.$store.isLogged, logged => {
 }
 .tabla-ventas .detalle { color: #555; }
 .tabla-ventas .precio-mod { color: #c62828; font-weight: 600; }
+.formula-anterior { font-size: 9px; font-style: italic; cursor: help; }
+.reporte-cierre .seccion-titulo { font-size: 11px; font-weight: 700; color: #004d40; text-transform: uppercase; margin-bottom: 2px; }
+.reporte-cierre :deep(td), .reporte-cierre :deep(th) { font-size: 11px; padding: 2px 6px; }
 .resumen-caja { max-width: 520px; margin-left: auto; }
 .resumen-caja :deep(th), .resumen-caja :deep(td) { font-size: 11px; padding: 3px 8px; }
 .resumen-caja .informativa td { color: #64748b; font-style: italic; }

@@ -103,9 +103,9 @@ function numeroALetras (monto) {
 /** Sobrante, faltante o caja cuadrada: el voucher lo dice con palabras. */
 function leerDiferencia (valor) {
   const n = Math.round((Number(valor) || 0) * 100) / 100
-  if (n > 0) return { etiqueta: 'DIFERENCIA (SOBRANTE)', monto: money(n) }
-  if (n < 0) return { etiqueta: 'DIFERENCIA (FALTANTE)', monto: money(-n) }
-  return { etiqueta: 'DIFERENCIA', monto: money(0) }
+  if (n > 0) return { etiqueta: 'DIFERENCIA DE EFECTIVO (SOBRANTE)', monto: money(n) }
+  if (n < 0) return { etiqueta: 'DIFERENCIA DE EFECTIVO (FALTANTE)', monto: money(-n) }
+  return { etiqueta: 'DIFERENCIA DE EFECTIVO', monto: money(0) }
 }
 
 /** Un gasto de caja resta: es dinero que salió, no que entró. */
@@ -125,7 +125,9 @@ function precioModificado (d) {
 function detalleVenta (venta) {
   return (venta.detalles || []).map(d => {
     const mod = precioModificado(d)
-    return `<div class="det${mod ? ' mod' : ''}">${esc(Number(d.cantidad))} x ${esc(d.nombre)} · ${money(d.precio)}${mod ? `* (lista ${money(d.precio_original)})` : ''}</div>`
+    // Sin 'Ver Montos Caja' la API no envía precios: solo cantidad y nombre.
+    const precio = d.precio === undefined ? '' : ` · ${money(d.precio)}${mod ? `* (lista ${money(d.precio_original)})` : ''}`
+    return `<div class="det${mod ? ' mod' : ''}">${esc(Number(d.cantidad))} x ${esc(d.nombre)}${precio}</div>`
   }).join('')
 }
 
@@ -144,13 +146,16 @@ function porFormaDePago (ventas) {
     .sort((a, b) => b.total - a.total)
 }
 
-function buildHtml (cierre, ventas, completo, verMontos, rango, resumen) {
+function buildHtml (cierre, ventas, completo, verMontos, rango, resumen, resumenCaja) {
   // Con rango de fecha y hora, los montos son los del rango, no los del día.
+  // La diferencia es solo de efectivo: el QR y los otros medios se informan aparte.
   const conRango = Boolean(rango && resumen)
-  const sistema = conRango ? resumen.neto : cierre.monto_sistema
-  const dif = leerDiferencia(conRango ? Number(cierre.monto || 0) - Number(resumen.neto || 0) : cierre.diferencia)
+  const esperado = conRango ? resumenCaja?.total_efectivo : cierre.efectivo_esperado
+  const qr = conRango ? resumenCaja?.qr?.importe : cierre.qr_total
+  const otros = conRango ? resumenCaja?.otros?.importe : cierre.otros_total
+  const dif = leerDiferencia(conRango ? Number(cierre.monto || 0) - Number(esperado || 0) : cierre.diferencia_efectivo)
   const cantidad = conRango ? resumen.cantidad_ventas : (cierre.cantidad_ventas ?? ventas.length)
-  const formas = completo ? porFormaDePago(ventas) : []
+  const formas = completo && verMontos ? porFormaDePago(ventas) : []
 
   const gastos = ventas.filter(esEgreso)
   const cantidadGastos = conRango ? resumen.cantidad_gastos : gastos.length
@@ -164,7 +169,7 @@ function buildHtml (cierre, ventas, completo, verMontos, rango, resumen) {
       (esEgreso(v) ? 'GASTO: ' + (v.detalles?.[0]?.nombre || 'SIN DETALLE') : 'SIN CLIENTE'))}
       ${esEgreso(v) ? '' : detalleVenta(v)}
       ${v.comentario ? `<div class="com">Coment.: ${esc(v.comentario)}</div>` : ''}</td>
-    <td class="num">${esEgreso(v) ? '-' : ''}${money(v.total)}</td>
+    <td class="num">${v.total === undefined ? '—' : (esEgreso(v) ? '-' : '') + money(v.total)}</td>
   </tr>`).join('')
 
   return `<div class="voucher">
@@ -193,9 +198,11 @@ function buildHtml (cierre, ventas, completo, verMontos, rango, resumen) {
 
     <table class="montos">
       <tr><td class="etiqueta">Ventas ${periodo}</td><td class="valor">${cantidad}</td></tr>
-      ${cantidadGastos ? `<tr><td class="etiqueta">Gastos ${periodo} (${cantidadGastos}) (Bs)</td><td class="valor">-${money(totalGastos)}</td></tr>` : ''}
-      ${verMontos ? `<tr><td class="etiqueta">Total según el sistema ${periodo} (Bs)</td><td class="valor">${money(sistema)}</td></tr>
-      <tr><td class="etiqueta">${dif.etiqueta} (Bs)</td><td class="valor">${dif.monto}</td></tr>` : ''}
+      ${cantidadGastos && verMontos ? `<tr><td class="etiqueta">Gastos ${periodo} (${cantidadGastos}) (Bs)</td><td class="valor">-${money(totalGastos)}</td></tr>` : ''}
+      ${verMontos ? `<tr><td class="etiqueta">Efectivo esperado ${periodo} (Bs)</td><td class="valor">${money(esperado)}</td></tr>
+      <tr><td class="etiqueta">${dif.etiqueta} (Bs)</td><td class="valor">${dif.monto}</td></tr>
+      <tr><td class="etiqueta">Cobrado por QR, no entra en el efectivo (Bs)</td><td class="valor">${money(qr)}</td></tr>
+      ${Number(otros) > 0 ? `<tr><td class="etiqueta">Transferencia / tarjeta (Bs)</td><td class="valor">${money(otros)}</td></tr>` : ''}` : ''}
       <tr class="fuerte"><td>EFECTIVO DECLARADO (Bs)</td><td class="right">${money(cierre.monto)}</td></tr>
     </table>
     <div class="son">SON: ${esc(numeroALetras(Number(cierre.monto || 0)))}</div>
@@ -237,14 +244,15 @@ function buildHtml (cierre, ventas, completo, verMontos, rango, resumen) {
  * @param {object} [opciones.rango]  { desde, hasta } si las ventas se filtraron
  *   por fecha y hora; los montos salen entonces del rango.
  * @param {object} [opciones.resumen]  Totales del rango que devuelve el API.
+ * @param {object} [opciones.resumenCaja]  Resumen de caja (arqueo) que devuelve el API.
  */
 export function imprimirCierreCaja (cierre, ventas = [], opciones = {}) {
-  const { totalVentas = null, verMontos = true, rango = null, resumen = null } = opciones
+  const { totalVentas = null, verMontos = true, rango = null, resumen = null, resumenCaja = null } = opciones
   const lista = Array.isArray(ventas) ? ventas : []
   const completo = totalVentas === null || lista.length >= totalVentas
 
   const element = document.createElement('div')
-  element.innerHTML = buildHtml(cierre, lista, completo, verMontos, rango, resumen)
+  element.innerHTML = buildHtml(cierre, lista, completo, verMontos, rango, resumen, resumenCaja)
 
   const printer = new Printd()
   printer.print(element, [CSS], [], ({ launchPrint }) => launchPrint())

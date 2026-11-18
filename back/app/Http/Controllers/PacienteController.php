@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Internacion;
 use App\Models\Paciente;
 use App\Models\Venta;
+use App\Services\ArqueoCaja;
 use App\Services\CobroInternacion;
 use App\Support\PdfTema;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -94,8 +95,9 @@ class PacienteController extends Controller
     {
         $this->req($request, 'Crear Ventas');
 
+        $request->merge(['tipo_pago' => $request->tipo_pago ? mb_strtoupper($request->tipo_pago) : null]);
         $request->validate([
-            'tipo_pago' => 'nullable|string|max:30',
+            'tipo_pago' => 'nullable|in:'.implode(',', CobroInternacion::TIPOS_PAGO),
             'observacion' => 'nullable|string|max:255',
         ]);
 
@@ -124,6 +126,7 @@ class PacienteController extends Controller
                     'tipo_pago' => $tipoPago,
                     'pago' => $venta->total,
                     'cambio' => 0,
+                    ...ArqueoCaja::reparto($tipoPago, (float) $venta->total),
                 ]);
                 $totalVentas += (float) $venta->total;
             }
@@ -142,6 +145,8 @@ class PacienteController extends Controller
                 'total' => round($totalVentas + $totalInternaciones, 2),
             ];
         });
+
+        CierreCajaController::recalcularCaja($request->user()->id, now()->toDateString());
 
         return response()->json(array_merge(['message' => 'Cuenta del paciente cobrada'], $resumen));
     }

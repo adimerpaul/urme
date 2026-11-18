@@ -22,8 +22,9 @@ class CierreCajaVentasExport implements FromCollection, ShouldAutoSize, WithHead
     /**
      * @param  Builder  $ventas  Movimientos del cierre (su día o el rango filtrado).
      * @param  array|null  $resumenCaja  CierreCajaController::resumenCaja(); importes null sin 'Ver Montos Caja'.
+     * @param  bool  $verMontos  Sin 'Ver Montos Caja' la columna Total y los precios no se exportan.
      */
-    public function __construct(protected Builder $ventas, protected ?array $resumenCaja = null) {}
+    public function __construct(protected Builder $ventas, protected ?array $resumenCaja = null, protected bool $verMontos = true) {}
 
     public function collection()
     {
@@ -41,12 +42,12 @@ class CierreCajaVentasExport implements FromCollection, ShouldAutoSize, WithHead
                 $venta->tipo_pago ?: '',
                 $venta->detalles->count(),
                 // "*" marca el precio cambiado por la vendedora respecto al de lista.
-                $venta->detalles->map(fn ($d) => (float) $d->cantidad.' x '.$d->nombre.' @ '
-                    .number_format((float) $d->precio, 2).($d->precio_modificado ? '* (lista '.number_format((float) $d->precio_original, 2).')' : ''))
+                $venta->detalles->map(fn ($d) => (float) $d->cantidad.' x '.$d->nombre.($this->verMontos ? ' @ '
+                    .number_format((float) $d->precio, 2).($d->precio_modificado ? '* (lista '.number_format((float) $d->precio_original, 2).')' : '') : ''))
                     ->implode(', '),
                 $venta->comentario ?: '',
                 // El gasto va en negativo: así la columna suma el neto que queda en caja.
-                $venta->esEgreso() ? -(float) $venta->total : (float) $venta->total,
+                $this->verMontos ? ($venta->esEgreso() ? -(float) $venta->total : (float) $venta->total) : '—',
             ]);
         $this->filasMovimientos = $filas->count();
 
@@ -63,13 +64,9 @@ class CierreCajaVentasExport implements FromCollection, ShouldAutoSize, WithHead
         $filas->push($fila('Total ventas', $r['total_ventas']['cantidad'], $r['total_ventas']['importe']));
         $filas->push($fila('(−) Ventas pendientes de cobro', $r['pendientes']['cantidad'], $r['pendientes']['importe']));
         $filas->push($fila('(−) Cobros por QR', $r['qr']['cantidad'], $r['qr']['importe']));
+        $filas->push($fila('(−) Otros medios (transferencia / tarjeta)', $r['otros']['cantidad'], $r['otros']['importe']));
         $filas->push($fila('(−) Gastos en efectivo', $r['gastos']['cantidad'], $r['gastos']['importe']));
         $filas->push($fila('TOTAL EFECTIVO', '', $r['total_efectivo']));
-        if ($r['cobros_ajenos']['cantidad']) {
-            $filas->push($fila($r['cobros_ajenos']['cantidad'].' cobro(s) de pendientes de otros días u otros usuarios'
-                .($r['cobros_ajenos']['importe'] !== null ? ' (Bs '.number_format($r['cobros_ajenos']['importe'], 2).')' : '')
-                .' figuran en el detalle pero no en este resumen', '', ''));
-        }
 
         return $filas;
     }
@@ -109,7 +106,7 @@ class CierreCajaVentasExport implements FromCollection, ShouldAutoSize, WithHead
 
         if ($this->resumenCaja) {
             $titulo = $ultimaMovimiento + 2;
-            $total = $titulo + 6;
+            $total = $titulo + 7;
             for ($row = $titulo; $row <= $last; $row++) {
                 $sheet->mergeCells("A{$row}:I{$row}");
             }

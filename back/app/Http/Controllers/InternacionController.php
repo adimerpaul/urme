@@ -157,8 +157,9 @@ class InternacionController extends Controller
     {
         $this->req($request, 'Crear Ventas');
 
+        $request->merge(['tipo_pago' => $request->tipo_pago ? mb_strtoupper($request->tipo_pago) : null]);
         $request->validate([
-            'tipo_pago' => 'nullable|string|max:30',
+            'tipo_pago' => 'nullable|in:'.implode(',', CobroInternacion::TIPOS_PAGO),
             'pago' => 'nullable|numeric|min:0',
             'observacion' => 'nullable|string|max:255',
         ]);
@@ -176,6 +177,8 @@ class InternacionController extends Controller
             $request->pago !== null && $request->pago !== '' ? (float) $request->pago : null,
             $request->observacion
         ));
+        // Cobro con tiempo autorizado (caja ya cerrada): el cierre se recalcula.
+        CierreCajaController::recalcularCaja($request->user()->id, now()->toDateString());
 
         return response()->json([
             'message' => 'Internación cobrada',

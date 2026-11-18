@@ -243,6 +243,9 @@ Route::middleware('auth:sanctum')->group(function () {
     // Cierre de caja
     Route::get('/cierres-caja/estado', [CierreCajaController::class, 'estado']);
     Route::get('/cierres-caja', [CierreCajaController::class, 'index']);
+    Route::get('/cierres-caja/jornadas-pendientes', [CierreCajaController::class, 'jornadasPendientes']);
+    Route::get('/cierres-caja/{id}/reporte/pdf', [CierreCajaController::class, 'reportePdf']);
+    Route::get('/cierres-caja/{id}/reporte', [CierreCajaController::class, 'reporte']);
     Route::get('/cierres-caja/{id}/ventas/export-excel', [CierreCajaController::class, 'ventasExportExcel']);
     Route::get('/cierres-caja/{id}/ventas/export-pdf', [CierreCajaController::class, 'ventasExportPdf']);
     Route::get('/cierres-caja/{id}/ventas', [CierreCajaController::class, 'ventas']);

@@ -20,7 +20,7 @@ class Venta extends Model implements AuditableContract
         'user_id', 'cobrado_por_id', 'tipo_movimiento', 'tipo_paciente', 'servicio', 'tipo_producto_padre_id', 'tipo_producto_id', 'paciente_id', 'doctor_id', 'seguro_id', 'cliente', 'fecha_hora',
         'fecha_hora_cobro',
         'tipo_pago', 'comentario', 'con_factura', 'numero_factura', 'estado', 'total', 'total_original', 'pago', 'cambio',
-        'monto_efectivo', 'monto_qr',
+        'monto_efectivo', 'monto_qr', 'anulado_en', 'anulado_por_id',
     ];
 
     protected $hidden = ['created_at', 'updated_at', 'deleted_at'];
@@ -29,6 +29,7 @@ class Venta extends Model implements AuditableContract
         'fecha_hora' => 'datetime',
         'con_factura' => 'boolean',
         'fecha_hora_cobro' => 'datetime',
+        'anulado_en' => 'datetime',
         'total' => 'decimal:2',
         'total_original' => 'decimal:2',
         'pago' => 'decimal:2',
@@ -111,6 +112,11 @@ class Venta extends Model implements AuditableContract
     public function cobradoPor()
     {
         return $this->belongsTo(User::class, 'cobrado_por_id');
+    }
+
+    public function anuladoPor()
+    {
+        return $this->belongsTo(User::class, 'anulado_por_id');
     }
 
     public function paciente()

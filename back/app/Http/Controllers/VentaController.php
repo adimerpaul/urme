@@ -399,6 +399,8 @@ class VentaController extends Controller
 
             return $venta;
         });
+        // Venta con tiempo autorizado (caja ya cerrada): el cierre se recalcula.
+        CierreCajaController::recalcularCaja($request->user()->id, now()->toDateString());
 
         return response()->json(
             $venta->load(['paciente:id,nombre_completo,ci', 'doctor:id,nombre', 'seguro:id,nombre', 'user:id,name', 'detalles.producto:id,nombre,codigo']),
@@ -461,6 +463,7 @@ class VentaController extends Controller
 
             return $venta;
         });
+        CierreCajaController::recalcularCaja($request->user()->id, now()->toDateString());
 
         // Mismas relaciones que show(): el comprobante del gasto se imprime con este JSON.
         return response()->json($venta->load(['paciente:id,nombre_completo,ci', 'doctor:id,nombre', 'seguro:id,nombre', 'user:id,name', 'categoriaGasto:id,nombre', 'subcategoriaGasto:id,nombre', 'detalles.producto:id,nombre,codigo']), 201);
@@ -505,6 +508,7 @@ class VentaController extends Controller
 
             return $venta;
         });
+        CierreCajaController::recalcularCaja($request->user()->id, now()->toDateString());
 
         return response()->json(
             $venta->load(['paciente:id,nombre_completo,ci', 'doctor:id,nombre', 'seguro:id,nombre', 'user:id,name', 'cobradoPor:id,name', 'detalles.producto:id,nombre,codigo'])
@@ -520,7 +524,25 @@ class VentaController extends Controller
             abort(422, 'La venta ya se encuentra anulada');
         }
 
-        $venta->update(['estado' => 'ANULADO']);
+        // Con la caja de ese movimiento ya cerrada: nunca si el cierre está
+        // validado; si no, solo con 'Anular Ventas Caja Cerrada', y el cierre se recalcula.
+        $cierre = CierreCajaController::cierreQueContiene($venta);
+        if ($cierre) {
+            $dia = $cierre->fecha->format('d/m/Y');
+            if ($cierre->validado) {
+                abort(422, "El cierre de caja del {$dia} ya fue validado: no se puede anular");
+            }
+            if (! $request->user()->hasPermissionTo('Anular Ventas Caja Cerrada')) {
+                abort(422, "La caja del {$dia} ya fue cerrada: para anular se necesita el permiso 'Anular Ventas Caja Cerrada'");
+            }
+        }
+
+        $venta->update([
+            'estado' => 'ANULADO',
+            'anulado_en' => now(),
+            'anulado_por_id' => $request->user()->id,
+        ]);
+        CierreCajaController::recalcular($cierre);
 
         return response()->json(['message' => $venta->esEgreso() ? 'Gasto anulado' : 'Venta anulada']);
     }

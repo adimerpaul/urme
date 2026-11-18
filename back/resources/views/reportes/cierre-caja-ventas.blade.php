@@ -51,14 +51,23 @@
         <tr>
             <td><span class="r-label">Cajero</span><br><span class="r-val">{{ $cierre->user?->name ?? '—' }}</span></td>
             <td><span class="r-label">Fecha</span><br><span class="r-val">{{ $cierre->fecha->format('d/m/Y') }}</span></td>
-            <td><span class="r-label">Sistema</span><br><span class="r-val">{{ number_format((float) $cierre->monto_sistema, 2) }} Bs</span></td>
+            {{-- Sin 'Ver Montos Caja' solo se muestra lo declarado. --}}
+            @if ($verMontos)
+                <td><span class="r-label">Efectivo esperado</span><br><span class="r-val">{{ number_format((float) $cierre->efectivo_esperado, 2) }} Bs</span></td>
+            @endif
             <td><span class="r-label">Declarado</span><br><span class="r-val">{{ number_format((float) $cierre->monto, 2) }} Bs</span></td>
-            <td><span class="r-label">Diferencia</span><br><span class="r-val">{{ number_format((float) $cierre->diferencia, 2) }} Bs</span></td>
+            @if ($verMontos)
+                <td><span class="r-label">Dif. de efectivo</span><br><span class="r-val">{{ number_format((float) $cierre->diferencia_efectivo, 2) }} Bs</span></td>
+                <td><span class="r-label">QR ({{ (int) $cierre->qr_cantidad }})</span><br><span class="r-val">{{ number_format((float) $cierre->qr_total, 2) }} Bs</span></td>
+            @endif
         </tr>
     </table>
+    @if ($verMontos && $cierre->formula_anterior)
+        <div class="nota">Cierre hecho con la fórmula anterior: la diferencia registrada al cerrar fue {{ number_format((float) $cierre->diferencia, 2) }} Bs (contra el total, QR incluido). Arriba, la diferencia de efectivo recalculada con los movimientos actuales.</div>
+    @endif
 
     {{-- Filtro por fecha y hora: turnos que cruzan la medianoche o duran poco. --}}
-    @if ($rango)
+    @if ($rango && $verMontos)
         <table class="rango" width="100%">
             <tr>
                 <td><span class="r-label">Desde</span><br><span class="r-val">{{ $rango[0]->format('d/m/Y H:i') }}</span></td>
@@ -66,7 +75,8 @@
                 <td><span class="r-label">Ventas ({{ $resumen['cantidad_ventas'] }})</span><br><span class="r-val">{{ number_format($resumen['ingresos'], 2) }} Bs</span></td>
                 <td><span class="r-label">Gastos ({{ $resumen['cantidad_gastos'] }})</span><br><span class="r-val">-{{ number_format($resumen['egresos'], 2) }} Bs</span></td>
                 <td><span class="r-label">Neto del rango</span><br><span class="r-val">{{ number_format($resumen['neto'], 2) }} Bs</span></td>
-                <td><span class="r-label">Declarado − neto</span><br><span class="r-val">{{ number_format((float) $cierre->monto - $resumen['neto'], 2) }} Bs</span></td>
+                <td><span class="r-label">Efectivo esperado del rango</span><br><span class="r-val">{{ number_format((float) $resumenCaja['total_efectivo'], 2) }} Bs</span></td>
+                <td><span class="r-label">Declarado - efectivo</span><br><span class="r-val">{{ number_format((float) $cierre->monto - (float) $resumenCaja['total_efectivo'], 2) }} Bs</span></td>
             </tr>
         </table>
     @endif
@@ -95,7 +105,7 @@
                         <td>
                             {{ $venta->paciente?->nombre_completo ?: ($venta->cliente ?: ($venta->esEgreso() ? 'GASTO DE CAJA' : 'SIN CLIENTE')) }}
                             @foreach ($venta->detalles as $d)
-                                <div class="det">{{ (float) $d->cantidad }} x {{ $d->nombre }} · {{ number_format((float) $d->precio, 2) }}@if ($d->precio_modificado)<span class="mod">* (lista {{ number_format((float) $d->precio_original, 2) }})</span>@endif</div>
+                                <div class="det">{{ (float) $d->cantidad }} x {{ $d->nombre }}@if ($verMontos) · {{ number_format((float) $d->precio, 2) }}@if ($d->precio_modificado)<span class="mod">* (lista {{ number_format((float) $d->precio_original, 2) }})</span>@endif @endif</div>
                             @endforeach
                             @if ($venta->comentario)
                                 <div class="com">Coment.: {{ $venta->comentario }}</div>
@@ -105,21 +115,21 @@
                         <td>{{ $venta->estado }}</td>
                         <td>{{ $venta->tipo_pago ?: '—' }}</td>
                         <td class="num">{{ $venta->detalles->count() }}</td>
-                        <td class="num">{{ number_format($venta->esEgreso() ? -(float) $venta->total : (float) $venta->total, 2) }}</td>
+                        <td class="num">{{ $verMontos ? number_format($venta->esEgreso() ? -(float) $venta->total : (float) $venta->total, 2) : '—' }}</td>
                     </tr>
                 @endforeach
             </tbody>
             <tfoot>
                 <tr>
                     <td colspan="7" class="num">{{ $rango ? 'Total del rango' : 'Total del cierre' }} (ventas menos gastos)</td>
-                    <td class="num">{{ number_format((float) $ventas->sum(fn ($venta) => $venta->esEgreso() ? -(float) $venta->total : (float) $venta->total), 2) }} Bs</td>
+                    <td class="num">{{ $verMontos ? number_format((float) $ventas->sum(fn ($venta) => $venta->esEgreso() ? -(float) $venta->total : (float) $venta->total), 2).' Bs' : '—' }}</td>
                 </tr>
             </tfoot>
         </table>
         <div class="nota"><span class="mod">*</span> Precio modificado por la vendedora (distinto al precio de lista).</div>
     @endif
 
-    {{-- Resumen de caja: solo lo registrado por el usuario del cierre en su día (o en el rango). --}}
+    {{-- Resumen de caja: la misma definición del arqueo (lo que entró a la caja del usuario en su día o en el rango). --}}
     @php
         $importe = fn ($valor) => $valor === null ? '—' : 'Bs '.number_format((float) $valor, 2);
         $lineasCaja = [
@@ -127,6 +137,7 @@
             ['Total ventas', $resumenCaja['total_ventas'], ''],
             ['(-) Ventas pendientes de cobro', $resumenCaja['pendientes'], ''],
             ['(-) Cobros por QR', $resumenCaja['qr'], ''],
+            ['(-) Otros medios (transferencia / tarjeta)', $resumenCaja['otros'], ''],
             ['(-) Gastos en efectivo', $resumenCaja['gastos'], ''],
         ];
     @endphp
@@ -145,12 +156,5 @@
             <td class="num">{{ $importe($resumenCaja['total_efectivo']) }}</td>
         </tr>
     </table>
-    @if ($resumenCaja['cobros_ajenos']['cantidad'])
-        <div class="nota">
-            {{ $resumenCaja['cobros_ajenos']['cantidad'] }} cobro(s) de pendientes de otros días u otros usuarios
-            @if ($resumenCaja['cobros_ajenos']['importe'] !== null)({{ $importe($resumenCaja['cobros_ajenos']['importe']) }})@endif
-            figuran en el detalle pero no en este resumen.
-        </div>
-    @endif
 </body>
 </html>

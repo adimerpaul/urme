@@ -13,6 +13,9 @@ use App\Models\VentaDetalle;
  */
 class CobroInternacion
 {
+    /** Medios de pago de un cobro de internación (pantalla del paciente). */
+    public const TIPOS_PAGO = ['EFECTIVO', 'QR', 'TRANSFERENCIA', 'TARJETA'];
+
     public static function total(Internacion $internacion): float
     {
         return round((float) $internacion->items->sum('total'), 2);
@@ -46,6 +49,8 @@ class CobroInternacion
 
         $venta = Venta::create([
             'user_id' => $usuario->id,
+            'tipo_movimiento' => 'INGRESO',
+            'tipo_paciente' => 'INTERNO',
             'paciente_id' => $internacion->paciente_id,
             'seguro_id' => $internacion->seguro_id,
             'fecha_hora' => now(),
@@ -53,8 +58,12 @@ class CobroInternacion
             'comentario' => 'Pago total de la internación #'.$internacion->id,
             'estado' => 'ACTIVO',
             'total' => $total,
+            'total_original' => $total,
             'pago' => $pago,
             'cambio' => round($pago - $total, 2),
+            // Reparto para el arqueo: EFECTIVO o QR; transferencia y tarjeta quedan en 0
+            // y se identifican por tipo_pago (otros medios).
+            ...ArqueoCaja::reparto($tipoPago, $total),
         ]);
 
         // Los cargos viajan como ítems sueltos: la internación no mueve lotes,

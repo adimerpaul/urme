@@ -3,8 +3,11 @@
        Se usan en el historial de ventas y en la pantalla de nueva venta. -->
   <q-btn v-if="canCerrarCaja" rounded outline color="teal-8" icon="lock_clock" class="q-mr-sm"
          :label="caja.cierre ? 'Caja cerrada' : 'Cerrar caja'" no-caps @click="abrirCierre">
+    <q-badge v-if="caja.jornada_pendiente" color="orange-9" floating rounded>!</q-badge>
     <q-tooltip>
-      {{ caja.cierre ? 'Ver el cierre de caja de hoy' : 'Cerrar la caja del día' }}
+      {{ caja.jornada_pendiente
+        ? 'Tiene la caja del ' + formatSoloFecha(caja.jornada_pendiente.fecha) + ' sin cerrar'
+        : (caja.cierre ? 'Ver el cierre de caja de hoy' : 'Cerrar la caja del día') }}
     </q-tooltip>
   </q-btn>
   <q-btn v-if="canCrear && !soloFarmacia" rounded outline color="deep-orange-8" icon="shopping_bag"
@@ -61,23 +64,39 @@
         <q-icon name="lock_clock" size="22px" class="q-mr-sm" />
         <div>
           <div class="text-subtitle1 text-weight-bold">
-            {{ caja.cierre ? 'Cierre de caja de hoy' : 'Cerrar caja' }}
+            {{ cerrandoAnterior ? 'Cerrar la caja del ' + formatSoloFecha(cerrandoAnterior)
+              : (caja.cierre ? 'Cierre de caja de hoy' : 'Cerrar caja') }}
           </div>
-          <div class="text-caption">{{ formatSoloFecha(caja.fecha) }} · {{ proxy.$store.user.name }}</div>
+          <div class="text-caption">{{ formatSoloFecha(cerrandoAnterior || caja.fecha) }} · {{ proxy.$store.user.name }}</div>
         </div>
         <q-space />
         <q-btn icon="close" flat round dense color="white" v-close-popup />
       </q-card-section>
 
       <q-card-section class="q-pa-sm">
-        <!-- El total del sistema es el dinero que se debe entregar: no se
+        <!-- Jornada anterior sin cierre (turno de noche): el cajero la cierra él
+             mismo hasta las 12:00 del día siguiente; después, un supervisor. -->
+        <q-banner v-if="caja.jornada_pendiente && !cerrandoAnterior" dense rounded class="bg-orange-1 text-orange-10 q-mb-sm">
+          <template v-slot:avatar><q-icon name="history" color="orange-9" /></template>
+          Tiene la caja del <b>{{ formatSoloFecha(caja.jornada_pendiente.fecha) }}</b> sin cerrar
+          ({{ caja.jornada_pendiente.movimientos }} movimientos).
+          <template v-if="caja.jornada_pendiente.puede_cerrar">
+            Puede cerrarla hasta las {{ formatHoraLimite(caja.jornada_pendiente.limite) }}.
+          </template>
+          <template v-else>El plazo venció: pida a un supervisor que la cierre.</template>
+          <template v-if="caja.jornada_pendiente.puede_cerrar" v-slot:action>
+            <q-btn dense flat no-caps color="orange-10" icon="lock_clock" label="Cerrar esa jornada" @click="cerrarJornadaAnterior" />
+          </template>
+        </q-banner>
+
+        <!-- El efectivo esperado es el dinero que se debe entregar: no se
              muestra mientras se declara, solo después de cerrada la caja. -->
-        <div v-if="caja.cierre && !editandoCierre" class="row q-col-gutter-xs q-mb-sm">
+        <div v-if="caja.cierre && !editandoCierre && !cerrandoAnterior" class="row q-col-gutter-xs q-mb-sm">
           <div v-if="verComparacion" class="col-6">
             <q-card flat bordered class="q-pa-xs text-center">
-              <div class="text-caption text-grey-6">Ventas del día (sistema)</div>
+              <div class="text-caption text-grey-6">Efectivo esperado</div>
               <div class="text-subtitle1 text-weight-bold text-primary">
-                {{ money(caja.cierre?.monto_sistema) }} Bs
+                {{ money(caja.cierre?.efectivo_esperado) }} Bs
               </div>
             </q-card>
           </div>
@@ -92,23 +111,32 @@
         </div>
 
         <!-- Caja ya cerrada: se muestra lo guardado -->
-        <template v-if="caja.cierre && !editandoCierre">
+        <template v-if="caja.cierre && !editandoCierre && !cerrandoAnterior">
           <q-markup-table dense flat bordered class="full-width q-mb-sm">
             <tbody>
               <tr>
                 <td class="text-grey-7">Efectivo declarado</td>
                 <td class="text-right text-weight-bold">{{ money(caja.cierre?.monto) }} Bs</td>
               </tr>
-              <!-- La diferencia contra el sistema es solo para quien tiene 'Ver Montos Caja'. -->
+              <!-- La diferencia (solo de efectivo) es solo para quien tiene 'Ver Montos Caja'. -->
               <tr v-if="verComparacion">
-                <td class="text-grey-7">Diferencia contra el sistema</td>
+                <td class="text-grey-7">Diferencia de efectivo</td>
                 <td class="text-right">
-                  <q-badge :color="diferencia(caja.cierre?.diferencia).color" class="text-weight-bold">
-                    <q-icon :name="diferencia(caja.cierre?.diferencia).icono" size="12px" class="q-mr-xs" />
-                    {{ diferencia(caja.cierre?.diferencia).monto }} Bs
-                    <q-tooltip>{{ diferencia(caja.cierre?.diferencia).titulo }}</q-tooltip>
+                  <q-badge :color="diferencia(caja.cierre?.diferencia_efectivo).color" class="text-weight-bold">
+                    <q-icon :name="diferencia(caja.cierre?.diferencia_efectivo).icono" size="12px" class="q-mr-xs" />
+                    {{ diferencia(caja.cierre?.diferencia_efectivo).monto }} Bs
+                    <q-tooltip>{{ diferencia(caja.cierre?.diferencia_efectivo).titulo }}</q-tooltip>
                   </q-badge>
                 </td>
+              </tr>
+              <!-- El QR y los otros medios no son efectivo: se informan aparte. -->
+              <tr v-if="verComparacion">
+                <td class="text-grey-7">Cobrado por QR (no entra en el efectivo)</td>
+                <td class="text-right">{{ money(caja.cierre?.qr_total) }} Bs ({{ caja.cierre?.qr_cantidad || 0 }})</td>
+              </tr>
+              <tr v-if="verComparacion && Number(caja.cierre?.otros_total) > 0">
+                <td class="text-grey-7">Transferencia / tarjeta</td>
+                <td class="text-right">{{ money(caja.cierre?.otros_total) }} Bs ({{ caja.cierre?.otros_cantidad || 0 }})</td>
               </tr>
               <tr v-if="cortesContados(caja.cierre?.detalle_efectivo).length">
                 <td class="text-grey-7">Conteo</td>
@@ -150,7 +178,7 @@
           </q-banner>
         </template>
 
-        <!-- Cerrar por primera vez, o la única corrección -->
+        <!-- Cerrar por primera vez (hoy o una jornada anterior), o la única corrección -->
         <q-form v-else @submit.prevent="guardarCierre">
           <q-input v-model.number="cierreForm.monto" label="Efectivo que entrega (Bs) *"
                    dense outlined type="number" step="0.01" min="0" autofocus
@@ -180,7 +208,11 @@
           </div>
           <q-input v-model="cierreForm.comentario" label="Comentario" dense outlined
                    type="textarea" rows="2" v-uppercase />
-          <q-banner v-if="!editandoCierre" dense rounded class="bg-orange-1 text-orange-10 q-mt-sm">
+          <q-banner v-if="cerrandoAnterior" dense rounded class="bg-blue-1 text-blue-10 q-mt-sm">
+            <template v-slot:avatar><q-icon name="history" /></template>
+            Declare el efectivo que entrega de la jornada del {{ formatSoloFecha(cerrandoAnterior) }}.
+          </q-banner>
+          <q-banner v-else-if="!editandoCierre" dense rounded class="bg-orange-1 text-orange-10 q-mt-sm">
             <template v-slot:avatar><q-icon name="warning" color="orange-9" /></template>
             Al cerrar la caja ya no podrá registrar ni cobrar ventas hasta mañana.
           </q-banner>
@@ -189,12 +221,12 @@
 
       <q-card-actions align="right" class="q-pa-sm">
         <q-btn flat dense label="Cerrar" no-caps v-close-popup />
-        <q-btn v-if="caja.cierre && !editandoCierre && caja.cierre?.puede_modificar"
+        <q-btn v-if="caja.cierre && !editandoCierre && !cerrandoAnterior && caja.cierre?.puede_modificar"
                dense padding="4px 14px" color="primary" icon="edit" label="Modificar" no-caps
                @click="editarCierre" />
-        <q-btn v-if="!caja.cierre || editandoCierre"
+        <q-btn v-if="!caja.cierre || editandoCierre || cerrandoAnterior"
                dense padding="4px 14px" color="teal-8" icon="lock_clock" no-caps
-               :label="editandoCierre ? 'Guardar corrección' : 'Cerrar caja'"
+               :label="editandoCierre ? 'Guardar corrección' : (cerrandoAnterior ? 'Cerrar esa jornada' : 'Cerrar caja')"
                :loading="guardandoCierre" @click="guardarCierre" />
       </q-card-actions>
     </q-card>
@@ -223,9 +255,11 @@ const canCerrarCaja = computed(() => proxy.$store.hasPermission('Cerrar Caja'))
 
 // ── Cierre de caja del día ─────────────────────────────────────
 // ver_montos: el backend solo manda el total del sistema a quien puede verlo.
-const caja = ref({ fecha: '', cerrada: false, ver_montos: false, cierre: null, total_sistema: null, cantidad_ventas: null })
+const caja = ref({ fecha: '', cerrada: false, ver_montos: false, cierre: null, total_sistema: null, cantidad_ventas: null, jornada_pendiente: null })
 const dialogCierre = ref(false)
 const editandoCierre = ref(false)
+// Fecha de la jornada anterior que se está cerrando (turno de noche), o null.
+const cerrandoAnterior = ref(null)
 const guardandoCierre = ref(false)
 const cierreForm = ref({ monto: null, detalle_efectivo: conteoVacio(), comentario: '' })
 
@@ -293,10 +327,23 @@ async function cargarCaja () {
 
 function abrirCierre () {
   editandoCierre.value = false
+  cerrandoAnterior.value = null
   // Arranca en cero: el cajero cuenta el efectivo y escribe lo que entrega.
   cierreForm.value = { monto: null, detalle_efectivo: conteoVacio(), comentario: '' }
   dialogCierre.value = true
   cargarCaja()
+}
+
+/** Cerrar la jornada anterior pendiente: el mismo formulario, a ciegas, con su fecha. */
+function cerrarJornadaAnterior () {
+  editandoCierre.value = false
+  cerrandoAnterior.value = caja.value.jornada_pendiente?.fecha || null
+  cierreForm.value = { monto: null, detalle_efectivo: conteoVacio(), comentario: '' }
+}
+
+function formatHoraLimite (valor) {
+  const [fecha, hora] = String(valor || '').split(' ')
+  return (hora || '') + ' del ' + formatSoloFecha(fecha)
 }
 
 function editarCierre () {
@@ -328,11 +375,15 @@ async function guardarCierre () {
       const { data } = await proxy.$axios.put('cierres-caja/' + caja.value.cierre.id, cierreForm.value)
       proxy.$alert.success(data.message || 'Cierre modificado')
     } else {
-      const { data } = await proxy.$axios.post('cierres-caja', cierreForm.value)
+      const payload = cerrandoAnterior.value ? { ...cierreForm.value, fecha: cerrandoAnterior.value } : cierreForm.value
+      const { data } = await proxy.$axios.post('cierres-caja', payload)
       // Si ya existía, el backend devuelve el mismo cierre con el mismo monto.
       proxy.$alert.success(data.message || 'Caja cerrada')
     }
     editandoCierre.value = false
+    cerrandoAnterior.value = null
+    // El monto declarado no se arrastra al cierre siguiente (p. ej. tras cerrar la jornada anterior).
+    cierreForm.value = { monto: null, detalle_efectivo: conteoVacio(), comentario: '' }
     await cargarCaja()
   } catch (error) {
     proxy.$alert.error(error.response?.data?.message || 'No se pudo guardar el cierre')

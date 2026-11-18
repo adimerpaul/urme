@@ -20,7 +20,8 @@ beforeEach(function () {
         'cierres_caja' => ['user_id', 'fecha'],
         'internaciones' => ['paciente_id', 'seguro_id', 'fecha_ingreso', 'pagado_en', 'pagado_por_id', 'venta_id', 'monto_pagado', 'pago_tipo', 'pago_observacion'],
         'internacion_items' => ['internacion_id', 'nombre', 'precio', 'cantidad', 'total'],
-        'ventas' => ['user_id', 'paciente_id', 'seguro_id', 'fecha_hora', 'tipo_pago', 'comentario', 'estado', 'total', 'pago', 'cambio', 'tipo_movimiento', 'fecha_hora_cobro', 'cobrado_por_id'],
+        'ventas' => ['user_id', 'paciente_id', 'seguro_id', 'fecha_hora', 'tipo_pago', 'comentario', 'estado', 'total', 'pago', 'cambio', 'tipo_movimiento', 'fecha_hora_cobro', 'cobrado_por_id',
+            'tipo_paciente', 'total_original', 'monto_efectivo', 'monto_qr'],
         'venta_detalles' => ['venta_id', 'producto_id', 'nombre', 'precio', 'cantidad', 'total'],
     ];
     foreach ($tables as $name => $fields) {

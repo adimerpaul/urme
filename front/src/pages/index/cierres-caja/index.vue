@@ -363,6 +363,37 @@
               <q-pagination v-model="pageVentas" :max="paginasVentas" :max-pages="6"
                             boundary-links direction-links size="sm" @update:model-value="cargarVentas()" />
             </div>
+
+            <!-- Resumen de caja: solo lo registrado por el usuario del cierre en su día
+                 (o en el rango). Sin 'Ver Montos Caja' llega sin importes. -->
+            <div v-if="resumenCaja" class="resumen-caja q-mt-sm">
+              <q-markup-table dense flat bordered separator="horizontal">
+                <thead>
+                  <tr class="bg-teal-9 text-white">
+                    <th class="text-left">Resumen de caja</th>
+                    <th class="text-right">Cantidad</th>
+                    <th class="text-right">Importe</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="linea in lineasCaja" :key="linea.etiqueta" :class="linea.clase">
+                    <td>{{ linea.etiqueta }}</td>
+                    <td class="text-right">{{ linea.cantidad }}</td>
+                    <td class="text-right">{{ importeCaja(linea.importe) }}</td>
+                  </tr>
+                  <tr class="total-efectivo">
+                    <td>TOTAL EFECTIVO</td>
+                    <td />
+                    <td class="text-right">{{ importeCaja(resumenCaja.total_efectivo) }}</td>
+                  </tr>
+                </tbody>
+              </q-markup-table>
+              <div v-if="resumenCaja.cobros_ajenos?.cantidad" class="text-caption text-grey-7 q-mt-xs">
+                {{ resumenCaja.cobros_ajenos.cantidad }} cobro(s) de pendientes de otros días u otros usuarios
+                <template v-if="resumenCaja.cobros_ajenos.importe !== null">({{ importeCaja(resumenCaja.cobros_ajenos.importe) }})</template>
+                figuran en el detalle pero no en este resumen.
+              </div>
+            </div>
           </q-card-section>
         </q-card>
       </q-dialog>
@@ -586,6 +617,20 @@ const paginasVentas = computed(() => Math.max(1, Math.ceil(totalVentas.value / p
 const rangoVentas = ref({ desde: '', hasta: '' })
 const rangoAplicado = ref(null)
 const resumenVentas = ref(null)
+const resumenCaja = ref(null)
+const lineasCaja = computed(() => {
+  const r = resumenCaja.value
+  if (!r) return []
+  return [
+    { etiqueta: 'Ventas anuladas (no se suman)', clase: 'informativa', ...r.anuladas },
+    { etiqueta: 'Total ventas', ...r.total_ventas },
+    { etiqueta: '(−) Ventas pendientes de cobro', ...r.pendientes },
+    { etiqueta: '(−) Cobros por QR', ...r.qr },
+    { etiqueta: '(−) Gastos en efectivo', ...r.gastos },
+  ]
+})
+/** Sin 'Ver Montos Caja' el importe llega null: se muestra "—". */
+function importeCaja (valor) { return valor === null || valor === undefined ? '—' : 'Bs ' + money(valor) }
 const difRango = computed(() =>
   Math.round((Number(cierreSel.value?.monto || 0) - Number(resumenVentas.value?.neto || 0)) * 100) / 100)
 
@@ -606,6 +651,7 @@ function verVentas (row) {
   rangoVentas.value = rangoDelDia(row)
   rangoAplicado.value = null
   resumenVentas.value = null
+  resumenCaja.value = null
   dialogVentas.value = true
   cargarVentas(1)
 }
@@ -656,6 +702,7 @@ async function cargarVentas (pagina) {
     ventas.value = data.ventas?.data || []
     totalVentas.value = data.ventas?.total || 0
     resumenVentas.value = data.resumen || null
+    resumenCaja.value = data.resumen_caja || null
   } catch (error) {
     proxy.$alert.error(error.response?.data?.message || 'No se pudieron cargar las ventas del cierre')
   } finally {
@@ -766,6 +813,10 @@ watch(() => proxy.$store.isLogged, logged => {
 }
 .tabla-ventas .detalle { color: #555; }
 .tabla-ventas .precio-mod { color: #c62828; font-weight: 600; }
+.resumen-caja { max-width: 520px; margin-left: auto; }
+.resumen-caja :deep(th), .resumen-caja :deep(td) { font-size: 11px; padding: 3px 8px; }
+.resumen-caja .informativa td { color: #64748b; font-style: italic; }
+.resumen-caja .total-efectivo td { font-weight: bold; font-size: 12px; color: #004d40; border-top: 2px solid #00695c; }
 .tabla-ventas .comentario { color: #8a5a00; font-style: italic; max-width: 260px; white-space: normal; }
 
 .cierres-caja :deep(.q-field--dense .q-field__control),

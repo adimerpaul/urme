@@ -30,6 +30,11 @@
         .rango .r-val { color: #E65100; }
         .empty { border: 1px dashed #cbd5e1; color: #64748b; padding: 22px; text-align: center; margin-top: 18px; }
         tfoot td { font-weight: bold; border-top: 2px solid #00695C; padding: 4px 3px; }
+        .resumen-caja { width: 55%; border-collapse: collapse; margin-top: 12px; page-break-inside: avoid; }
+        .resumen-caja th { background: #00695C; color: #fff; font-size: 8px; text-transform: uppercase; text-align: left; padding: 4px 6px; }
+        .resumen-caja td { padding: 3px 6px; border-bottom: 1px solid #dbe4ee; font-size: 8.5px; }
+        .resumen-caja .informativa td { color: #64748b; font-style: italic; }
+        .resumen-caja .total td { font-weight: bold; font-size: 10px; color: #004D40; border-top: 2px solid #00695C; border-bottom: 0; }
     </style>
 </head>
 <body>
@@ -112,6 +117,40 @@
             </tfoot>
         </table>
         <div class="nota"><span class="mod">*</span> Precio modificado por la vendedora (distinto al precio de lista).</div>
+    @endif
+
+    {{-- Resumen de caja: solo lo registrado por el usuario del cierre en su día (o en el rango). --}}
+    @php
+        $importe = fn ($valor) => $valor === null ? '—' : 'Bs '.number_format((float) $valor, 2);
+        $lineasCaja = [
+            ['Ventas anuladas (no se suman)', $resumenCaja['anuladas'], 'informativa'],
+            ['Total ventas', $resumenCaja['total_ventas'], ''],
+            ['(-) Ventas pendientes de cobro', $resumenCaja['pendientes'], ''],
+            ['(-) Cobros por QR', $resumenCaja['qr'], ''],
+            ['(-) Gastos en efectivo', $resumenCaja['gastos'], ''],
+        ];
+    @endphp
+    <table class="resumen-caja">
+        <tr><th colspan="3">Resumen de caja</th></tr>
+        @foreach ($lineasCaja as [$etiqueta, $linea, $clase])
+            <tr class="{{ $clase }}">
+                <td>{{ $etiqueta }}</td>
+                <td class="num">{{ $linea['cantidad'] }}</td>
+                <td class="num">{{ $importe($linea['importe']) }}</td>
+            </tr>
+        @endforeach
+        <tr class="total">
+            <td>TOTAL EFECTIVO</td>
+            <td></td>
+            <td class="num">{{ $importe($resumenCaja['total_efectivo']) }}</td>
+        </tr>
+    </table>
+    @if ($resumenCaja['cobros_ajenos']['cantidad'])
+        <div class="nota">
+            {{ $resumenCaja['cobros_ajenos']['cantidad'] }} cobro(s) de pendientes de otros días u otros usuarios
+            @if ($resumenCaja['cobros_ajenos']['importe'] !== null)({{ $importe($resumenCaja['cobros_ajenos']['importe']) }})@endif
+            figuran en el detalle pero no en este resumen.
+        </div>
     @endif
 </body>
 </html>

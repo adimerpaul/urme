@@ -8,6 +8,7 @@ use App\Models\Venta;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Maatwebsite\Excel\Facades\Excel;
 
 /**
@@ -245,6 +246,7 @@ class CierreCajaController extends Controller
             'ventas' => $ventas,
             'rango' => $rango ? self::rangoTexto($rango) : null,
             'resumen' => self::resumen($this->ventasDelCierre($cierre, $rango)),
+            'resumen_caja' => self::resumenCaja($cierre, $rango, $request->user()->can('Ver Montos Caja')),
         ]);
     }
 
@@ -256,7 +258,10 @@ class CierreCajaController extends Controller
         $rango = $this->rangoSolicitado($request);
 
         return Excel::download(
-            new CierreCajaVentasExport($this->ventasDelCierre($cierre, $rango)),
+            new CierreCajaVentasExport(
+                $this->ventasDelCierre($cierre, $rango),
+                self::resumenCaja($cierre, $rango, $request->user()->can('Ver Montos Caja'))
+            ),
             'cierre_caja_'.$cierre->fecha->format('Ymd').'_'.$cierre->id.($rango ? '_'.$rango[0]->format('Ymd_Hi').'-'.$rango[1]->format('Ymd_Hi') : '').'.xlsx'
         );
     }
@@ -279,6 +284,7 @@ class CierreCajaController extends Controller
             'ventas' => $ventas,
             'rango' => $rango,
             'resumen' => self::resumen($this->ventasDelCierre($cierre, $rango)),
+            'resumenCaja' => self::resumenCaja($cierre, $rango, $request->user()->can('Ver Montos Caja')),
         ])->setPaper('letter');
 
         return $pdf->stream('cierre_caja_'.$cierre->fecha->format('Ymd').'_'.$cierre->id.'.pdf');
@@ -428,6 +434,73 @@ class CierreCajaController extends Controller
             'cantidad_ventas' => (clone $ventas)->where('tipo_movimiento', 'INGRESO')->count(),
             'cantidad_gastos' => (clone $ventas)->where('tipo_movimiento', 'EGRESO')->count(),
         ];
+    }
+
+    /**
+     * Parte QR de una venta cobrada. Los cobros de internación no guardan el
+     * reparto (monto_efectivo y monto_qr en 0): para ellos vale su tipo_pago.
+     */
+    private const SQL_QR = "CASE WHEN monto_efectivo = 0 AND monto_qr = 0 AND total > 0
+        THEN (CASE WHEN UPPER(tipo_pago) = 'QR' THEN total ELSE 0 END) ELSE monto_qr END";
+
+    /**
+     * Resumen de caja al pie del detalle del cierre. Solo cuenta lo registrado
+     * por el usuario del cierre en su día (o en el rango pedido); una pendiente
+     * suya ya cobrada, por quien sea, suma a esta caja. No cambia nada del
+     * cierre: se calcula con los estados actuales. Sin 'Ver Montos Caja' viaja
+     * sin importes, solo con las cantidades.
+     *
+     * TOTAL EFECTIVO = total ventas − pendientes de cobro − cobros por QR − gastos.
+     */
+    public static function resumenCaja(CierreCaja $cierre, ?array $rango, bool $verMontos): array
+    {
+        $propias = function () use ($cierre, $rango) {
+            $query = Venta::where('user_id', $cierre->user_id);
+
+            return $rango
+                ? $query->where('fecha_hora', '>=', $rango[0]->format('Y-m-d H:i:00'))
+                    ->where('fecha_hora', '<', $rango[1]->copy()->addMinute()->format('Y-m-d H:i:00'))
+                : $query->whereDate('fecha_hora', $cierre->fecha->toDateString());
+        };
+        $ventas = fn () => $propias()->where('tipo_movimiento', 'INGRESO');
+        $linea = fn ($query, $importe = 'total') => [
+            'cantidad' => (clone $query)->count(),
+            'importe' => round((float) (clone $query)->sum(DB::raw($importe)), 2),
+        ];
+
+        $anuladas = $linea($ventas()->where('estado', 'ANULADO'));
+        $total = $linea($ventas()->whereIn('estado', ['ACTIVO', 'PENDIENTE']));
+        $pendientes = $linea($ventas()->where('estado', 'PENDIENTE')->whereNull('fecha_hora_cobro'));
+        $qr = $linea($ventas()
+            ->where(fn ($q) => $q->where('estado', 'ACTIVO')
+                ->orWhere(fn ($cobrada) => $cobrada->where('estado', 'PENDIENTE')->whereNotNull('fecha_hora_cobro')))
+            ->whereRaw('('.self::SQL_QR.') > 0'), self::SQL_QR);
+        $gastos = $linea($propias()->where('tipo_movimiento', 'EGRESO')->where('estado', 'ACTIVO'));
+
+        // Pendientes de otros días u otros usuarios que este usuario cobró: están
+        // en el detalle del cierre (y en su efectivo) pero no en este resumen.
+        $ajenas = (new self)->ventasDelCierre($cierre, $rango)
+            ->where('estado', 'PENDIENTE')
+            ->whereNotIn('id', $ventas()->select('id'));
+        $cobrosAjenos = $linea($ajenas);
+
+        $resumen = [
+            'anuladas' => $anuladas,
+            'total_ventas' => $total,
+            'pendientes' => $pendientes,
+            'qr' => $qr,
+            'gastos' => $gastos,
+            'total_efectivo' => round($total['importe'] - $pendientes['importe'] - $qr['importe'] - $gastos['importe'], 2),
+            'cobros_ajenos' => $cobrosAjenos,
+        ];
+
+        if (! $verMontos) {
+            foreach ($resumen as $clave => $valor) {
+                $resumen[$clave] = is_array($valor) ? [...$valor, 'importe' => null] : null;
+            }
+        }
+
+        return $resumen;
     }
 
     /** Cierre vigente de un usuario en una fecha, o null. */

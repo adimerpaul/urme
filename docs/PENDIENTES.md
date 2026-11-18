@@ -19,6 +19,7 @@ revisan y, si corresponde, se corrigen desde la pantalla.
 | [Unidad escrita a mano en reactivos](#unidad-escrita-a-mano-en-reactivos-que-no-se-aplica) | Baja | Desarrollo y laboratorio |
 | [Reactivos vinculados a productos dados de baja](#reactivos-vinculados-a-productos-dados-de-baja-r-001-r-006-y-r-009) | Baja | Responsable de reactivos, desde la pantalla |
 | [Vínculos de reactivos que se recrean al editar](#vínculos-de-reactivos-que-se-borran-y-recrean-al-editar) | Baja | Desarrollo |
+| [Desplegar el cierre de caja con arqueo de efectivo](#desplegar-el-cierre-de-caja-con-arqueo-de-efectivo) | Alta | Administración y desarrollo |
 | [Título del perfil al partirse un área posterior](#título-del-perfil-al-partirse-un-área-posterior-limitación-de-dompdf) | Baja | Laboratorio, si algún día se pide |
 | [Tests que fallan por causas previas](#tests-que-fallan-por-causas-previas) | Media | Desarrollo |
 | [Datos de prueba en `urme_prueba`](#limpieza-de-los-datos-de-prueba-de-urme_prueba) | Baja | Desarrollo |
@@ -172,6 +173,29 @@ fechas de la API recortadas como texto en UTC.** Una sola observación, menor:
   cambien. No se pierde información, pero cada edición deja filas borradas y
   registros de auditoría que no corresponden a cambios reales.
 - **Decide:** desarrollo: sincronizar solo los vínculos que cambian.
+
+### Desplegar el cierre de caja con arqueo de efectivo
+
+- **Origen:** implementación del 2026-11-18
+  ([`ANALISIS_CIERRES_CAJA.md`](ANALISIS_CIERRES_CAJA.md) §8 y §9).
+- **Gravedad:** alta. El código nuevo necesita sus migraciones: sin
+  `2026_11_18_000100` y `000200`, cerrar caja, anular y cobrar internaciones
+  fallan. Además, `master` ya necesita las 3 migraciones de ventas del merge
+  `d076126` (`2026_11_11_000300` y las dos `000400`): sin ellas, vender falla.
+- **Pasos:** ver el anexo «Cierre de caja» de
+  [`DESPLIEGUE_PRODUCCION.md`](DESPLIEGUE_PRODUCCION.md).
+  1. Avisar a cajeros y supervisores antes: la diferencia pasa a ser solo de
+     efectivo.
+  2. Dar el permiso «Anular Ventas Caja Cerrada» a quien corresponda.
+  3. En la base local `back`: aplicar las 3 migraciones de `2026_11_18`. Las de
+     ventas ya se aplicaron el 2026-11-17. En `urme_prueba` ya están las 6.
+- **`pacientes.user_id`** (decidido el 2026-11-18, opción 2): la migración
+  `2026_11_11_000500` quedó **solo de esquema**. Se quitó el relleno desde la
+  auditoría, así que los pacientes anteriores quedan sin «Registrado por» y los
+  nuevos lo guardan. El código ya la necesita para crear pacientes. Aplicada en
+  `back` y `urme_prueba` sin cambiar ningún paciente. En producción va con las
+  de ventas, en el requisito previo del anexo.
+- **Decide:** administración (aviso y permisos); desarrollo (despliegue).
 
 ### Título del perfil al partirse un área posterior (limitación de dompdf)
 

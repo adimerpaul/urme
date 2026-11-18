@@ -73,6 +73,7 @@ donde esos productos ya existen.
 | Frontend | Campo "Código laboratorio" en Crear laboratorio, código compuesto en listado, WhatsApp, verificación y reporte general. Categoría y subcategoría en "Nuevo gasto" de Ventas y en los gastos de las cajas. Corrección de la hora al editar movimientos de caja (antes se corría +4 h). **Se publica en el mismo despliegue** (paso 10). |
 | Reactivos | Unidades µL, DETERMINACIÓN y TACO en «Nuevo reactivo»; el signo micro se guarda siempre como U+00B5 y no pasa a mayúsculas (rama `reactivos-unidades`, integrada en `master` en `1484a76`). Sin migraciones ni cambios de datos. Según el equipo ya está en producción: se incluye para que el despliegue de `master` no lo revierta. |
 | Dependencias | No hay cambios en `composer.lock` ni en `pnpm-lock.yaml`. |
+| Cierre de caja (2026-11-18) | Diferencia solo de efectivo, anulaciones bloqueadas con la caja cerrada, cierre de jornadas anteriores y reporte de cierre de caja. Tiene **sus propias migraciones y su propio orden**: ver el anexo «Cierre de caja: arqueo de efectivo» al final. |
 
 Todo esto ya está en `master`: se despliega `master`.
 
@@ -670,3 +671,78 @@ La clasificación de cada migración (ESQUEMA, ESQUEMA-DESTRUCTIVO o DATOS) est�
 dentro del script, en la constante `CLASIFICACION`. **Al agregar una migración
 nueva hay que clasificarla allí**; si no, el script la muestra como
 `SIN CLASIFICAR` y da el aviso.
+
+## Anexo: cierre de caja: arqueo de efectivo (2026-11-18)
+
+Diseño y decisiones en [`ANALISIS_CIERRES_CAJA.md`](ANALISIS_CIERRES_CAJA.md) §8
+y §9. **Cambia la diferencia que ven los cajeros**: desde este despliegue es solo
+de efectivo (los cobros por QR ya no aparecen como faltante). Hay que **avisar a
+los cajeros y supervisores antes** de desplegar.
+
+### Requisito previo: columnas del merge `d076126`
+
+El código de `master` ya guarda `tipo_paciente`, `servicio` y la factura en cada
+venta, y quién registró cada paciente. Si en producción no existen esas
+columnas, **vender y crear pacientes fallan** («Unknown column…»). Antes de este
+anexo deben estar aplicadas, de a una (todas de esquema):
+
+```bash
+php artisan migrate --pretend --path=database/migrations/2026_11_11_000300_add_tipo_paciente_to_ventas_table.php
+php artisan migrate --path=database/migrations/2026_11_11_000300_add_tipo_paciente_to_ventas_table.php
+php artisan migrate --pretend --path=database/migrations/2026_11_11_000400_add_factura_to_ventas_table.php
+php artisan migrate --path=database/migrations/2026_11_11_000400_add_factura_to_ventas_table.php
+php artisan migrate --pretend --path=database/migrations/2026_11_11_000400_add_servicio_to_ventas_table.php
+php artisan migrate --path=database/migrations/2026_11_11_000400_add_servicio_to_ventas_table.php
+php artisan migrate --pretend --path=database/migrations/2026_11_11_000500_add_user_id_to_pacientes_table.php
+php artisan migrate --path=database/migrations/2026_11_11_000500_add_user_id_to_pacientes_table.php
+```
+
+`2026_11_11_000500_add_user_id_to_pacientes_table` quedó **solo de esquema**
+(decisión del 2026-11-18): la versión original también rellenaba `user_id` de
+los pacientes existentes desde la auditoría, y ese relleno se quitó. El
+`--pretend` debe mostrar solo el `ALTER TABLE` (columna y clave foránea), ningún
+`UPDATE`. Los pacientes anteriores quedan sin dato («—» en «Registrado por»).
+Si `verificar_migraciones.php` la muestra ya ejecutada en producción, allí se
+corrió la versión original con relleno: no se vuelve a ejecutar.
+
+### Migraciones de este cambio, de a una (siempre con `--pretend` antes)
+
+| Migración | Tipo | Qué hace |
+|---|---|---|
+| `2026_11_18_000100_add_arqueo_efectivo_to_cierres_caja_table` | ESQUEMA | `cierres_caja` + `formula` y las cifras del arqueo, todas nullable. Los cierres existentes quedan en null y **no se modifican**. |
+| `2026_11_18_000200_add_anulado_to_ventas_table` | ESQUEMA | `ventas` + `anulado_en`, `anulado_por_id` (nullable). |
+| `2026_11_18_000300_add_anular_ventas_caja_cerrada_permission` | DATOS (solo agrega) | Crea el permiso «Anular Ventas Caja Cerrada» y se lo da a `admin`. No modifica filas existentes. |
+
+```bash
+php artisan migrate --pretend --path=database/migrations/2026_11_18_000100_add_arqueo_efectivo_to_cierres_caja_table.php
+php artisan migrate --path=database/migrations/2026_11_18_000100_add_arqueo_efectivo_to_cierres_caja_table.php
+php artisan migrate --pretend --path=database/migrations/2026_11_18_000200_add_anulado_to_ventas_table.php
+php artisan migrate --path=database/migrations/2026_11_18_000200_add_anulado_to_ventas_table.php
+php artisan migrate --pretend --path=database/migrations/2026_11_18_000300_add_anular_ventas_caja_cerrada_permission.php
+php artisan migrate --path=database/migrations/2026_11_18_000300_add_anular_ventas_caja_cerrada_permission.php
+```
+
+Las tres se probaron en `urme_prueba` (aplicar, revertir y volver a aplicar).
+El código nuevo **necesita** las dos primeras: sin ellas, cerrar caja, anular y
+cobrar internaciones fallan. Por eso van antes de salir del modo mantenimiento.
+
+### Después del despliegue
+
+1. Dar «Anular Ventas Caja Cerrada» a quien corresponda (Usuarios → permisos).
+   Sin ese permiso, ninguna venta o gasto de una caja ya cerrada se puede anular;
+   con el cierre validado, no se puede anular nunca.
+2. «Autorizar Ventas Caja Cerrada» ahora también permite cerrar en nombre del
+   cajero una jornada anterior (hasta 2 días) que quedó sin cierre.
+3. Comprobar en Administración → Cierres de caja: columnas «Efectivo esperado»,
+   «Dif. efectivo» y «QR»; los cierres anteriores muestran «fórmula anterior»
+   (su diferencia registrada sigue guardada tal cual).
+4. En un cierre validado, Opciones → «Reporte de cierre de caja»: los seis
+   cuadres deben decir CUADRA.
+
+### Volver atrás
+
+Revertir en orden inverso con `migrate:rollback --path=…` (`000300`, `000200`,
+`000100`). Se pierden las cifras del arqueo de los cierres hechos con la fórmula
+nueva y los datos de quién y cuándo anuló; `monto_sistema` y `diferencia` siguen
+guardados como antes.
+
